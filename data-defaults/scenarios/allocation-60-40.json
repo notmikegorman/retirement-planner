@@ -1,0 +1,15 @@
+{
+  "name": "Static 60/40 from retirement",
+  "description": "Base-case retirement, but the whole portfolio moves to a static 60/40 stock/bond mix on the retirement date. Compare against base-case and allocation-glidepath to see what de-risking costs and buys.",
+  "events": [
+    { "type": "retire", "person": "p1", "date": "2030-07" },
+    { "type": "retire", "person": "p2", "date": "2030-07" },
+    {
+      "type": "allocation_change",
+      "date": "2030-07",
+      "mix": { "stocks": 0.6, "bonds": 0.4, "bills": 0 }
+    },
+    { "type": "claim_social_security", "person": "p1", "date": "2042-03" },
+    { "type": "claim_social_security", "person": "p2", "date": "2044-09" }
+  ]
+}

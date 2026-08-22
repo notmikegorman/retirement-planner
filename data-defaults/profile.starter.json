@@ -1,0 +1,125 @@
+{
+  "people": [
+    {
+      "id": "p1",
+      "name": "Alex",
+      "birthYear": 1975,
+      "birthMonth": 3,
+      "piaMonthlyAtFraIfWorkingTo62": 2900,
+      "piaMonthlyAtFraIfStoppingNow": 2600,
+      "hasOwnBenefit": true,
+      "notes": "PLACEHOLDER: working-to-62 figure comes from your SSA statement (ssa.gov/myaccount). The stopping-now figure (2600) is a placeholder — get the real $0-future-earnings estimate from ssa.gov's estimator with average future annual salary set to $0."
+    },
+    {
+      "id": "p2",
+      "name": "Jordan",
+      "birthYear": 1977,
+      "birthMonth": 9,
+      "piaMonthlyAtFraIfWorkingTo62": 0,
+      "piaMonthlyAtFraIfStoppingNow": 0,
+      "hasOwnBenefit": false,
+      "notes": "EXAMPLE SETUP: this person is modelled with no earnings record of their own — under 40 credits, so own benefit is 0 and only the spousal benefit applies. That is a configuration, not an assumption about you: set hasOwnBenefit=true and both PIA figures from the SSA statement if this person has a work record."
+    }
+  ],
+  "filing": { "status": "mfj", "state": "va" },
+  "accounts": [
+    {
+      "id": "k401",
+      "name": "401(k) — current employer",
+      "type": "401k",
+      "owner": "p1",
+      "balance": 850000,
+      "allocation": { "stocks": 0.68, "bonds": 0.32, "bills": 0 },
+      "currentEmployer": true,
+      "targetDateFund": { "targetYear": 2035 },
+      "notes": "PLACEHOLDER balance and allocation. Shaped like a 2035 target-date fund — roughly 68/32 stocks/bonds today, which the engine glides toward the target year automatically. Set targetDateFund.targetYear (or delete it and set a fixed allocation) to match what this account actually holds. Rolled into the traditional IRA at separation in every scenario."
+    },
+    {
+      "id": "ira1",
+      "name": "Traditional IRA",
+      "type": "traditional_ira",
+      "owner": "p1",
+      "balance": 250000,
+      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "notes": "PLACEHOLDER balance."
+    },
+    {
+      "id": "roth1",
+      "name": "Roth IRA (Alex)",
+      "type": "roth_ira",
+      "owner": "p1",
+      "balance": 120000,
+      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "rothBasis": { "contributions": 60000, "conversions": [] },
+      "notes": "PLACEHOLDER balance and contribution basis."
+    },
+    {
+      "id": "roth2",
+      "name": "Roth IRA (Jordan)",
+      "type": "roth_ira",
+      "owner": "p2",
+      "balance": 30000,
+      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "rothBasis": { "contributions": 20000, "conversions": [] },
+      "notes": "PLACEHOLDER balance and contribution basis."
+    },
+    {
+      "id": "brokerage",
+      "name": "Taxable brokerage",
+      "type": "taxable_brokerage",
+      "owner": "joint",
+      "balance": 70000,
+      "costBasis": 45000,
+      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "notes": "PLACEHOLDER. Together with savings this is the liquid money available before 59 1/2 — the bridge the 72(t) and rule-of-55 logic exist to supplement."
+    },
+    {
+      "id": "savings",
+      "name": "Savings",
+      "type": "savings",
+      "owner": "joint",
+      "balance": 35000,
+      "allocation": { "stocks": 0, "bonds": 0, "bills": 1 },
+      "notes": "PLACEHOLDER. High-yield savings; earns the T-bill return as taxable interest."
+    }
+  ],
+  "home": {
+    "value": 550000,
+    "costBasis": 350000,
+    "state": "va",
+    "propertyTaxAnnual": 4400,
+    "insuranceAnnual": 1800,
+    "maintenancePctOfValue": 0.01,
+    "sellingCostPct": 0.06,
+    "mortgage": null
+  },
+  "income": {
+    "salaries": { "p1": 150000, "p2": 0 },
+    "contribution401k": 24000,
+    "employerMatch401k": 6000
+  },
+  "expenses": {
+    "livingMonthly": 6000,
+    "charitableMonthly": 0,
+    "investingMonthly": 0
+  },
+  "health": {
+    "acaBenchmarkMonthly": 1480,
+    "acaQuoteYear": 2026,
+    "partDPlanMonthly": 45,
+    "employerPremiumShareMonthly": 200,
+    "notes": "PLACEHOLDER: acaBenchmarkMonthly (1480) is an ILLUSTRATIVE full-price household premium for the second-lowest-cost Silver plan covering two people in their early fifties in a low-cost inland county — the right order of magnitude, and nothing more. This number drives the premium tax credit and the 400%-FPL cliff, so it is the single most valuable field to replace: get the real one from healthcare.gov (or your state marketplace) by pricing a Silver plan for your ages and ZIP, and set acaQuoteYear to the year you priced. employerPremiumShareMonthly 200 is a PLACEHOLDER too — set your real per-month payroll deduction."
+  },
+  "settings": {
+    "horizonAge": 95,
+    "successTarget": 0.85,
+    "mcPathsInteractive": 1000,
+    "mcPathsFinal": 10000,
+    "seed": 20260812,
+    "spendingPolicy": { "type": "fixed_real" },
+    "withdrawalPolicy": {
+      "order": ["cash", "taxable", "pretax", "roth"],
+      "pretaxPreference": "ira_first"
+    }
+  }
+}

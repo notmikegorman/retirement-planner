@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Finance Planner favicon: rounded square + upward compounding curve with
+       a fan band beneath it. Solid mid-blue background keeps it legible on
+       both light and dark browser tabs at 16px. -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#2563eb"/>
+  <path d="M7 25 C 13 24, 19 19.5, 25 8 L 25 25 Z" fill="#ffffff" opacity="0.28"/>
+  <path d="M7 25 C 13 24, 19 19.5, 25 8" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

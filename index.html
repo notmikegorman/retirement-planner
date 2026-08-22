@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finance Planner</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Stamp the resolved theme on <html> BEFORE first paint so there is no
+      // flash of the wrong theme. src/ui/theme.ts keeps data-theme in sync
+      // afterwards (same storage key + resolution rules).
+      (function () {
+        var dark = false;
+        try {
+          var stored = localStorage.getItem('fplan-theme');
+          var mode = stored === 'light' || stored === 'dark' ? stored : 'system';
+          dark =
+            mode === 'dark' ||
+            (mode === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch (e) {
+          /* storage/matchMedia unavailable -> default light */
+        }
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/ui/main.tsx"></script>
+  </body>
+</html>

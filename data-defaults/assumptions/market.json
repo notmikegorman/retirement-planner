@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "source": "owner-adjustable defaults; long-run historical averages",
+    "verified_on": "2026-08-12",
+    "notes": "Deterministic-mode real returns are user-set sanity-check values, not forecasts."
+  },
+  "deterministicReal": { "stocks": 0.065, "bonds": 0.018, "bills": 0.005 },
+  "deterministicInflation": 0.025,
+  "expenseRatios": { "stocks": 0.0003, "bonds": 0.0005, "bills": 0 },
+  "stockDividendYield": 0.014,
+  "bootstrapBlockYears": 5,
+  "homeAppreciationRealSpread": 0.0,
+  "medicalInflationRealSpread": 0.02,
+  "rentGrowthRealSpread": 0.005
+}

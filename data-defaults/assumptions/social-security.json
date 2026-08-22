@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "ssa.gov (statutory claiming adjustment factors)",
+    "verified_on": "2026-08-12",
+    "notes": "FRA 67 for anyone born 1960+. Worker: -5/9% per month for first 36 months early, -5/12% beyond; delayed credits +2/3% per month to age 70 (124% at 70). Spousal: max 50% of worker PIA at spouse FRA; -25/36% per month first 36 months, -5/12% beyond (32.5% of PIA at 62); no delayed credits; cannot start before the worker files; deemed filing applies. SURVIVOR figures verified 2026-08-15 against 20 CFR Part 404 (eCFR API, title-20 current as of 2026-08-13) and SSA's own POMS operating manual at secure.ssa.gov — www.ssa.gov's consumer pages return HTTP 403 to this environment, so the citations are the regulation and the operating manual rather than the brochures, which outrank them anyway. survivorFraYearsByBirthYear is a SEPARATE table from the retirement one: 20 CFR 404.409(b) reaches FRA 67 at birth year 1962 while 404.409(a) reaches it at 1960, and the intermediate steps differ (FRA 66 covers 1943-1955 for retirement, 1945-1957 for survivors). Both tables say 67 from birth year 1962 on, so a profile born after that is unaffected by the difference — the table exists so a profile containing an older person is not silently given the wrong window. survivorMinClaimAge 60 per 404.409(c) (NOT 62 — the worker/spousal clamp at minClaimAge would reprice a 60 claim as a 62 one). survivorMaxReduction 0.285 per 404.410(c)(1): months early x 0.285 / (months from 60 to survivor FRA), spread EVENLY with no 36-month kink, which for FRA 67 is 84 months and gives the published 19/56 of 1% per month (0.285/84 = 0.0033928571 exactly); factors at 60..67 are 0.715 / 0.755714 / 0.796429 / 0.837143 / 0.877857 / 0.918571 / 0.959286 / 1.0. survivorRibLimFloorPctOfPia 0.825 per POMS RS 00615.320: when the deceased claimed EARLY the survivor gets the larger of 82.5% of the deceased's PIA and the deceased's own reduced benefit — a floor as much as a cap — and it does not apply at all when the deceased never claimed or claimed at/after FRA (20 CFR 404.338(c)). No delayed credits accrue for the survivor's own delay past survivor FRA (404.313(a), 404.338(b)), so the survivor factor is flat at 1 after FRA. The survivor benefit is 100% of the deceased's PIA (404.338(a)) and does NOT stack with the survivor's own — the larger of the two is paid (POMS RS 00615.020) — so a household drawing worker + 50% spousal loses exactly a third of its Social Security."
+  },
+  "fraYearsByBirthYear": { "1960": 67 },
+  "fraDefaultYears": 67,
+  "workerReductionFirst36PerMonth": 0.005555555555555556,
+  "workerReductionBeyond36PerMonth": 0.004166666666666667,
+  "delayedCreditPerMonth": 0.006666666666666667,
+  "maxClaimAge": 70,
+  "minClaimAge": 62,
+  "spousalMaxPctOfPia": 0.5,
+  "spousalReductionFirst36PerMonth": 0.006944444444444444,
+  "spousalReductionBeyond36PerMonth": 0.004166666666666667,
+  "survivorFraYearsByBirthYear": { "1962": 67 },
+  "survivorFraDefaultYears": 67,
+  "survivorMinClaimAge": 60,
+  "survivorMaxReduction": 0.285,
+  "survivorRibLimFloorPctOfPia": 0.825,
+  "lumpSumDeathPayment": 255
+}

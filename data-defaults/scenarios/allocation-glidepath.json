@@ -1,0 +1,17 @@
+{
+  "name": "Glidepath: 100% equity → 60/40 over retirement+5",
+  "description": "Base-case retirement with an equity glidepath from 100% stocks at retirement (mid-2030) to 60/40 by mid-2035, rather than the single step allocation-60-40 takes. Read the three side by side to answer the sequence-of-returns question empirically instead of by rule of thumb.",
+  "events": [
+    { "type": "retire", "person": "p1", "date": "2030-07" },
+    { "type": "retire", "person": "p2", "date": "2030-07" },
+    {
+      "type": "glidepath",
+      "start": "2030-07",
+      "end": "2035-07",
+      "fromMix": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "toMix": { "stocks": 0.6, "bonds": 0.4, "bills": 0 }
+    },
+    { "type": "claim_social_security", "person": "p1", "date": "2042-03" },
+    { "type": "claim_social_security", "person": "p2", "date": "2044-09" }
+  ]
+}

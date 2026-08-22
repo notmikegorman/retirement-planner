@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "tax.virginia.gov",
+    "verified_on": "2026-08-12",
+    "needs_verification": false,
+    "notes": "SINGLE-FILER FIGURES verified 2026-08-15 against the statutory text at law.lis.virginia.gov. Brackets are NOT filing-status dependent: 58.1-320 imposes the rates on 'every individual', so there is no single bracket table and none is needed. standardDeductionSingle/ByYear is exactly half the MFJ schedule at every step ($8,750 TY2025-2026, $9,200 TY2027, $9,300 TY2028-2029, reverting to $3,000 from TY2030). vaExemptions are already per person ($930 each plus $800 per person 65+), so a one-person household simply claims one — no single-specific value exists or is needed. THE ONE NON-PROPORTIONAL FIGURE is the age-deduction threshold: 58.1-322.03(5.b) reads '$50,000 for single taxpayers or $75,000 for married taxpayers', so afagiThresholdSingle is $50,000 and NOT half of $75,000 — a widow starts losing the $12,000 age deduction $25,000 of income sooner than a halving rule predicts. Verified 2026-08-12 (tax.virginia.gov, law.lis.virginia.gov 58.1-322.03). Brackets statutory, not indexed. Standard deduction MFJ is a legislated schedule (2026 Appropriation Act amending 58.1-322.03): $17,500 TY2025-2026, $18,400 TY2027, $18,600 TY2028-2029, with a statutory reversion to $6,000 from TY2030 — standardDeductionMfjByYear carries the enacted schedule and standardDeductionMfj ($6,000) is the post-2029 current-law fallback for years beyond it. Virginia has repeatedly extended the elevated deduction before each sunset; to assume another extension, raise the fallback (and/or extend the schedule). Age deduction: $12,000 per person 65+ (born after Jan 1 1939), reduced $1-for-$1 by combined AFAGI over $75,000 MFJ, where AFAGI = federal AGI minus federally-taxed Social Security. SS fully subtracted."
+  },
+  "state": "va",
+  "baseYear": 2026,
+  "kind": "brackets",
+  "brackets": [
+    { "rate": 0.02, "upTo": 3000 },
+    { "rate": 0.03, "upTo": 5000 },
+    { "rate": 0.05, "upTo": 17000 },
+    { "rate": 0.0575, "upTo": null }
+  ],
+  "standardDeductionMfj": 6000,
+  "standardDeductionMfjByYear": {
+    "2025": 17500,
+    "2026": 17500,
+    "2027": 18400,
+    "2028": 18600,
+    "2029": 18600
+  },
+  "standardDeductionSingle": 3000,
+  "standardDeductionSingleByYear": {
+    "2025": 8750,
+    "2026": 8750,
+    "2027": 9200,
+    "2028": 9300,
+    "2029": 9300
+  },
+  "startingPoint": "federal_agi",
+  "socialSecurityTaxed": false,
+  "vaAgeDeduction": {
+    "perPerson65Plus": 12000,
+    "afagiThresholdMfj": 75000,
+    "afagiThresholdSingle": 50000
+  },
+  "vaExemptions": { "perPerson": 930, "additional65": 800 },
+  "indexed": false
+}

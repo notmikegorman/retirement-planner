@@ -1,0 +1,22 @@
+{
+  "name": "Relocate to a lower-tax state",
+  "description": "The downsize plan plus a change of residency: `state_change` switches the state tax module from June 2031, and `expense_change` scales the whole living baseline by 0.85 for a lower cost of living. Only VA, SC and NC are modeled — this example moves VA → SC. Compare against downsize-cash to separate what the move saves in tax from what it saves in spending.",
+  "events": [
+    { "type": "retire", "person": "p1", "date": "2030-07" },
+    { "type": "retire", "person": "p2", "date": "2030-07" },
+    { "type": "sell_house", "date": "2031-06" },
+    { "type": "rent", "start": "2031-06", "months": 12, "monthlyCost": 2800 },
+    { "type": "state_change", "date": "2031-06", "state": "sc" },
+    { "type": "expense_change", "date": "2031-06", "multiplier": 0.85 },
+    {
+      "type": "buy_house",
+      "date": "2032-06",
+      "price": "sale_proceeds",
+      "financing": "cash",
+      "propertyTaxAnnual": 3300,
+      "insuranceAnnual": 1700
+    },
+    { "type": "claim_social_security", "person": "p1", "date": "2042-03" },
+    { "type": "claim_social_security", "person": "p2", "date": "2044-09" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Retire 2030 with a 72(t) SEPP bridge",
+  "description": "Retire mid-2030 and open a 72(t) SEPP on the traditional IRA (which absorbs the 401(k) at separation). Substantially equal periodic payments give penalty-free access to pre-tax money before 59 1/2 — the bridge that rule of 55 would have provided if the 401(k) had stayed in the plan. Compare against base-case, where the same withdrawals pay the 10% early-distribution penalty.",
+  "events": [
+    { "type": "retire", "person": "p1", "date": "2030-07" },
+    { "type": "retire", "person": "p2", "date": "2030-07" },
+    { "type": "start_72t", "date": "2030-07", "account": "ira1" },
+    { "type": "claim_social_security", "person": "p1", "date": "2042-03" },
+    { "type": "claim_social_security", "person": "p2", "date": "2044-09" }
+  ]
+}

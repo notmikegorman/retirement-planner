@@ -1,0 +1,10 @@
+{
+  "name": "Base case — retire mid-2030, claim at FRA",
+  "description": "Both people stop work July 2030 and stay put; Social Security at each one's own full retirement age of 67. The reference point every other example is read against.",
+  "events": [
+    { "type": "retire", "person": "p1", "date": "2030-07" },
+    { "type": "retire", "person": "p2", "date": "2030-07" },
+    { "type": "claim_social_security", "person": "p1", "date": "2042-03" },
+    { "type": "claim_social_security", "person": "p2", "date": "2044-09" }
+  ]
+}

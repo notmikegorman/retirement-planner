@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# The app's data folder lives outside the repo by default (~/finance-planner-data/),
+# but FPLAN_DATA_DIR can point anywhere. If anyone ever points it inside the
+# checkout, these are the files that would otherwise become untracked-but-addable
+# — a real profile, a real plan, a real net-worth ledger. Never commit them.
+data/
+finance-planner-data/
+profile.json
+plan.json
+plan-history.json
+networth.json
+quotes.json
+.writer.lock

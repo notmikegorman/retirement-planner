@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "SC H.4216 / Act 110 (signed 2026-03-30), dor.sc.gov/news/information-about-h-4216, scstatehouse.gov bill text",
+    "verified_on": "2026-08-12",
+    "needs_verification": false,
+    "notes": "SINGLE-FILER FIGURES verified 2026-08-15 against S.C. Code 12-6-510(C)(1) and 12-6-1140(15) as enacted by H.4216 (scstatehouse.gov bill text) and SCDOR's H.4216 page. Brackets are NOT filing-status dependent — the $30,000 threshold is uniform across filing statuses (and is status-independent by construction: 5.21% x 30,000 - 966 = 597 = 1.99% x 30,000). SCIAD single is $15,000, reduced by (FAGI - $40,000) / $55,000 and gone at FAGI $95,000 — exactly half the MFJ parameters at both ends, but written out rather than derived. The retirement-income deduction ($3,000 / $10,000) and the 65+ deduction ($15,000) are already PER INDIVIDUAL TAXPAYER under 12-6-1170, so a one-person household simply claims one set and no single-specific values exist. TY2026 restructure: two brackets — 1.99% up to $30,000 and 5.21% above (statutory form 5.21% x TI - $966, identical). Starting point moved to FEDERAL AGI; the SC Income Adjusted Deduction (SCIAD, $30,000 MFJ) replaces the federal standard deduction and phases out proportionally over FAGI $80,000-$190,000 MFJ. Retirement-income deduction ($3,000 under 65 / $10,000 65+ per taxpayer) and the 65+ $15,000 deduction (reduced by retirement deduction claimed) were retained. Social Security is not taxed. The $30,000 bracket threshold is not indexed. From 2027 the top rate may step down on revenue triggers — not assumed."
+  },
+  "state": "sc",
+  "baseYear": 2026,
+  "kind": "brackets",
+  "brackets": [
+    { "rate": 0.0199, "upTo": 30000 },
+    { "rate": 0.0521, "upTo": null }
+  ],
+  "startingPoint": "federal_agi",
+  "socialSecurityTaxed": false,
+  "scDeductions": {
+    "retirementDeductionUnder65": 3000,
+    "retirementDeduction65Plus": 10000,
+    "seniorDeduction65Plus": 15000,
+    "sciad": {
+      "amountMfj": 30000,
+      "phaseoutStartMfj": 80000,
+      "phaseoutRangeMfj": 110000,
+      "amountSingle": 15000,
+      "phaseoutStartSingle": 40000,
+      "phaseoutRangeSingle": 55000
+    }
+  },
+  "indexed": false
+}

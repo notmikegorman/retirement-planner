@@ -1,0 +1,1688 @@
+/*
+ * Clean, simple desktop styling (SPEC §2). Shared tokens + primitives.
+ *
+ * THEMING (test-drive note 4): every color in this file comes from a custom
+ * property defined in the two blocks below. The resolved theme is stamped as
+ * data-theme="light" | "dark" on <html> (pre-paint by index.html's inline
+ * script, then kept in sync by src/ui/theme.ts). Chart colors for Recharts
+ * live in src/ui/theme.ts (useChartTheme) and mirror these values.
+ */
+
+/* ------------------------------ Theme: light ----------------------------- */
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --input-bg: #ffffff;
+  --border: #dfe3e8;
+  --text: #1c2430;
+  --text-dim: #5b6675;
+  --accent: #2563eb; /* interactive text/borders */
+  --accent-soft: #dbeafe; /* active-nav / badge / focus-ring background */
+  --accent-strong: #2563eb; /* primary-button background */
+  --accent-strong-hover: #1d4ed8;
+  --accent-contrast: #ffffff; /* text on accent-strong */
+  --good: #15803d;
+  --warn: #b45309;
+  --warn-soft-bg: #fffbeb;
+  --warn-soft-border: #fde68a;
+  --bad: #b91c1c;
+  --bad-soft-bg: #fef2f2;
+  --bad-soft-border: #fecaca;
+  --radius: 8px;
+  --control-h: 34px; /* shared input/select height — field rows align to it */
+  /* The reserved label track and its distance to the control below it. Anything
+     that has to line up beside a control (.field-note) offsets by their sum, so
+     the two live here rather than as numbers repeated down the file. */
+  --field-label-h: 32px;
+  --field-label-gap: 4px;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-pop: 0 4px 12px rgba(16, 24, 40, 0.18);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* ------------------------------ Theme: dark ------------------------------ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111827;
+  --surface: #1c2431;
+  --input-bg: #151c28;
+  --border: #2b3446;
+  --text: #e5eaf2;
+  --text-dim: #94a3b8;
+  --accent: #60a5fa;
+  --accent-soft: #1e3350;
+  --accent-strong: #2563eb;
+  --accent-strong-hover: #3b82f6;
+  --accent-contrast: #ffffff;
+  --good: #4ade80;
+  --warn: #fbbf24;
+  --warn-soft-bg: #382a10;
+  --warn-soft-border: #78350f;
+  --bad: #f87171;
+  --bad-soft-bg: #3b1a1e;
+  --bad-soft-border: #7f1d1d;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.55);
+}
+
+/* --------------------------------- Base ---------------------------------- */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+/* -------------------------------- Layout --------------------------------- */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-btn {
+  border: none;
+  background: transparent;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.nav-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.nav-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 96px;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/*
+ * The Workbench is two columns (inputs + results) and wants the extra room:
+ * at 1280px the results column loses ~380px to the panel.
+ */
+.content.wide {
+  max-width: 1680px;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: 17px;
+  margin: 24px 0 10px;
+}
+
+h3 {
+  font-size: 15px;
+  margin: 16px 0 8px;
+}
+
+.card {
+  /* Positioned so an info-tip bubble can be measured against the card it
+     belongs to and can therefore never be clipped by the panel — see the
+     "Info tips" section below before removing this. */
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 12px 16px; /* a little extra column gap so adjacent fields read apart */
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/*
+ * Rows that contain form fields align to the TOP (note 5): each .field is a
+ * label/control/help grid, so labels share a line and helper text hangs
+ * below without vertically centering (and thus misaligning) neighbors.
+ * Button/text rows without fields keep the centered default above.
+ */
+.row:has(> .field),
+.row:has(> .field-note) {
+  align-items: flex-start;
+}
+
+/*
+ * Stacked rows need real separation, or a row's labels touch the controls of the
+ * row above (measured: 1px) and read as captioning them. Paired with the
+ * bottom-aligned .field-label above, every label now sits far closer to the
+ * field it names than to anything above it.
+ */
+.row + .row {
+  margin-top: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* -------------------------------- Buttons -------------------------------- */
+button,
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-strong-hover);
+  border-color: var(--accent-strong-hover);
+  color: var(--accent-contrast);
+}
+
+button.danger {
+  color: var(--bad);
+}
+
+/* ----------------------- Forms + field alignment ------------------------- */
+/*
+ * .field = three stacked rows: label / control / helper. All controls share
+ * --control-h, so within a top-aligned .row every input sits on the same
+ * baseline regardless of which neighbors carry helper text.
+ */
+label.field {
+  display: grid;
+  /* Label track is the reserved two lines (see .field-label); it still grows if
+     a label somehow needs a third. + implicit auto row when help present. */
+  grid-template-rows: minmax(var(--field-label-h), auto) auto;
+  align-content: start;
+  row-gap: var(--field-label-gap);
+  font-size: 13px;
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+/*
+ * Inside a row the field box owns its width and the control fills it (below).
+ * Without this the <input> renders at its intrinsic ~178px while the flex item
+ * shrinks to the label's width, so controls overflow their own box and collide
+ * with the next field. Inline width={...} from the field components overrides
+ * the default. Fields outside a row (e.g. full-width Notes) keep block sizing.
+ */
+.row > label.field {
+  width: var(--field-w, 170px);
+  flex: 0 0 auto;
+}
+
+/* Controls fill the field box, so they can never spill into a neighbour. */
+label.field > input,
+label.field > select,
+label.field > textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * Labels reserve two lines. A long label that wraps would otherwise push its own
+ * control down while a short neighbour's control stays put, so controls in the
+ * same row end up on different baselines (the "verbose footer" misalignment).
+ * Reserving the taller case keeps every control in a row on one line. Labels are
+ * kept short enough to fit two lines at their field width.
+ *
+ * The text sits at the BOTTOM of that reserved track (align-self), which is what
+ * makes a label read as belonging to the field BELOW it. Top-aligned, a one-line
+ * label left its unused second line as dead space between itself and its own
+ * control — measured 19px away from the field it names and 1px from the field
+ * above, so it appeared to caption the wrong one. Bottom-aligning moves that
+ * slack above the text instead, costing no height: every label is now
+ * --field-label-gap from its control and a row-gap away from the field above.
+ *
+ * tests/ui/fieldSpacing.test.ts asserts that relationship against this file.
+ */
+.field-label {
+  display: block;
+  align-self: end;
+  line-height: 16px;
+}
+
+/* Help text ("footers") likewise reserves nothing — it sits below the control,
+   so its height varies freely without disturbing control alignment. */
+
+.field-help {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+/* ------------------------------- Info tips -------------------------------- */
+/*
+ * The "?" beside a label (fields.tsx InfoTip). Verbose help used to sit under
+ * every control as a permanent paragraph, which is what made the Workbench
+ * panel a scroll of prose with controls buried in it.
+ *
+ * Reveal is CSS-only: :hover for the mouse, :focus-within for the keyboard
+ * (the affordance is a real <button>, so Tab reaches it and Escape closes it).
+ *
+ * POSITIONING. The bubble is `position: absolute` with `top: auto`, so it lands
+ * at its STATIC position vertically — directly under the "?", because it is a
+ * block box following an inline-flex button inside the inline-block wrapper —
+ * and it therefore tracks its field exactly as anything else in the flow does.
+ * (`position: fixed` is NOT an alternative: a fixed box keeps the static
+ * position it was laid out at, so it detaches from its "?" the moment a
+ * scrolling ancestor moves.)
+ *
+ * HORIZONTALLY the bubble is anchored to its CARD, because .wb-panel is a
+ * `position: sticky` scroll container — which makes it both the containing
+ * block for anything absolute inside it AND a clipper. A bubble hanging from a
+ * "?" halfway across the panel would simply be sliced off at the panel's
+ * edge. `.card` is therefore `position: relative` (below) and,
+ * inside the panel, the bubble spans the card: left: 0 / right: 0. It cannot
+ * overflow what it is measured against, so it cannot be clipped.
+ *
+ * On the roomy pages (Profile) the default is the plain static position — the
+ * bubble hangs right under its "?" — with `align="end"` available for a field
+ * near the card's right edge, which hugs the card's right edge instead.
+ *
+ * Hidden state is `display: none` rather than `visibility: hidden` on purpose:
+ * a hidden-but-laid-out 320px box next to a right-hand field would sit outside
+ * the page and give the whole document a horizontal scrollbar.
+ */
+.infotip {
+  display: inline-block;
+  margin-left: 5px;
+  line-height: 0; /* the button must not stretch its label's line box */
+}
+
+.infotip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.infotip-btn:hover:not(:disabled),
+.infotip-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.infotip-bubble {
+  position: absolute;
+  display: none;
+  width: max-content;
+  max-width: min(320px, 88vw);
+  margin-top: 6px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  text-align: left;
+  z-index: 200;
+}
+
+/* Hugs the card's right edge — for a field near the right of a wide page. */
+.infotip-end > .infotip-bubble {
+  left: auto;
+  right: 0;
+}
+
+/*
+ * In the panel the bubble spans its card, whatever it hangs from: the panel
+ * clips, so "as wide as the card" is the only width that is always safe. This
+ * has to beat .infotip-end too, hence both selectors.
+ */
+.wb-panel .infotip-bubble,
+.wb-panel .infotip-end > .infotip-bubble {
+  left: 0;
+  right: 0;
+  width: auto;
+  max-width: none;
+}
+
+.infotip:hover > .infotip-bubble,
+.infotip:focus-within > .infotip-bubble {
+  display: block;
+}
+
+/* Checkbox fields: empty label row + control row matching input height. */
+.field-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-h);
+}
+
+/* Inline note aligned to the control row of adjacent fields (FieldNote). */
+.field-note {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-h);
+  /* Clear the label track so the note centers on the control it annotates. This
+     read 20px — one line of label — while labels have reserved two for some
+     time, leaving every "= $x/yr" 16px high of its own input. */
+  margin-top: calc(var(--field-label-h) + var(--field-label-gap));
+  font-size: 13px;
+}
+
+.field-note.warn {
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--input-bg);
+}
+
+input:not([type='checkbox']):not([type='radio']),
+select {
+  height: var(--control-h);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent-strong);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+input:disabled {
+  opacity: 0.65;
+}
+
+/* -------------------------------- Tables --------------------------------- */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+}
+
+th,
+td {
+  text-align: right;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+th {
+  color: var(--text-dim);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+
+/*
+ * Wide tables scroll SIDEWAYS inside their own box, so a twelve-column
+ * cashflow row cannot give the whole document a horizontal scrollbar.
+ *
+ * They do NOT scroll vertically. A tall table is simply tall: capping it at
+ * 520px put a second scrollbar inside the page's own, so reading to the end of
+ * a thirty-year table meant scrolling a small window inside a big one and
+ * losing the header on the way. If the content is long, let the page be long —
+ * that is the scrollbar the reader already knows how to use.
+ */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* --------------------------- Misc primitives ----------------------------- */
+.muted {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.error-banner {
+  background: var(--bad-soft-bg);
+  border: 1px solid var(--bad-soft-border);
+  color: var(--bad);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.flag {
+  display: inline-block;
+  background: var(--warn-soft-bg);
+  border: 1px solid var(--warn-soft-border);
+  color: var(--warn);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.success-gauge {
+  font-size: 40px;
+  font-weight: 700;
+}
+
+.good {
+  color: var(--good);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.trace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 14px;
+  overflow-x: auto;
+}
+
+.trace-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 1px 0;
+}
+
+/* --------------------------------- Modals -------------------------------- */
+/*
+ * Built on <dialog> + showModal(), so focus trapping, Escape-to-close and the
+ * inert page behind come from the platform rather than from JS this app would
+ * then own and have to keep correct.
+ *
+ * Every color below is a token, as everywhere else — but the UA sheet is the
+ * reason the rules exist at all: an unstyled <dialog> is a white box with a
+ * black border in BOTH themes, so in dark mode the modal would arrive as a
+ * white card over a dark page.
+ */
+dialog.modal {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  padding: 16px 20px;
+  /* Wide enough for the two fields side by side, never wider than the window. */
+  max-width: min(560px, calc(100vw - 32px));
+}
+
+/*
+ * The scrim is written as a literal rather than var(--...): ::backdrop did not
+ * inherit custom properties from the originating element until Chrome 122 /
+ * Safari 17.4, and an unresolvable var() there leaves the backdrop transparent
+ * — i.e. the one rule whose whole job is to dim the page would silently do
+ * nothing. The theme split is done with a selector instead, which every engine
+ * that supports <dialog> at all resolves.
+ */
+dialog.modal::backdrop {
+  background: rgba(16, 24, 40, 0.45);
+}
+
+:root[data-theme='dark'] dialog.modal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Confirm sits last, at the trailing edge — the resting place for the button a
+   keyboard user tabs to and a mouse user aims at. */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* --------------------------------- Toasts -------------------------------- */
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none; /* clicks pass through the stack, not the toasts */
+}
+
+.toast {
+  pointer-events: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--good);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 14px;
+  max-width: 360px;
+  cursor: pointer;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast.error {
+  border-left-color: var(--bad);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --------------------------- Scenario editing ---------------------------- */
+/*
+ * Used by the scenario editor cards (PlanCard / EventsCard / EventForm), which
+ * the Workbench panel hosts. These rules used to be injected by the Scenarios
+ * page; they live here now because no single page owns the cards any more.
+ */
+.event-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.event-row:last-child {
+  border-bottom: none;
+}
+
+.event-date {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  min-width: 64px;
+}
+
+.event-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.type-grid button {
+  text-align: left;
+}
+
+.type-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.raw-json {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+/* ------------------------------- Results --------------------------------- */
+/*
+ * Shared by the results components (verdict, cashflow table, Explore, solver
+ * views). Previously injected by the Results page; same story as above.
+ */
+.progress-outer {
+  height: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 160px;
+}
+
+.progress-inner {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.headline-metrics {
+  display: flex;
+  gap: 40px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.field.checkbox input {
+  width: 16px;
+  height: 16px;
+  margin-top: 9px;
+}
+
+.cf-row {
+  cursor: pointer;
+}
+
+.cf-row:hover td {
+  background: var(--bg);
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.mini-table {
+  width: auto;
+  min-width: 240px;
+}
+
+.mini-table td {
+  padding: 3px 10px;
+  border-bottom: none;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.verdict {
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.verdict-timing {
+  margin-top: 10px;
+  font-size: 15px;
+}
+
+.explore-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.explore-answer {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.best-row td {
+  background: var(--accent-soft);
+}
+
+/* ------------------------------- Workbench ------------------------------- */
+/*
+ * One page: inputs on the left, results on the right, results re-running as
+ * inputs change. The right column uses minmax(0, 1fr) so wide content (the
+ * cashflow table, the charts) is clipped INTO its own scroller instead of
+ * widening the grid and scrolling the page sideways.
+ *
+ * PROPORTIONAL, NOT PINNED. The inputs column is one third of the page and the
+ * results two thirds (1fr : 2fr), so both grow with the window instead of the
+ * panel stopping dead at 400px and handing every extra pixel to the results.
+ * The panel had outgrown that cap: a housing form with a sale date, a rate, a
+ * rent, a price, a tax and a mortgage does not fit in 400px without every field
+ * wrapping onto its own line.
+ *
+ * The 320px floor is what keeps the proportion from becoming a liability on a
+ * small window: below ~960px the panel would fall under the width its two-field
+ * rows need, so it stops shrinking and the results column gives way instead
+ * (its own minmax(0, …) already lets it be clipped rather than overflow).
+ */
+.wb-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/*
+ * There is no collapsed variant. The panel used to fold to a 40px rail behind a
+ * ⌘B toggle and a stored 'collapsed' flag; the rail could answer no question
+ * about the plan, and the flag could restore the app into it on a load nobody
+ * asked for it on. `.wb-rail`, `.wb-rail-label` and `.wb-icon-btn` went with it.
+ */
+.wb-panel {
+  position: sticky;
+  top: 62px;
+  max-height: calc(100vh - 78px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+/*
+ * The panel is narrow, so its cards run tighter than page cards. PADDING ONLY —
+ * no type-size override lives here or anywhere else under .wb-panel. The panel
+ * reads at exactly the scale the results column does, which is what the user
+ * asked for when he said the font sizes had to be consistent left to right;
+ * what a 320px-floor column cannot also afford is 20px of side padding.
+ * tests/ui/workbenchChrome.test.ts holds that line.
+ */
+.wb-panel .card {
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.wb-results {
+  min-width: 0;
+}
+
+/*
+ * A step heading inside the Housing card: Selling / Renting / Buying. The move
+ * is one form but three moments, and without a break between them the eight
+ * fields read as one undifferentiated list. Not an <h2>, because the card
+ * already has one and these are subordinate to it.
+ */
+.housing-step {
+  margin: 18px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* --------------------------------- Tabs ---------------------------------- */
+/*
+ * A tab strip. Used by the Workbench's results column and by the Profile page,
+ * so the names are not prefixed for either. It sits directly above the panel it switches,
+ * with the active tab joined to it by a shared background and a colored top
+ * edge — the strip has to read as "these are pages of one thing", not as a row
+ * of buttons that happen to be there.
+ */
+.tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  /* Sits ON the container's bottom border so the active tab can cover it. */
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.tab.is-active {
+  background: var(--surface);
+  border-color: var(--border);
+  border-bottom: 1px solid var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/*
+ * Eight tabs in a third-width column. The strip wraps rather than scrolls, and a
+ * wrapped strip reads badly — the active tab only joins the panel below it when
+ * it sits on the last row — so the panel buys horizontal room where it can.
+ *
+ * WHAT IT DOES NOT BUY IT WITH IS TYPE. This rule used to carry `font-size:
+ * 13px` against the results strip's 14px, which is the mismatch the user
+ * actually saw: one bar across the screen printed at two sizes. The labels are
+ * the same size on both sides now, and the two strips are the same HEIGHT
+ * because the vertical padding is inherited from `.tab` rather than restated —
+ * restate it and the "one bar" becomes two, offset by however far the two
+ * paddings have drifted.
+ *
+ * The horizontal padding and the gap are what pay for the eighth tab, and at
+ * 14px they both had to give: measured on the user's 1440px window the strip
+ * gets 455px and the eight labels want 494px at the old 6px/2px. Closing the
+ * gap and taking the padding to 4px brings them to ~446px, which holds one line
+ * there with a little to spare. Below roughly a 1300px window the strip wraps
+ * whatever these are set to — it did at 13px too — and the results strip wraps
+ * on a narrow window the same way.
+ */
+.wb-panel .tabs {
+  gap: 0;
+}
+
+.wb-panel .tab {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* ------------------------- Paired working/retired ------------------------- */
+/*
+ * The Spending and Income cards: one row per stream, two cells side by side —
+ * what is in play while working, and what is in play afterwards. The stream's
+ * name spans both columns above its pair, which keeps the two controls on one
+ * baseline no matter how long the name is (a label column would push them out
+ * of line in a 400px panel).
+ */
+.pair-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 12px;
+  align-items: start;
+}
+
+/* Both headings stretch to the taller one so their rules line up even when the
+   right-hand heading wraps onto a second line. */
+.pair-head {
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pair-label {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pair-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pair-cell > input,
+.pair-cell > select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* An empty cell states its default in words ("same as working", "stops"), so
+   the placeholder is a statement of behaviour rather than a hint. */
+.pair-cell > input::placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+  opacity: 1;
+}
+
+.pair-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.pair-status {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* The giving rule's parameters, under the row it belongs to. */
+.pair-params {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+/* The read-only working-income cell (salaries, 401(k)). */
+.pair-readonly {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 6px 8px;
+  font-size: 12.5px;
+}
+
+.pair-readonly-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 1px 0;
+}
+
+/* --------------------------- Profile: accounts --------------------------- */
+/*
+ * The Accounts card: the list of accounts on the left, the selected account's
+ * editor on the right. Same split as .wb-layout above and for the same reason
+ * — a narrow column that names things, a wide one that holds the form — so it
+ * borrows that rule's shape (a floor on the narrow side, minmax(0, …) on the
+ * wide side so nothing widens the grid and scrolls the page sideways).
+ *
+ * THE FLOOR IS 260px, not .wb-layout's 320px, because the two columns hold
+ * different things. A row here is a name and a money figure on one line, and
+ * the widest real pair is "IRA" beside $1,284,502.66 — about 200px of text
+ * plus the row's own padding. Below 260px the balance would start wrapping
+ * under the name it belongs to.
+ *
+ * BELOW 720px THE SPLIT IS OFF, and this is where it parts company with
+ * .wb-layout. There, the wide side is a results column that can be clipped
+ * into its own scroller, so it gives way and the panel keeps its width. Here
+ * the wide side is a FORM: at 720px the card's inner width is about 630px, the
+ * list takes its 260px floor, and the editor is left with ~355px — enough for
+ * a field and its helper line. Any narrower and the editor's rows would break
+ * to one control per line while the list sat beside them holding a third of
+ * the window, so the columns stack instead: list first, then the editor for
+ * the row you picked. Nothing is hidden and nothing scrolls sideways.
+ */
+.acct-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/*
+ * The list column sticks under the topbar (the same 62px offset .wb-panel
+ * uses, for the same topbar), because the editor beside it runs long — a
+ * holdings IRA is three field rows, a positions table and a notes box — and
+ * scrolling to the bottom of it must not carry the way back to another
+ * account off the screen.
+ *
+ * The total is OUTSIDE the scrolling list on purpose: the rows scroll under
+ * it, the sum stays put. A foot inside the scroller would be the one line that
+ * disappears exactly when the list is long enough to need it.
+ */
+.acct-list-col {
+  position: sticky;
+  top: 62px;
+  max-height: calc(100vh - 78px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.acct-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  /* Without this a flex child refuses to shrink below its content, and the
+     list would push its own total off the bottom of the sticky column. */
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.acct-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.acct-row:hover {
+  background: var(--bg);
+}
+
+/*
+ * The selected row wears the marks this app already uses for "you are here":
+ * .nav-btn.active's accent-soft fill with accent text, and .tab.is-active's
+ * inset accent edge — turned to the leading edge, because this strip runs
+ * down the page rather than across it.
+ */
+.acct-row.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.acct-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The name gives way, never the balance: a truncated "Alex's 401(k) rollo…"
+   is still identifiable, a truncated "$1,284,50…" is a wrong number. */
+.acct-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-row-balance {
+  white-space: nowrap;
+  /* Digits share one width, so the column of balances lines up decimal under
+     decimal and can be compared by eye. */
+  font-variant-numeric: tabular-nums;
+}
+
+.acct-total {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding: 8px 10px 0;
+}
+
+.acct-total-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.acct-total-value {
+  margin-left: auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.acct-detail {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .acct-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked, the list is above the editor rather than beside it, so pinning it
+     would cover the fields being edited with a copy of the list. */
+  .acct-list-col {
+    position: static;
+    max-height: none;
+  }
+}
+
+/* Metrics strip: current value + a signed change chip against the comparison. */
+.wb-metrics {
+  display: flex;
+  gap: 34px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.wb-metric-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.wb-chip {
+  display: inline-block;
+  margin-top: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.wb-chip.good {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+.wb-chip.bad {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+/*
+ * Slim in-flight indicator: the previous results stay on screen, dimmed.
+ *
+ * IT KEEPS ITS ROW WHEN IDLE — transparent, empty, still 3px tall. It sits
+ * directly under the results tab strip, and a bar that appeared and vanished
+ * there would shove every card below it 15px down and back on every 400ms
+ * debounce, which is a whole results column twitching once per keystroke.
+ */
+.wb-progress {
+  height: 3px;
+  background: transparent;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.wb-progress.is-running {
+  background: var(--border);
+}
+
+.wb-progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+
+.wb-stale {
+  opacity: 0.55;
+  transition: opacity 0.12s ease;
+}
+
+/*
+ * There is no save-status LINE. `.wb-status` held "Saved — every change writes
+ * itself to plan.json" in a row of the panel on every render, restating a
+ * promise the app keeps anyway, and it is gone; a failed write still raises
+ * `.error-banner` under the panel's tab strip — losing the heading was the
+ * point, losing the failure would not have been.
+ *
+ * THE DOT IS NOT THE PANEL'S AND DID NOT GO WITH IT. `.wb-dot` was born beside
+ * `.wb-status`, but the Search page borrowed it for its "a search is running"
+ * marker in the page header, and that is now its only caller. Deleting the rule
+ * with the line that named it left SearchPage rendering `wb-dot dirty` against
+ * no rule at all: an inline span with no size and no colour, which is to say
+ * nothing on screen where a running search used to announce itself. A class is
+ * only dead once nothing renders it — `tests/ui/workbenchChrome.test.ts` now
+ * checks that for every `wb-` class rather than trusting the reading.
+ *
+ * `.wb-dot.bad` DID go: the collapsed rail was its only caller, and the rail is
+ * gone.
+ */
+.wb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--good);
+  flex: 0 0 auto;
+  /* The Search page sets it inline in running text, where a bare inline box
+     has no width; the panel's old flex row gave it one for free. */
+  display: inline-block;
+}
+
+/* Work in flight — the only state the Search page's marker is ever drawn in. */
+.wb-dot.dirty {
+  background: var(--warn);
+}
+
+/* Inline text button (e.g. the age-picker's "use an exact month instead"). */
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:hover:not(:disabled) {
+  border: none;
+  color: var(--accent-strong-hover);
+}
+
+/* ------------------------- The plan's history ---------------------------- */
+/*
+ * The Workbench panel's "History" tab: one row per stored version of the plan.
+ *
+ * The rows are separated by a rule rather than boxed as cards: a card inside a
+ * card inside a 400px panel is three borders deep before any content, and the
+ * list is scanned rather than read one entry at a time.
+ */
+.hist-row {
+  border-top: 1px solid var(--border);
+  padding: 10px 0 12px;
+}
+
+.hist-row:first-of-type {
+  border-top: none;
+}
+
+/*
+ * The version that IS the plan on screen. A rule down the edge rather than a
+ * fill, because more than one row can be current — two entries can hold the
+ * identical plan — and a highlight strong enough to read as a selection would
+ * then be claiming a choice nobody made.
+ */
+.hist-row.is-current {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 10px;
+}
+
+.hist-score {
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/*
+ * A history chip is a SENTENCE, not a tag.
+ *
+ * `.wb-chip` is nowrap because the results panel's chips are two words ("first
+ * run") and wrapping one would look broken. These carry their own conditions —
+ * "$64,200/yr sustainable living spend (2,000 paths)" is 48 characters — and
+ * the History tab lives in the Inputs panel, which is 286px wide. Left nowrap,
+ * the longest and newest of the three numbers ran off the edge of the panel and
+ * was cut mid-word, which is the one chip a reader most needs whole: the
+ * probability saturates, so the dollars are what tell two versions apart.
+ */
+.hist-score .wb-chip {
+  white-space: normal;
+  padding: 2px 10px;
+}
+
+/*
+ * What a restore just did. A plain bordered notice, NOT the amber warning box:
+ * a restore that filed the plan it replaced did exactly what its button
+ * promised, and dressing that as a warning would teach the user to ignore the
+ * one case that really is a warning (a second restore in a day, which files
+ * nothing).
+ */
+.hist-outcome {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* The two-step restore, indented under the row it is asking about. */
+.hist-confirm {
+  border-left: 2px solid var(--warn-soft-border);
+  padding-left: 10px;
+  font-size: 13px;
+}
+
+/*
+ * A soft warning block. Named for the library that first needed one; it long
+ * ago outgrew that (the search page's warnings, the history tab's) and the
+ * class name is the only trace left.
+ */
+.lib-warning {
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.lib-warning.warn {
+  background: var(--warn-soft-bg);
+  border: 1px solid var(--warn-soft-border);
+  color: var(--warn);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+/* ------------------------------- Search ---------------------------------- */
+/*
+ * The space editor: one row per decision, off until it is turned on. The row
+ * only opens its level editor when enabled, so a page of twelve dimensions is
+ * a readable list of twelve questions rather than twelve forms.
+ */
+.axis-row {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.axis-row:first-of-type {
+  border-top: none;
+}
+
+.axis-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.axis-title {
+  font-weight: 600;
+}
+
+.axis-body {
+  margin: 8px 0 0 24px;
+  max-width: 620px;
+}
+
+.axis-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.axis-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.axis-error {
+  margin-top: 6px;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/*
+ * The forest plot's legend. Four verdicts, four words: colour never carries a
+ * verdict on its own (see DeltaForest.tsx).
+ */
+.forest-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.forest-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * A paragraph of report prose. Wider measure than a field-help and darker than
+ * .muted, because these sentences are the report — the delta notes, the tie
+ * bracket, the interaction residual — not chrome around it.
+ */
+.report-note {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 78ch;
+  margin: 8px 0;
+}
+
+.report-note.warn {
+  color: var(--warn);
+}
+
+.caveat-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  max-width: 78ch;
+}
+
+.attr-row {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.attr-row:first-of-type {
+  border-top: none;
+}
+
+/* The name-it-then-save-it row, inline in a table cell or under the answer. */
+.save-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * Report tables carry sentences (a plan's label is a clause, not a word), so
+ * unlike the cashflow tables they wrap rather than forcing a horizontal
+ * scrollbar the width of the winning plan's description.
+ */
+.report-wrap td {
+  white-space: normal;
+}
+
+/*
+ * A table column that holds a SENTENCE rather than a figure. The default cell
+ * alignment in this app is right (figures line up on the decimal), which is
+ * exactly wrong for "retire 2031 - rent for good - give 10% of growth" sitting
+ * next to a rank and four money columns.
+ */
+.col-text {
+  text-align: left;
+}
+
+/* ---------------------------- The budget tables -------------------------- */
+/*
+ * The itemised budget (BudgetCard: one homogeneous table per budget tab). It
+ * is an EDITOR shaped like a table, so unlike the read-only tables above every
+ * cell holds a control, and the cells that can hold two things — an input and
+ * the note under it — align to the top rather than the middle.
+ *
+ * The inherited/typed distinction is carried by the placeholder: a blank
+ * retired or survivor cell shows the figure it inherits in the dim italic every
+ * "empty means something" box in this app uses (compare .pair-cell). It has to
+ * be legible enough to read as a number and different enough not to be mistaken
+ * for one that was typed.
+ */
+.budget-table td {
+  vertical-align: top;
+  padding: 5px 8px;
+}
+
+.budget-table th {
+  /* The sticky heading of the read-only tables would float over the card while
+     a row below it is being edited, which is worse than useless in a form. */
+  position: static;
+  white-space: normal;
+}
+
+.cell-money {
+  width: 108px;
+  text-align: right;
+}
+
+/* The line's label. min-width so a one-word label still gets a usable box. */
+.cell-text {
+  display: block;
+  width: 100%;
+  min-width: 150px;
+}
+
+.budget-table input::placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+  opacity: 1;
+}
+
+/* The note under a survivor cell: what a death while still working inherits,
+   when that differs from the figure the cell itself shows. */
+.cell-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.3;
+  padding-top: 2px;
+}
+
+.cell-controls {
+  display: flex;
+  gap: 4px;
+}
+
+/* Row buttons sit inside a 34px control row, so they carry the table's padding
+   rather than a form button's. */
+.cell-btn {
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* The tab's total — the row that answers "what does this stream cost". */
+.budget-table tfoot .budget-total td,
+.budget-table tfoot .budget-total th {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+}
+
+.budget-table tfoot td,
+.budget-table tfoot th {
+  padding-top: 8px;
+}
+
+/*
+ * A field-shaped READOUT: same footprint as an input so a derived value can
+ * stand in a form row without the layout jumping, but visibly not editable —
+ * no border-on-focus, no cursor. Born for the Widow tab's living share, which
+ * became a sum the moment the budget grew an "If I die" column: rendering it
+ * in a disabled input would say "temporarily off", when the truth is "edited
+ * elsewhere".
+ */
+.field-static {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 2px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

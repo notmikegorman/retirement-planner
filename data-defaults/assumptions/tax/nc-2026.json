@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "ncdor.gov",
+    "verified_on": "2026-08-12",
+    "needs_verification": false,
+    "notes": "SINGLE-FILER FIGURE verified 2026-08-15 against NCDOR's 'NC Standard Deduction or NC Itemized Deductions' page: $12,750 single, exactly half of $25,500 MFJ, and UNCHANGED for 2026 (the House-budget provision that would have raised it by $1,000 MFJ / $500 single did not survive into the enacted law — a full-text scan of N.C. Sess. Law 2026-41 finds neither $26,500 nor $13,250 anywhere). The rate is flat and filing-status independent, so the widow penalty in NC is entirely the halved deduction. OPEN ITEM, NOT FIXED HERE: N.C. Sess. Law 2026-41 (SB 257, signed 2026-07-07) section 44.1(a) rewrote G.S. 105-153.7(a) with a fixed schedule — 3.99% (2026), 3.49% (2027-2029), 3.24% (2030-2032), 2.99% (after 2032) — replacing the trigger mechanism this file's note describes. flatRateFallback 0.0399 therefore over-taxes every NC scenario from 2027 on, for the household AND the widow equally. Left unchanged deliberately: it is a modelling-policy decision (this file's standing posture is to decline unenacted cuts, and these are now enacted) that belongs to the owner, not a silent data edit inside a survivor-modelling change. Verified 2026-08-12 (ncdor.gov). Flat rate on federal AGI minus NC standard deduction; 4.25% 2025, 3.99% 2026. Social Security is deducted. Standard deduction $25,500 MFJ / $12,750 single, not auto-indexed."
+  },
+  "state": "nc",
+  "baseYear": 2026,
+  "kind": "flat",
+  "flatRateByYear": {
+    "2025": 0.0425,
+    "2026": 0.0399
+  },
+  "flatRateFallback": 0.0399,
+  "standardDeductionMfj": 25500,
+  "standardDeductionSingle": 12750,
+  "startingPoint": "federal_agi",
+  "socialSecurityTaxed": false,
+  "indexed": false
+}

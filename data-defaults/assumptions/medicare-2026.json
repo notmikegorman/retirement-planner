@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "CMS 2026 premium announcement (Nov 2025)",
+    "verified_on": "2026-08-12",
+    "needs_verification": false,
+    "notes": "irmaaTiersSingle verified 2026-08-15 against the SAME CMS 2026 fact sheet (2025-11-14), read verbatim from two independent mirrors (the NARFE chapter PDF carrying the cms.gov URL, and the RRB news release), which agree exactly and whose MFJ half reproduces the tiers already in this file digit-for-digit. cms.gov itself returns HTTP 403 to this environment, so the citation is a verbatim mirror rather than the government host — flagged rather than papered over. THE TRAP: the first four single thresholds are exactly half the MFJ ones ($218k/$274k/$342k/$410k -> $109k/$137k/$171k/$205k) but the TOP tier is $500,000 single against $750,000 MFJ, NOT half. A 'divide the MFJ thresholds by two' implementation would put it at $375,000 and over-charge IRMAA for any widow with MAGI between $375,000 and $500,000. Part B totals and Part D add-ons are identical to MFJ tier-for-tier; only the thresholds move — which is exactly how a widow drawing unchanged income jumps one or two tiers the year her filing status changes. Verified against CMS 2026 fact sheet via rrb.gov mirror + Kiplinger/KFF (2026-08-12): Part B standard $202.90, deductible $283 (not modeled), MFJ IRMAA tiers based on MAGI from 2 years prior. Future-year premiums and MAGI thresholds are indexed by simulated CPI (+ medicalInflationRealSpread for premiums) per SPEC §5/§7. partDBaseMonthly is NOT used in any computation: the Part D PLAN premium the engine charges comes from profile.health.partDPlanMonthly, and Part D IRMAA add-ons come from irmaaTiersMfj. The field is retained only as the CMS reference value (2026 Part D base beneficiary premium) for documentation."
+  },
+  "baseYear": 2026,
+  "partBStandardMonthly": 202.9,
+  "partDBaseMonthly": 38.99,
+  "irmaaTiersMfj": [
+    { "magiOver": 218000, "partBTotalMonthly": 284.1, "partDAddOnMonthly": 14.5 },
+    { "magiOver": 274000, "partBTotalMonthly": 405.8, "partDAddOnMonthly": 37.5 },
+    { "magiOver": 342000, "partBTotalMonthly": 527.5, "partDAddOnMonthly": 60.4 },
+    { "magiOver": 410000, "partBTotalMonthly": 649.2, "partDAddOnMonthly": 83.3 },
+    { "magiOver": 750000, "partBTotalMonthly": 689.9, "partDAddOnMonthly": 91.0 }
+  ],
+  "irmaaTiersSingle": [
+    { "magiOver": 109000, "partBTotalMonthly": 284.1, "partDAddOnMonthly": 14.5 },
+    { "magiOver": 137000, "partBTotalMonthly": 405.8, "partDAddOnMonthly": 37.5 },
+    { "magiOver": 171000, "partBTotalMonthly": 527.5, "partDAddOnMonthly": 60.4 },
+    { "magiOver": 205000, "partBTotalMonthly": 649.2, "partDAddOnMonthly": 83.3 },
+    { "magiOver": 500000, "partBTotalMonthly": 689.9, "partDAddOnMonthly": 91.0 }
+  ],
+  "medicareStartAge": 65,
+  "magiLookbackYears": 2
+}

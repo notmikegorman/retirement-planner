@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "IRS Rev. Proc. 2025-32 (TY2026, post-OBBBA); statutory items from IRC (charitable: IRC 170(p), 63(b)(4), 170(b)(1)(I), 170(b)(1)(G)(i))",
+    "verified_on": "2026-08-12",
+    "needs_verification": false,
+    "notes": "SINGLE-FILER FIGURES (bracketsSingle, standardDeductionSingle, additionalStdDeduction65Unmarried, ltcgBreakpointsSingle, niitThresholdSingle, ssTaxationThresholdsSingle, homeSaleExclusionSingle, charitable.nonItemizerDeductionSingle) verified 2026-08-15 directly against the PRIMARY source: the Rev. Proc. 2025-32 PDF from irs.gov (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf, SHA-256 e9ada115fb43a4af5ea326ca91edd40ab0bf29b9be01d2c13d7b8fa96214635b), IRB 2025-45, Nov 3 2025 — Section 4.01 Table 3 (unmarried individuals other than surviving spouses and heads of households), 4.03, 4.14(1), 4.14(3) — plus IRC 86(c), 1411(b), 121(b)(1)/(b)(4) and 170(p) via Cornell LII. Transcription self-check: the rev proc prints cumulative tax at each single threshold ($1,240 / $5,800 / $17,966 / $41,024 / $58,448 / $192,979.25) and all six reconcile to the cent from the thresholds below; the same check on the MFJ table reproduces the figures already in this file, which independently validates both. The MFJ half of this file was re-verified against the same primary PDF on 2026-08-15 and is unchanged. DO NOT DERIVE SINGLE FROM MFJ: the first five bracket thresholds are exactly half, but the 37% entry is $640,600 single vs $768,700 MFJ (half, $384,350, is the MARRIED-FILING-SEPARATELY figure), and ltcgBreakpointsSingle.fifteenRateTop is $545,500 vs $613,700 MFJ (half, $306,850, is again MFS). additionalStdDeduction65Unmarried is $2,050 per Section 4.14(3) verbatim — 'The additional standard deduction amount is increased to $2,050 if the individual is also unmarried and not a surviving spouse' — where 'surviving spouse' is the IRC 2(a) status that REQUIRES a dependent child, which a childless survivor does not have, so they take the higher figure. homeSaleExclusionSingle is $250,000 (IRC 121(b)(1)) but IRC 121(b)(4) preserves the full $500,000 for a sale within 2 years of a spouse's death; the engine applies that window. saltCapByYear/saltPhaseDown are NOT filing-status-dependent — IRC 164(b)(6) gives single and joint filers the same applicable limitation amount and the same phase-down threshold, halving only for married filing separately (verified 2026-08-15 against the statute via Cornell LII). Verified 2026-08-12 against IRS newsroom (Rev. Proc. 2025-32), Tax Foundation, The Tax Adviser; see VERIFICATIONS.md. SS thresholds and NIIT threshold are statutory and unindexed. Brackets/deductions/LTCG breakpoints are indexed by simulated CPI from baseYear. OBBBA $6k senior deduction (2025-2028) is NOT modeled AT ALL: the provision expires after 2028, so it can only ever matter to a profile whose people are already 65 in 2025-2028. Anyone that age today is simply not given it; a profile that retires before 65 is unaffected either way. charitable (OBBBA, TY2026+, permanent — verified 2026-08-12 against irs.gov Topic 506 and the IRC via Cornell LII; see VERIFICATIONS.md Charitable section): nonItemizerDeductionMfj $2,000 MFJ ($1,000 single) per IRC 170(p) — CASH gifts only (no donor-advised funds / private non-operating foundations), statutory and NEVER indexed for inflation, and subtracted in computing TAXABLE INCOME per IRC 63(b)(4) — it is NOT in IRC 62(a), so AGI and every MAGI variant (ACA / IRMAA / NIIT) are unaffected. itemizerAgiFloor 0.005 = IRC 170(b)(1)(I): itemized charitable is allowed only above 0.5% of the contribution base (AGI). Order of operations for itemizers is CEILING FIRST, FLOOR SECOND: max(0, min(gifts, 0.60 x AGI) - 0.005 x AGI). The 60%-of-AGI cash-gift ceiling (IRC 170(b)(1)(G)(i), made permanent by OBBBA — the pre-2026 sunset was struck) is an AGI fraction applied in code, not a data value. Excess over the ceiling carries forward in real law; carryforwards are NOT modeled."
+  },
+  "baseYear": 2026,
+  "bracketsMfj": [
+    { "rate": 0.1, "upTo": 24800 },
+    { "rate": 0.12, "upTo": 100800 },
+    { "rate": 0.22, "upTo": 211400 },
+    { "rate": 0.24, "upTo": 403550 },
+    { "rate": 0.32, "upTo": 512450 },
+    { "rate": 0.35, "upTo": 768700 },
+    { "rate": 0.37, "upTo": null }
+  ],
+  "bracketsSingle": [
+    { "rate": 0.1, "upTo": 12400 },
+    { "rate": 0.12, "upTo": 50400 },
+    { "rate": 0.22, "upTo": 105700 },
+    { "rate": 0.24, "upTo": 201775 },
+    { "rate": 0.32, "upTo": 256225 },
+    { "rate": 0.35, "upTo": 640600 },
+    { "rate": 0.37, "upTo": null }
+  ],
+  "standardDeductionMfj": 32200,
+  "standardDeductionSingle": 16100,
+  "additionalStdDeduction65": 1650,
+  "additionalStdDeduction65Unmarried": 2050,
+  "ltcgBreakpointsMfj": { "zeroRateTop": 98900, "fifteenRateTop": 613700 },
+  "ltcgBreakpointsSingle": { "zeroRateTop": 49450, "fifteenRateTop": 545500 },
+  "niitThresholdMfj": 250000,
+  "niitThresholdSingle": 200000,
+  "niitRate": 0.038,
+  "ssTaxationThresholdsMfj": { "tier1": 32000, "tier2": 44000 },
+  "ssTaxationThresholdsSingle": { "tier1": 25000, "tier2": 34000 },
+  "earlyWithdrawalPenaltyRate": 0.1,
+  "saltCapByYear": {
+    "2025": 40000,
+    "2026": 40400,
+    "2027": 40804,
+    "2028": 41212,
+    "2029": 41624
+  },
+  "saltCapFallback": 10000,
+  "saltPhaseDown": { "magiThreshold": 505000, "rate": 0.3, "floor": 10000 },
+  "homeSaleExclusionMfj": 500000,
+  "homeSaleExclusionSingle": 250000,
+  "charitable": {
+    "nonItemizerDeductionMfj": 2000,
+    "nonItemizerDeductionSingle": 1000,
+    "itemizerAgiFloor": 0.005
+  }
+}

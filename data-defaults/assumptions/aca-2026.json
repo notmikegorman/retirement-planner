@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "year": 2026,
+    "source": "IRS Rev. Proc. 2025-25 (applicable percentages); HHS 2025 FPL guidelines; 45 CFR 147.102 age curve",
+    "verified_on": "2026-08-12",
+    "needs_verification": false,
+    "notes": "fpl1Person verified 2026-08-15 against the ASPE 2025 HHS poverty-guideline computations (aspe.hhs.gov), 48 contiguous states + DC: $15,650 for one person, with the published $5,500 per-person increment reproducing this file's already-verified 2-person $21,150 exactly ($15,650 + $5,500). The 400% cliff for a single filer is therefore 4.0 x $15,650 = $62,600 of MAGI, against $84,600 for the couple — likely the single largest driver of a widow score, because a household retiring in its mid-fifties sits on the exchange for roughly nine years and the same withdrawal that cleared the couple's cliff by $20,000 is $20,000 over hers. The applicable-percentage table is household-size independent (the same Rev. Proc. 2025-25 schedule applies), so only the FPL denominator changes and no second percentage table is needed. Verified 2026-08-12 (Rev. Proc. 2025-25 PDF, 2025 Form 8962 instructions, ASPE 2025 FPL, CMS age-curve guidance). As of Aug 2026 no extension enacted (House passed one Jan 2026; Senate did not). 2026 law: enhanced (ARPA/IRA) credits expired 2025-12-31, so the 400%-FPL cliff is back — for a 2-person household the 2026 cliff is 4.0 x $21,150 = $84,600 MAGI; $1 over forfeits the entire credit. enhancedCreditsExtended toggles the policy per scenario. Benchmark premium comes from the owner's quote in profile.json, scaled by the federal age curve and medical inflation. Medicaid expansion: VA expanded in 2019 and NC in 2023; SC never expanded. In expansion states a household below medicaidThresholdFpl (138% FPL) is modeled as Medicaid-enrolled at a $0 premium (no marketplace PTC — Medicaid-eligible households are not PTC-eligible); in SC the below-100%-FPL coverage gap is real and the full premium is owed."
+  },
+  "baseYear": 2026,
+  "fpl2Person": 21150,
+  "fpl1Person": 15650,
+  "applicablePctTable": [
+    { "fplFrom": 0, "fplTo": 1.33, "pctFrom": 0.021, "pctTo": 0.021 },
+    { "fplFrom": 1.33, "fplTo": 1.5, "pctFrom": 0.0314, "pctTo": 0.0419 },
+    { "fplFrom": 1.5, "fplTo": 2.0, "pctFrom": 0.0419, "pctTo": 0.066 },
+    { "fplFrom": 2.0, "fplTo": 2.5, "pctFrom": 0.066, "pctTo": 0.0844 },
+    { "fplFrom": 2.5, "fplTo": 3.0, "pctFrom": 0.0844, "pctTo": 0.0996 },
+    { "fplFrom": 3.0, "fplTo": 4.0, "pctFrom": 0.0996, "pctTo": 0.0996 }
+  ],
+  "applicablePctTableEnhanced": [
+    { "fplFrom": 0, "fplTo": 1.5, "pctFrom": 0, "pctTo": 0 },
+    { "fplFrom": 1.5, "fplTo": 2.0, "pctFrom": 0, "pctTo": 0.02 },
+    { "fplFrom": 2.0, "fplTo": 2.5, "pctFrom": 0.02, "pctTo": 0.04 },
+    { "fplFrom": 2.5, "fplTo": 3.0, "pctFrom": 0.04, "pctTo": 0.06 },
+    { "fplFrom": 3.0, "fplTo": 4.0, "pctFrom": 0.06, "pctTo": 0.085 },
+    { "fplFrom": 4.0, "fplTo": null, "pctFrom": 0.085, "pctTo": 0.085 }
+  ],
+  "enhancedCreditsExtended": false,
+  "medicaidExpansion": { "va": true, "sc": false, "nc": true },
+  "medicaidThresholdFpl": 1.38,
+  "ageCurve": {
+    "50": 1.786,
+    "51": 1.865,
+    "52": 1.952,
+    "53": 2.04,
+    "54": 2.135,
+    "55": 2.23,
+    "56": 2.333,
+    "57": 2.437,
+    "58": 2.548,
+    "59": 2.603,
+    "60": 2.714,
+    "61": 2.81,
+    "62": 2.873,
+    "63": 2.952,
+    "64": 3.0
+  }
+}

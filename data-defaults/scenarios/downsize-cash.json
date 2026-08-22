@@ -1,0 +1,20 @@
+{
+  "name": "Downsize in place, buying for cash",
+  "description": "Retire mid-2030, sell the home June 2031 (the §121 exclusion applies), rent 12 months while looking, then buy June 2032 for cash equal to the net sale proceeds. `price: \"sale_proceeds\"` is a residual claim, not a commitment: living costs come out of the proceeds first and the house gets what survived, which is what stops a 72(t) reserving cash for a purchase that would simply have been smaller.",
+  "events": [
+    { "type": "retire", "person": "p1", "date": "2030-07" },
+    { "type": "retire", "person": "p2", "date": "2030-07" },
+    { "type": "sell_house", "date": "2031-06" },
+    { "type": "rent", "start": "2031-06", "months": 12, "monthlyCost": 2800 },
+    {
+      "type": "buy_house",
+      "date": "2032-06",
+      "price": "sale_proceeds",
+      "financing": "cash",
+      "propertyTaxAnnual": 3300,
+      "insuranceAnnual": 1700
+    },
+    { "type": "claim_social_security", "person": "p1", "date": "2042-03" },
+    { "type": "claim_social_security", "person": "p2", "date": "2044-09" }
+  ]
+}
