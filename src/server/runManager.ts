@@ -7,10 +7,10 @@
  * (profile + assumptions + scenario + mode + paths + seed) on the same engine
  * version always map to the same run, which is what makes the disk cache safe.
  */
-import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
+import { sha256Hex } from '../shared/sha256';
 import { ENGINE_VERSION } from '../shared/types';
 import type {
   RunMode,
@@ -52,9 +52,7 @@ function runFilePath(runKey: string): string {
  * canonical order (see search/compile.ts).
  */
 export function runKeyFor(input: SimulationInput): string {
-  return createHash('sha256')
-    .update(stableStringify({ engineVersion: ENGINE_VERSION, input }))
-    .digest('hex');
+  return sha256Hex(stableStringify({ engineVersion: ENGINE_VERSION, input }));
 }
 
 /** A cached full RunResult, or null on a miss. */

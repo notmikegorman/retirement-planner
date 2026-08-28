@@ -61,7 +61,7 @@ import type {
   SearchRound,
   SeedStat,
 } from "../../shared/types";
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../../shared/sha256";
 import { ENGINE_VERSION } from "../../shared/types";
 import { formatUSD, stableStringify } from "../../shared/util";
 // Read-only imports from the engine. Nothing under src/engine is MODIFIED by
@@ -220,16 +220,19 @@ interface EvalKey {
 // ---------------------------------------------------------------------------
 
 /**
- * The engine's own input hash, reproduced here.
+ * The engine's own input hash — literally the same functions the engine
+ * calls (shared/sha256 over stableStringify), not a reproduction.
  *
- * simulate.ts keeps its `sha256Hex` private, and exporting it would edit a file
- * under src/engine — which trips the version-pinning test, forces an
- * ENGINE_VERSION bump, and voids every cached run for a helper that computes
- * the same eight lines. This must stay byte-identical to that one: the values
- * are compared against RunMeta.hashes.
+ * This USED to be a copy: simulate.ts kept `sha256Hex` private behind the
+ * version pin, so the eight lines were duplicated here and drift was only
+ * held off by a test. The vendored shared/sha256 dissolved that trade — one
+ * implementation, no copy to drift. The pairing with stableStringify still
+ * matters: the values are compared against RunMeta.hashes, and hashing
+ * anything but the stable stringification would flag every saved score as
+ * computed under a different profile, forever.
  */
 function inputHash(value: unknown): string {
-  return createHash("sha256").update(stableStringify(value)).digest("hex");
+  return sha256Hex(stableStringify(value));
 }
 
 export async function runSearch(

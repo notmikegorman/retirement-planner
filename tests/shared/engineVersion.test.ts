@@ -58,6 +58,26 @@ function engineSourceHash(): string {
  * together, always.
  */
 const PINNED = {
+  // 1.23.0: ONE HASH EVERYWHERE — the engine's last Node import is gone.
+  // simulate.ts's private `sha256Hex` (createHash from node:crypto) is
+  // replaced by the vendored, dependency-free shared/sha256, the single
+  // implementation now behind every digest and cache key in the app. NO
+  // ARITHMETIC MOVED: the swap touches only which function turns a string
+  // into hex, and that function is proven byte-identical to node:crypto by
+  // the FIPS vectors, a 100,000-case seeded property test
+  // (tests/shared/sha256.test.ts), and this file's own RunMeta.hashes
+  // assertion, whose reference side still calls createHash directly.
+  //
+  // The proof that behaviour did not move is that every golden digest held
+  // WITHOUT a re-pin across this change: mfjUnchanged, both
+  // preExpenseLinesUnchanged digests, housingPlan's pins, housingCycles,
+  // rentingWindow, guardrails' §7 pins, tithePair's equivalence digests,
+  // mortgagePayoff, seppCalendarBust, survivorDownsize and bondComposition
+  // all passed untouched. The bump is here because the pin hashes source
+  // BYTES and the import line moved — and it is honest anyway: new runKeys
+  // mean every cached run recomputes once rather than being trusted across
+  // a hash-implementation change.
+  //
   // 1.22.0: COMMENTS ONLY — the de-personalisation pass. Every comment in
   // src/engine that cited a real household (names, birth dates, carrier names,
   // actual account balances, actual premiums) was rewritten to cite an
@@ -261,8 +281,8 @@ const PINNED = {
   //
   // 1.13.0 was the tithe account's soft window; 1.12.0 per-policy
   // life-insurance dispositions; 1.11.0 the itemised budget.
-  version: '1.22.0',
-  engineSourceSha256: '88adfb4474f4cfe1909935d0c14c53c031b7f45df864a24a6f8eb095e54591bf',
+  version: '1.23.0',
+  engineSourceSha256: '9ad278391b8be059980b11814245a69b40c5d32532f6d5320a70fe793dfdbff7',
 };
 
 describe('ENGINE_VERSION and the run cache', () => {
@@ -286,22 +306,22 @@ describe('ENGINE_VERSION and the run cache', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The input hash, copied twice
+// The input hash vs node:crypto
 // ---------------------------------------------------------------------------
 
 /**
- * `sha256Hex` is private to simulate.ts, and exporting it would edit a file
- * under src/engine — which trips the pin above, forces an ENGINE_VERSION bump,
- * and voids every cached run for the sake of eight lines. So it is copied, in
- * server/search/execute.ts and in server/scenarioStore.ts.
- *
- * Copies drift. If either one did, `ScenarioMetrics.inputsHash` would never
- * match what the engine stamps on RunMeta, so every saved score would be
- * flagged as computed under a different profile — forever, and for nothing. A
- * warning that always fires is worse than no warning: it trains the user to
- * ignore the one case it exists to catch.
+ * The engine hashes through the vendored shared/sha256 (its former private
+ * `sha256Hex` copy — once duplicated into the search executor to stay out of
+ * the pin's way — is unified there). This test's reference side deliberately
+ * KEEPS `createHash` from node:crypto: computing the expectation with a
+ * different implementation is exactly what makes the assertion the standing
+ * proof that the vendored hash is byte-identical to node's on real
+ * profile/assumptions shapes — not just on test vectors. Were both sides ever
+ * switched to shared/sha256, the test would compare the function to itself
+ * and a divergence from node:crypto (every runKey silently missing the
+ * ~hundreds of cached runs on disk) would sail through green.
  */
-describe('the input hash is the same function in all three places', () => {
+describe('the input hash matches node:crypto, so cached runs stay reachable', () => {
   /*
    * A FRESH TEMP FOLDER SEEDED FROM data-defaults, exactly like every server
    * test — and NOT the default `~/finance-planner-data`.

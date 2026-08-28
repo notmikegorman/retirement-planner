@@ -22,7 +22,8 @@
  * undoable and no entry is ever consumed, reordered or rewritten.
  */
 import path from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { sha256Hex } from '../shared/sha256';
 import type { PlanHistoryEntry, PlanScore, Scenario } from '../shared/types';
 import { planIdentityKey } from '../shared/planIdentity';
 import { planHistoryFileSchema, parseOrThrow } from '../shared/schemas';
@@ -45,7 +46,7 @@ function historyPath(): string {
  * score's `planHash` means "this exact plan" on any machine.
  */
 export function planHash(plan: Scenario): string {
-  return createHash('sha256').update(planIdentityKey(plan)).digest('hex');
+  return sha256Hex(planIdentityKey(plan));
 }
 
 /**

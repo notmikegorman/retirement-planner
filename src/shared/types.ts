@@ -71,7 +71,7 @@ export type YearMonth = string;
  * tests/shared/engineVersion.test.ts now fails when the engine's source
  * changes without this constant moving.
  */
-export const ENGINE_VERSION = '1.22.0';
+export const ENGINE_VERSION = '1.23.0';
 
 // ---------------------------------------------------------------------------
 // Profile

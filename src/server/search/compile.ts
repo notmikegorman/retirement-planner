@@ -18,7 +18,7 @@
  * would mean exporting it, which is an edit to src/engine, which is a bump. The
  * duplication is the cheaper mistake, and this comment is the mitigation.
  */
-import { createHash } from 'node:crypto';
+import { sha256Hex } from '../../shared/sha256';
 import type {
   AssetMix,
   GlideShape,
@@ -704,7 +704,7 @@ export function canonicalise(profile: Profile, scenario: Scenario): Scenario {
 
 /** sha256 of the EFFECTIVE plan. Equal hashes are one plan, whatever the labels. */
 export function planHash(scenario: Scenario): string {
-  return createHash('sha256').update(stableStringify(scenario)).digest('hex').slice(0, 16);
+  return sha256Hex(stableStringify(scenario)).slice(0, 16);
 }
 
 // ---------------------------------------------------------------------------
@@ -858,10 +858,9 @@ export function assignmentValues(
 
 /** Stable hash of the space itself, so two searches over it are linkable. */
 export function spaceHash(base: Scenario, axes: SearchAxis[]): string {
-  return createHash('sha256')
-    .update(stableStringify({ base, axes: [...axes].sort((a, b) => a.dim.localeCompare(b.dim)) }))
-    .digest('hex')
-    .slice(0, 16);
+  return sha256Hex(
+    stableStringify({ base, axes: [...axes].sort((a, b) => a.dim.localeCompare(b.dim)) }),
+  ).slice(0, 16);
 }
 
 /** Penalty-free year per person, for callers that need the inert-level rule. */

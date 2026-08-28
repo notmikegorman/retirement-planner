@@ -473,7 +473,7 @@
  *   is reported for information in income.employerHealthPremiumShare.
  */
 
-import { createHash } from 'node:crypto';
+import { sha256Hex } from '../shared/sha256';
 import type {
   AssetMix,
   FilingStatus,
@@ -5187,9 +5187,11 @@ export function simulatePath(
 // runSimulation
 // ---------------------------------------------------------------------------
 
-function sha256Hex(s: string): string {
-  return createHash('sha256').update(s).digest('hex');
-}
+// The hashes stamped below compute through the vendored shared/sha256 — the
+// engine's LAST Node dependency was the `node:crypto` import this replaced.
+// tests/shared/engineVersion.test.ts proves the vendored digest byte-equal to
+// node:crypto on real profile/assumptions shapes, so RunMeta.hashes and
+// runKey are unchanged by the swap.
 
 /**
  * Run a full simulation (SPEC §4.3 modes):
