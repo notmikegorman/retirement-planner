@@ -761,10 +761,11 @@ function WidowResult({
         Its other half — the note that the engine caps sweep runs below the
         headline's path count — is worth saying and is NOT said here, because
         saying it needs INNER_PATH_CAP and importing it would pull
-        engine/solvers.ts (and through it node:crypto) into the browser bundle.
-        Mirroring the number locally is the option this file declines: a copied
-        constant that drifts would state a false path count with total
-        confidence. Move the constant to src/shared and the note can come back.
+        engine/solvers.ts (and the whole simulation engine behind it) into the
+        browser bundle for one number. Mirroring the number locally is the
+        option this file declines: a copied constant that drifts would state a
+        false path count with total confidence. Move the constant to src/shared
+        and the note can come back.
       */}
     </div>
   );

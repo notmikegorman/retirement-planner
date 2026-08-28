@@ -34,8 +34,8 @@ import { deriveExpenseStreams, survivorLivingMonthly } from '../../../shared/exp
 import { formatPct, formatUSD, parseYearMonth } from '../../../shared/util';
 // The engine's own purchase date and downsize-delay default, not lookalikes —
 // safe for the bundle: engine/housingPlan imports nothing beyond src/shared
-// (HousingCard already pulls it in), unlike engine/solvers whose node:crypto
-// must stay out.
+// (HousingCard already pulls it in), unlike engine/solvers, which would drag
+// the whole simulation engine into the client chunk.
 import { DEFAULT_SURVIVOR_DOWNSIZE_DELAY_MONTHS, purchaseDate } from '../../../engine/housingPlan';
 import { coverageBands, householdWorkStopMonth } from '../workbench/workbenchLogic';
 
