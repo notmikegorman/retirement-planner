@@ -4,6 +4,16 @@ import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  /**
+   * The served-from prefix (Phase 7). GitHub Pages serves a PROJECT site
+   * under /<repo>/, so the Pages workflow builds with
+   * FPLAN_BASE=/retirement-planner/ — every asset URL, worker chunk URL and
+   * the router's path vocabulary (nav.ts reads import.meta.env.BASE_URL)
+   * shift under it. Everything else — npm run dev, npm start, the parked
+   * legacy server, the non-walkthrough browser lanes — keeps serving at /,
+   * which is why this is env-driven rather than hardcoded.
+   */
+  base: process.env.FPLAN_BASE ?? '/',
   plugins: [react()],
   build: {
     outDir: 'dist/ui',

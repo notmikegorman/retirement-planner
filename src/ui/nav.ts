@@ -138,6 +138,52 @@ export function isProfileTabId(value: string | null): value is ProfileTabId {
 }
 
 // ---------------------------------------------------------------------------
+// The base path (pure helpers + the build's answer)
+// ---------------------------------------------------------------------------
+
+/*
+ * THE APP DOES NOT ALWAYS LIVE AT '/'. GitHub Pages serves a project site
+ * under /<repo>/ (Phase 7 ships to /retirement-planner/), so every pathname
+ * the router READS arrives with that prefix and every pathname it WRITES
+ * must carry it — a pushState to a bare '/workbench' would walk the address
+ * bar right out of the deployed site. The pure route vocabulary above stays
+ * base-blind on purpose (parseRoute/routePath speak app-paths only, and
+ * their tests stay simple); these two helpers are the border crossing, and
+ * useRoute is the only place that crosses it.
+ */
+
+/**
+ * Vite's BASE_URL ('/', '/retirement-planner/') normalized to a strippable
+ * prefix: '' for root, otherwise no trailing slash. Total: garbage in,
+ * root out.
+ */
+export function normalizeBase(baseUrl: string | undefined): string {
+  if (baseUrl === undefined || baseUrl === '' || baseUrl === '/') return '';
+  const trimmed = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+/** The location.pathname → app-path direction. '/base' alone reads as '/'. */
+export function stripBase(pathname: string, base: string): string {
+  if (base === '') return pathname;
+  if (pathname === base) return '/';
+  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
+  // Off-base pathnames cannot be served to this app by the host; parse what
+  // arrived rather than guessing (parseRoute resolves anything to a page).
+  return pathname;
+}
+
+/** The app-path → history.pushState direction. */
+export function withBase(path: string, base: string): string {
+  return base === '' ? path : `${base}${path}`;
+}
+
+/** What this build was told at bundle time; '' outside a bundler (tests). */
+export function appBase(): string {
+  return normalizeBase(import.meta.env?.BASE_URL as string | undefined);
+}
+
+// ---------------------------------------------------------------------------
 // Routes (pure)
 // ---------------------------------------------------------------------------
 
@@ -328,7 +374,15 @@ export type StoredTabs = Record<Page, string | null>;
  * an effect's dependency list (SearchPage's does) without re-arming it.
  */
 export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: StoredTabs } {
-  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
+  /*
+   * Every read strips the build's base path and every write prepends it —
+   * here, in the one impure layer, so the pure vocabulary above never
+   * learns the app can be served from anywhere but '/'.
+   */
+  const base = appBase();
+  const [route, setRoute] = useState<Route>(() =>
+    parseRoute(stripBase(window.location.pathname, base)),
+  );
 
   /*
    * Once, here, for every page at the same moment — not in each page, which
@@ -355,7 +409,7 @@ export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: St
      *
      * Mount only: every write after this one goes through navigate().
      */
-    const canonical = routePath(route);
+    const canonical = withBase(routePath(route), base);
     if (window.location.pathname !== canonical) {
       window.history.replaceState(null, '', canonical);
     }
@@ -367,13 +421,13 @@ export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: St
      * the URL by the time popstate fires, so the route is RE-READ here and
      * never written — writing would fight the history stack it is reporting.
      */
-    const onPopState = () => setRoute(parseRoute(window.location.pathname));
+    const onPopState = () => setRoute(parseRoute(stripBase(window.location.pathname, base)));
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   const navigate = useCallback<NavigateFn>((page, tab, opts) => {
-    const here = window.location.pathname;
+    const here = stripBase(window.location.pathname, base);
     const next = nextRoute(parseRoute(here), page, tab);
     const path = routePath(next);
     /*
@@ -382,8 +436,8 @@ export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: St
      * not leave an entry, or Back walks through views nobody chose.
      */
     const action = opts?.replace === true ? 'replace' : historyAction(here, path);
-    if (action === 'replace') window.history.replaceState(null, '', path);
-    else window.history.pushState(null, '', path);
+    if (action === 'replace') window.history.replaceState(null, '', withBase(path, base));
+    else window.history.pushState(null, '', withBase(path, base));
     setRoute(next);
   }, []);
 

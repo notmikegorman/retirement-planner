@@ -38,9 +38,12 @@ import {
   isSearchTabId,
   isTabOfPage,
   nextRoute,
+  normalizeBase,
   parseRoute,
   resolveTab,
   routePath,
+  stripBase,
+  withBase,
   type Page,
   type Route,
 } from '../../src/ui/nav';
@@ -533,6 +536,58 @@ describe('the pages render the vocabulary they are addressed by', () => {
  * nothing else in this repo notices. A DOM-based test of useRoute would replace
  * all three, and should, the day a DOM environment arrives.
  */
+describe('the base path helpers', () => {
+  it('normalizeBase: Vite BASE_URL forms → a strippable prefix', () => {
+    expect(normalizeBase('/')).toBe('');
+    expect(normalizeBase('')).toBe('');
+    expect(normalizeBase(undefined)).toBe('');
+    expect(normalizeBase('/retirement-planner/')).toBe('/retirement-planner');
+    expect(normalizeBase('/retirement-planner')).toBe('/retirement-planner');
+    expect(normalizeBase('retirement-planner/')).toBe('/retirement-planner');
+  });
+
+  it('stripBase reads served pathnames back into app paths', () => {
+    const b = '/retirement-planner';
+    expect(stripBase('/retirement-planner/', b)).toBe('/');
+    expect(stripBase('/retirement-planner', b)).toBe('/');
+    expect(stripBase('/retirement-planner/workbench/cashflow', b)).toBe('/workbench/cashflow');
+    // Root builds: the identity, byte for byte.
+    expect(stripBase('/workbench', '')).toBe('/workbench');
+  });
+
+  it('a prefix-LOOKALIKE path is not stripped — /retirement-planner-x is not ours', () => {
+    expect(stripBase('/retirement-planner-x/workbench', '/retirement-planner')).toBe(
+      '/retirement-planner-x/workbench',
+    );
+  });
+
+  it('withBase writes app paths back under the served prefix', () => {
+    expect(withBase('/workbench', '/retirement-planner')).toBe(
+      '/retirement-planner/workbench',
+    );
+    expect(withBase('/profile/expenses', '')).toBe('/profile/expenses');
+  });
+
+  it('the two directions round-trip for every route in the vocabulary', () => {
+    for (const base of ['', '/retirement-planner']) {
+      for (const route of EVERY_ROUTE) {
+        const path = routePath(route);
+        expect(stripBase(withBase(path, base), base)).toBe(path);
+        expect(parseRoute(stripBase(withBase(path, base), base))).toEqual(route);
+      }
+    }
+  });
+
+  it('an UNBASED deep link parsed under a base resolves rather than blanking', () => {
+    // The 404 trick serves the app for any in-site path; a stale bookmark to
+    // the OLD root-served shape must still land somewhere.
+    expect(parseRoute(stripBase('/workbench', '/retirement-planner'))).toEqual({
+      page: 'workbench',
+      tab: null,
+    });
+  });
+});
+
 describe('useRoute wires the History API', () => {
   const nav = read('../../src/ui/nav.ts');
 
@@ -540,14 +595,16 @@ describe('useRoute wires the History API', () => {
     expect(nav).toContain("window.addEventListener('popstate', onPopState)");
     expect(nav).toContain("window.removeEventListener('popstate', onPopState)");
     // Re-read, never written: writing here would fight the stack it reports.
-    expect(nav).toContain('setRoute(parseRoute(window.location.pathname))');
+    expect(nav).toContain('setRoute(parseRoute(stripBase(window.location.pathname, base)))');
   });
 
   it('PUSHES a new path and only replaces a repeat, so Back has somewhere to go', () => {
     // If this branch ever replaced too, the back button would be inert and
     // every pure test in this file would still pass.
-    expect(nav).toContain("if (action === 'replace') window.history.replaceState(null, '', path)");
-    expect(nav).toContain("else window.history.pushState(null, '', path)");
+    expect(nav).toContain(
+      "if (action === 'replace') window.history.replaceState(null, '', withBase(path, base))",
+    );
+    expect(nav).toContain("else window.history.pushState(null, '', withBase(path, base))");
     expect(nav).toContain("const action = opts?.replace === true ? 'replace' : historyAction(");
   });
 
@@ -556,7 +613,17 @@ describe('useRoute wires the History API', () => {
     // bar keeps saying something the app is not showing. A push instead would
     // make the first Back land on the view already on screen.
     expect(nav).toContain("window.history.replaceState(null, '', canonical)");
-    expect(nav).toContain('const canonical = routePath(route)');
+    expect(nav).toContain('const canonical = withBase(routePath(route), base)');
+  });
+
+  it('every read strips the base and every write prepends it — no bare escape', () => {
+    // The Pages deploy serves under /retirement-planner/; one forgotten
+    // stripBase reads the repo name as a page (everything resolves to the
+    // workbench), one forgotten withBase pushStates the address bar straight
+    // out of the site. Pin all four crossings.
+    expect(nav).toContain('parseRoute(stripBase(window.location.pathname, base))');
+    expect(nav).toContain('const here = stripBase(window.location.pathname, base)');
+    expect(nav.match(/withBase\(/g)!.length).toBeGreaterThanOrEqual(3);
   });
 
   it('snapshots every page\'s remembered tab once, at app load', () => {
