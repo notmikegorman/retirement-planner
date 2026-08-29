@@ -41,6 +41,7 @@ import {
   type ScoringIntent,
 } from '../../src/store/scoringIntent';
 import { createServices, type Services } from '../../src/store/services';
+import { createSnapshotScorer } from '../../src/store/snapshotScorer';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultsDir = path.join(repoRoot, 'data-defaults');
@@ -619,6 +620,119 @@ describe('finishing an interrupted scoring', () => {
     const outcome = await w.services.snapshotScorer.finishScoring(id, w.deps);
     expect(outcome.status).toBe('already_scored');
     expect(JSON.stringify(await w.stores.networth.listSnapshots())).toBe(before);
+    expect(await w.intentFileExists()).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The write boundary: attach FIRST, clear SECOND
+// ---------------------------------------------------------------------------
+
+describe('the intent outlives a death at the attach itself', () => {
+  /**
+   * The ordering the scorers promise in their comments — attach first, clear
+   * second — pinned at the one boundary where reversing it silently loses a
+   * record: the run has answered, the attach is the very next write, and the
+   * process dies ON that write. The intent is then the only thing on disk
+   * that says a run was in flight, so it MUST still be there — cleared-first
+   * would put the row back in the pre-Phase-6 silent-permanent-blank state.
+   */
+  function scorerDyingAt(method: 'attachScore' | 'attachSustainableSpend') {
+    const dying = {
+      ...w.stores.networth,
+      [method]: async () => {
+        throw new Error('the process died on this write');
+      },
+    };
+    return createSnapshotScorer({
+      networth: dying,
+      planHistory: w.stores.planHistory,
+      plan: w.stores.plan,
+      runner: w.services.scoreRunner,
+      defaultDeps: w.deps,
+      intents: w.services.scoringIntentStore,
+    });
+  }
+
+  it('a spend attach that never lands leaves the spend-phase intent standing', async () => {
+    const id = await snapshotRow();
+    const scorer = scorerDyingAt('attachSustainableSpend');
+    // The whole flow, dying exactly at the spend attach: the probability
+    // landed (the real attachScore ran), the bisection answered, the figure
+    // never reached the row.
+    await expect(scorer.startScoring(id, w.deps)).rejects.toThrow('died on this write');
+
+    expect((await w.readIntents()).find((i) => i.id === id)).toMatchObject({
+      kind: 'snapshot',
+      phase: 'spend',
+    });
+
+    // And the reopened app turns it into the Aug-20 repair, not a loss.
+    const w2 = await w.reboot();
+    await w2.services.scoringIntents.heal();
+    expect((await w2.services.scoringIntents.list()).map((i) => i.id)).toContain(id);
+    const outcome = await w2.services.snapshotScorer.finishScoring(id, w2.deps);
+    expect(outcome.status).toBe('scored');
+    expect(await w2.intentFileExists()).toBe(false);
+  });
+
+  it('a score attach that never lands leaves the score-phase intent standing', async () => {
+    const id = await snapshotRow();
+    const scorer = scorerDyingAt('attachScore');
+    await expect(scorer.startScoring(id, w.deps)).rejects.toThrow('died on this write');
+
+    expect((await w.readIntents()).find((i) => i.id === id)).toMatchObject({
+      kind: 'snapshot',
+      phase: 'score',
+    });
+
+    const w2 = await w.reboot();
+    await w2.services.scoringIntents.heal();
+    const outcome = await w2.services.snapshotScorer.finishScoring(id, w2.deps);
+    expect(outcome.status).toBe('scored');
+    expect(await w2.intentFileExists()).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Two scorings in flight share the one intent file
+// ---------------------------------------------------------------------------
+
+describe('concurrent recording through the serialized store', () => {
+  it('a snapshot and a version scoring keep BOTH intents on disk mid-flight', async () => {
+    // The interleaving the store's serialized chain exists to survive: two
+    // scorers record into the one file at once, and a read-modify-write that
+    // bypassed the chain (or wrote the file raw) would drop one of them —
+    // exactly the loss class the intent machinery was built to close.
+    const snapId = await snapshotRow();
+    const verId = await keptVersionId();
+    let releaseRuns: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      releaseRuns = r;
+    });
+    w.setExecutor(async (input) => {
+      await gate;
+      return input.scenario.solver ? solved() : finished();
+    });
+    // Real (short) waits: the gated polling loops must yield the event loop.
+    const deps: ScoringDeps = { ...w.deps, wait: () => new Promise((r) => setTimeout(r, 2)) };
+    const snapWork = w.services.snapshotScorer.startScoring(snapId, deps);
+    const verWork = w.services.planHistoryScorer.startVersionScoring(verId, deps);
+
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const kinds = (await w.services.scoringIntentStore.list()).map((i) => i.kind).sort();
+      if (kinds.length === 2) {
+        expect(kinds).toEqual(['plan-version', 'snapshot']);
+        break;
+      }
+      if (Date.now() > deadline) throw new Error('both intents never appeared on disk');
+      await new Promise((r) => setTimeout(r, 5));
+    }
+
+    releaseRuns();
+    expect((await snapWork).status).toBe('scored');
+    expect((await verWork).status).toBe('scored');
     expect(await w.intentFileExists()).toBe(false);
   });
 });
