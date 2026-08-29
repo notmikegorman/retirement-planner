@@ -138,6 +138,69 @@ body {
   color: var(--text-dim);
 }
 
+/*
+ * The folder control (File > New / File > Open): the current folder's name,
+ * always, and a small menu behind it. It sits beside the theme toggle and
+ * borrows its quiet look; the name gets an ellipsis rather than a second
+ * topbar line, because the full name is one hover (title) away.
+ */
+.folder-control {
+  position: relative;
+  display: inline-flex;
+  margin-right: 8px;
+}
+
+.folder-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+
+.folder-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  padding: 10px 12px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.folder-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.folder-menu-section + .folder-menu-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.folder-menu-item {
+  text-align: left;
+  width: 100%;
+}
+
+.folder-menu-hint {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .content {
   flex: 1;
   padding: 24px;

@@ -35,3 +35,15 @@ export function setScoringInFlight(inFlight: number): void {
   if (shouldArm) addEventListener('beforeunload', warnOnUnload);
   else removeEventListener('beforeunload', warnOnUnload);
 }
+
+/**
+ * Whether any scoring run is in flight RIGHT NOW — the folder switcher's
+ * pre-check (topbar FolderControl). It must refuse to switch while this is
+ * true: switching releases the writer guard and then reloads, and a reload
+ * this guard's own dialog talks the user out of would leave a live, writing
+ * tab holding NO guard — the one state the whole guard machinery exists to
+ * make impossible.
+ */
+export function scoringInFlight(): boolean {
+  return armed;
+}

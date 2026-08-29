@@ -2,6 +2,7 @@ import { PAGES, useRoute, type Page } from './nav';
 import { useSwUpdate } from './pwa';
 import { ThemeContext, themeModeIcon, themeModeLabel, useThemeController } from './theme';
 import { ToastProvider } from './toast';
+import { FolderControl } from './components/topbar/FolderControl';
 import { WorkbenchPage } from './pages/WorkbenchPage';
 import { SearchPage } from './pages/SearchPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -86,6 +87,9 @@ export function App() {
               ))}
             </nav>
             <span className="spacer" />
+            {/* Where the data on screen lives, and the door to anywhere else
+                it could (File > New / File > Open) — FolderControl.tsx. */}
+            <FolderControl />
             <button
               className="theme-toggle"
               onClick={theme.cycleMode}

@@ -124,16 +124,34 @@ export async function requestStoragePersistence(): Promise<boolean | null> {
 const DB_NAME = 'fplan';
 const DB_STORE = 'handles';
 const HANDLE_KEY = 'data-folder';
+/**
+ * The REMEMBERED-FOLDERS list (File > Open, 2026-08-29) — every folder this
+ * browser profile was ever granted, beside the current-folder pointer above.
+ * Same store, second key: no DB version bump, so a pre-list profile opens
+ * unchanged and its lone remembered handle is adopted into the list on first
+ * read (see listRememberedFolders).
+ */
+const FOLDER_LIST_KEY = 'data-folders';
 
 export interface SavedFolder {
   /**
-   * Minted once per pick, stored beside the handle, used as the Web-Lock
-   * scope: every tab of this profile loads the same record, so every tab
-   * contends on the same lock — which is all a lock name has to do. (A path
-   * would be nicer; the API deliberately never reveals one.)
+   * Minted once per FOLDER (not per pick, since the list landed): stored
+   * beside the handle, used as the Web-Lock scope AND as the per-folder
+   * localStorage identity (ui/planBlockStash.ts). Every tab of this profile
+   * loads the same record, so every tab contends on the same lock — and
+   * re-picking a folder the list already knows re-adopts its id via
+   * isSameEntry, so two tabs that reached one folder through different picks
+   * still contend on one lock. (A path would be nicer; the API deliberately
+   * never reveals one.)
    */
   id: string;
   handle: FileSystemDirectoryHandle;
+}
+
+/** A list entry: the saved folder plus when it was last the current one. */
+export interface RememberedFolder extends SavedFolder {
+  /** ISO — orders the File menu, most recently opened first. */
+  lastOpened: string;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -156,15 +174,150 @@ function requestDone<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-export async function saveFolderHandle(handle: FileSystemDirectoryHandle): Promise<SavedFolder> {
-  const record: SavedFolder = { id: `folder-${randomHex(8)}`, handle };
+// ---- pure list rules (node-tested in tests/ui/storageGate.test.ts) --------
+
+/** Most recently opened first; a tie keeps input order (stable sort). */
+export function sortRememberedFolders(list: readonly RememberedFolder[]): RememberedFolder[] {
+  return [...list].sort((a, b) => b.lastOpened.localeCompare(a.lastOpened));
+}
+
+/** The list with `record` upserted by id — one entry per folder, ever. */
+export function upsertRememberedFolder(
+  list: readonly RememberedFolder[],
+  record: RememberedFolder,
+): RememberedFolder[] {
+  return sortRememberedFolders([...list.filter((f) => f.id !== record.id), record]);
+}
+
+/** Garbage-tolerant read of whatever the list key holds. */
+function parseFolderList(raw: unknown): RememberedFolder[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (f): f is RememberedFolder =>
+      typeof f === 'object' &&
+      f !== null &&
+      typeof (f as RememberedFolder).id === 'string' &&
+      typeof (f as RememberedFolder).lastOpened === 'string' &&
+      Boolean((f as RememberedFolder).handle),
+  );
+}
+
+// ---- the shelves ----------------------------------------------------------
+
+/**
+ * One pass against the handles store; the db opens and closes here.
+ *
+ * THE BODY MAY ONLY AWAIT IDB REQUESTS. An IndexedDB transaction auto-commits
+ * the moment the event loop turns with no request pending, so awaiting
+ * anything else inside (isSameEntry, a timer) deactivates the transaction and
+ * the next put throws. Callers that need a non-IDB await (saveFolderHandle's
+ * identity check) split into two passes around it instead.
+ */
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  body: (store: IDBObjectStore) => Promise<T>,
+): Promise<T> {
   const db = await openDb();
   try {
-    await requestDone(db.transaction(DB_STORE, 'readwrite').objectStore(DB_STORE).put(record, HANDLE_KEY));
+    return await body(db.transaction(DB_STORE, mode).objectStore(DB_STORE));
   } finally {
     db.close();
   }
-  return record;
+}
+
+/**
+ * The id a fresh pick should carry: the LIST's id when the picked handle is a
+ * folder the profile already knows (isSameEntry — the API's only identity
+ * test), a newly minted one otherwise. Re-using the id is what keeps the
+ * Web-Lock scope and the per-folder stash stable across re-picks of one
+ * folder.
+ */
+async function idForHandle(
+  handle: FileSystemDirectoryHandle,
+  list: readonly RememberedFolder[],
+): Promise<string> {
+  for (const known of list) {
+    try {
+      if (await handle.isSameEntry(known.handle)) return known.id;
+    } catch {
+      // A dead stored handle cannot be compared; it simply never matches.
+    }
+  }
+  return `folder-${randomHex(8)}`;
+}
+
+/**
+ * Remember a picked folder as THE folder: writes the current-folder pointer
+ * and upserts the remembered list (File > Open's menu). Every pick path —
+ * the boot chooser and the topbar control — comes through here. Two IDB
+ * passes around the identity check, because isSameEntry is a non-IDB await
+ * (see withStore's contract).
+ */
+export async function saveFolderHandle(handle: FileSystemDirectoryHandle): Promise<SavedFolder> {
+  const known = await withStore('readonly', async (store) =>
+    parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY))),
+  );
+  const record: SavedFolder = { id: await idForHandle(handle, known), handle };
+  return withStore('readwrite', async (store) => {
+    const list = parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY)));
+    await requestDone(store.put(record, HANDLE_KEY));
+    await requestDone(
+      store.put(
+        upsertRememberedFolder(list, { ...record, lastOpened: new Date().toISOString() }),
+        FOLDER_LIST_KEY,
+      ),
+    );
+    return record;
+  });
+}
+
+/**
+ * Every folder this profile was ever granted, most recently opened first.
+ * A profile from before the list existed holds only the pointer; its lone
+ * folder is adopted into the list here (dated at the epoch — it sorts last
+ * until it is opened again, which is the honest reading of "never opened
+ * since the list has existed").
+ */
+export async function listRememberedFolders(): Promise<RememberedFolder[]> {
+  try {
+    return await withStore('readwrite', async (store) => {
+      const list = parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY)));
+      if (list.length > 0) return sortRememberedFolders(list);
+      const legacy = await requestDone<SavedFolder | undefined>(store.get(HANDLE_KEY));
+      if (!legacy || typeof legacy.id !== 'string' || !legacy.handle) return [];
+      const adopted = [{ ...legacy, lastOpened: new Date(0).toISOString() }];
+      await requestDone(store.put(adopted, FOLDER_LIST_KEY));
+      return adopted;
+    });
+  } catch {
+    return []; // an unreadable shelf and an empty one land the same place
+  }
+}
+
+/**
+ * Make a remembered folder the current one (File > Open on a listed entry):
+ * pointer written, lastOpened bumped. Null when the id is not in the list —
+ * the caller falls back to asking for a fresh pick.
+ */
+export async function openRememberedFolder(id: string): Promise<SavedFolder | null> {
+  try {
+    return await withStore('readwrite', async (store) => {
+      const list = parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY)));
+      const found = list.find((f) => f.id === id);
+      if (found === undefined) return null;
+      const record: SavedFolder = { id: found.id, handle: found.handle };
+      await requestDone(store.put(record, HANDLE_KEY));
+      await requestDone(
+        store.put(
+          upsertRememberedFolder(list, { ...found, lastOpened: new Date().toISOString() }),
+          FOLDER_LIST_KEY,
+        ),
+      );
+      return record;
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function loadFolderHandle(): Promise<SavedFolder | null> {

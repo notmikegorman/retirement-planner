@@ -57,6 +57,17 @@ function searchSettled(): void {
   if (runningSearches === 0) removeEventListener('beforeunload', warnOnUnload);
 }
 
+/**
+ * Whether any search is in flight RIGHT NOW — the folder switcher's
+ * pre-check, the sibling of scoringGuard.scoringInFlight and for the same
+ * reason: a switch releases the writer guard before it reloads, and a reload
+ * this module's own beforeunload dialog talks the user out of must not leave
+ * a live searching tab writing into an unguarded folder.
+ */
+export function searchesInFlight(): boolean {
+  return runningSearches > 0;
+}
+
 // ---------------------------------------------------------------------------
 // The runner
 // ---------------------------------------------------------------------------

@@ -236,6 +236,13 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     expect(resultsText).toContain('Add your accounts on the Profile tab');
     expect(resultsText).not.toContain('%');
     expect(await page.locator('.wb-metric-value').count()).toBe(0);
+
+    // The topbar's folder control names the storage this session actually
+    // booted on — the OPFS seam boots browser-private, and the control must
+    // say so by the app's one name for it (folderControlLogic).
+    expect((await page.locator('.folder-name').innerText()).trim()).toBe(
+      'Browser-private storage',
+    );
   }, 300_000);
 
   it('Net Worth degrades honestly too: no snapshot button, the reason in its place', async () => {
@@ -504,6 +511,15 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
         .getProfile(),
     );
     expect(demoProfile.people.map((p) => p.name)).toEqual(['Alex', 'Jordan']);
+
+    // The folder control degrades with the storage: "Demo storage" as the
+    // name, and its menu explains rather than offering folders this browser
+    // cannot pick (folderControlLogic's demo-note branch).
+    expect((await fbPage.locator('.folder-name').innerText()).trim()).toBe('Demo storage');
+    await fbPage.locator('.folder-toggle').click();
+    const menuText = await fbPage.locator('.folder-menu').innerText();
+    expect(menuText).toContain('there is no folder connection to switch');
+    expect(await fbPage.getByRole('menuitem', { name: 'Open another folder…' }).count()).toBe(0);
     await fallbackContext.close();
   }, 600_000);
 
