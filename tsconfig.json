@@ -14,5 +14,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts", "vitest.browser.config.ts"]
+  "include": ["src", "tests", "scripts", "workers", "vite.config.ts", "vitest.browser.config.ts"]
 }

@@ -34,6 +34,11 @@ import { describe, expect, it } from 'vitest';
 // local backend) joined for the same reason: they ARE the browser runtime,
 // and a node: import there fails only at bundle time, which is exactly the
 // quiet-until-shipped failure this scan exists to make loud.
+// workers/quote-proxy joined in Phase 6: the Cloudflare Worker runs in a
+// browser-like runtime (fetch, Request, Response — no node at all), and it
+// is deployed straight from source by wrangler, so a node: import there
+// would fail only at deploy time, on the owner's machine, with no CI in
+// front of it. Pinned like the rest of the portable code instead.
 const PORTABLE_DIRS = [
   'src/engine',
   'src/tax',
@@ -42,6 +47,7 @@ const PORTABLE_DIRS = [
   'src/ui/io',
   'src/ui/local',
   'src/ui/workers',
+  'workers/quote-proxy',
 ] as const;
 
 /** Bare builtin names ('fs', 'path') count the same as 'node:'-prefixed. */

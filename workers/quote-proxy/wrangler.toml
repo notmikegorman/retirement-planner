@@ -1,0 +1,18 @@
+# The quote proxy's deploy config. One command, run from this directory:
+#
+#   npx wrangler deploy
+#
+# See README.md for the post-deploy step (pointing the app at the printed
+# workers.dev URL). Decision D3: the owner's Cloudflare account, workers.dev
+# hostname, and NO LOGGING — a symbol list is a portfolio fingerprint, so
+# observability stays off and the handler never writes a log line.
+
+name = "fplan-quote-proxy"
+main = "handler.ts"
+compatibility_date = "2026-08-29"
+
+# Serve on <name>.<account>.workers.dev — no custom domain (D3).
+workers_dev = true
+
+[observability]
+enabled = false
