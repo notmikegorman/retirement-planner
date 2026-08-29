@@ -1,0 +1,51 @@
+# The repo's whole CI: one boring job that runs exactly what a developer runs.
+#
+# Order is cheapest-failure-first: typecheck (seconds), the node-env suite
+# (seconds, 2,277 tests including every golden digest), then the browser
+# parity lane — the only step that needs a browser binary, so the Playwright
+# install sits directly in front of it and nothing else waits on the download.
+#
+# The parity lane is the reason this file exists now (browser-port Phase 1):
+# every push must re-prove that the Vite-built engine computes byte-identical
+# results in Chromium, because the failure it guards against — a bundler or
+# lib difference shipping plausible-but-different numbers — is silent
+# everywhere else.
+#
+# The suite needs no data folder, no dev server, and no network beyond package
+# installs: every test seeds its own temp directory or bundles its own inputs.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # The Chromium binary is ~100MB; cache it keyed on the lockfile, which
+      # pins the Playwright version and therefore the browser build it wants.
+      # On a hit, `playwright install` verifies and returns in seconds.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:browser
