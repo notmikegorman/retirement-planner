@@ -244,7 +244,9 @@ describe('the total says what it counts, so it cannot be read as net worth', () 
     expect(ACCOUNTS_TOTAL_TITLE.toLowerCase()).not.toContain('mortgage');
     expect(
       readFileSync(
-        fileURLToPath(new URL('../../src/server/networthStore.ts', import.meta.url)),
+        // The store logic moved to src/store in Phase 3 of the browser port;
+        // the pin follows the code that actually computes the total.
+        fileURLToPath(new URL('../../src/store/networthStore.ts', import.meta.url)),
         'utf8',
       ),
     ).toContain('total: portfolio + input.homeValue');

@@ -24,7 +24,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const PORTABLE_DIRS = ['src/engine', 'src/tax', 'src/shared'] as const;
+// src/store joined in Phase 3 of the browser port: the record stores, the
+// seeding/migration logic and the writer lease all run inside the browser's
+// IO context now, so one convenient node: import there would break (or
+// silently shim) the exact code that guards irreplaceable records. src/ui/io
+// is the browser driver + writer guard — browser-only by nature, but a Node
+// type leaking in would still drag @types/node into the bundle's compile.
+const PORTABLE_DIRS = ['src/engine', 'src/tax', 'src/shared', 'src/store', 'src/ui/io'] as const;
 
 /** Bare builtin names ('fs', 'path') count the same as 'node:'-prefixed. */
 const BUILTINS = new Set(builtinModules);

@@ -16,7 +16,7 @@
  * save. The slim per-evaluation scores live beside them in searches/scores/
  * (see search/scoreStore.ts).
  */
-import { randomBytes } from 'node:crypto';
+import { randomHex } from '../shared/random';
 import type { SearchProgress, SearchReport, SearchRequest, SearchSummary } from '../shared/types';
 import { missingQuotesMessage } from '../shared/holdings';
 import { ValidationError, loadAssumptions, loadResolvedProfile, NotFoundError } from './dataStore';
@@ -39,7 +39,7 @@ function reportPath(searchId: string): string {
 }
 
 function newSearchId(): string {
-  return `${Date.now().toString(36)}${randomBytes(4).toString('hex')}`.toLowerCase();
+  return `${Date.now().toString(36)}${randomHex(4)}`.toLowerCase();
 }
 
 function initialProgress(searchId: string): SearchProgress {

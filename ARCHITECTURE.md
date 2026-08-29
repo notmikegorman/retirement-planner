@@ -48,15 +48,29 @@ src/engine/    PURE, deterministic given input + seed. simulate.ts (yearly loop)
                events.ts, housing.ts, returns.ts (3 return modes), rng.ts (mulberry32),
                metrics.ts (fan/success), solvers.ts, index.ts (execute()).
                The engine calls tax.computeYear(...) and nothing else from tax.
-src/server/    File IO + API. dataStore.ts (data folder, zod-validated load/save),
-               runManager.ts (worker orchestration + content-hash run cache),
-               simWorker.ts, server.ts (routes mirroring src/ui/api.ts),
+src/store/     ENVIRONMENT-NEUTRAL record stores (browser port Phase 3): the
+               logic of dataStore/planStore/planHistoryStore/networthStore/
+               quotes, moved whole into factories over a FileStore pair
+               (`createStores({files, defaults})`), plus writerLease.ts (the
+               heartbeat lease that replaces .writer.lock where no pid
+               exists). No node: imports, ever (pinned by
+               tests/shared/noNodeImports.test.ts) — the same guard and
+               migration code runs under node and inside a browser bundle.
+               dataStore.ts (seeding, backfills, zod-validated load/save),
                planStore.ts (plan.json — the ONE door every plan write passes
                through, so the day's first change files the version it
                replaces), planHistoryStore.ts (plan-history.json — every
                version there has been; one serial writer),
                networthStore.ts (the append-only ledger; one serial writer, so
-               a snapshot and a late-arriving score cannot lose each other),
+               a snapshot and a late-arriving score cannot lose each other).
+src/server/    File IO + API, node face. fileStore.ts (the node:fs driver of
+               src/shared/fileStore.ts's contract + the data folder's
+               location), stores.ts (binds src/store to the real folders),
+               dataStore/planStore/planHistoryStore/networthStore/quotes.ts
+               (thin wrappers re-exporting the composed instance under the
+               historical surface),
+               runManager.ts (worker orchestration + content-hash run cache),
+               simWorker.ts, server.ts (routes mirroring src/ui/api.ts),
                scoreRunner.ts (runs a plan at final quality and bisects what it
                could afford; the mode, paths and seed are decided here so a
                version's score and a snapshot's are on one scale),
@@ -64,6 +78,10 @@ src/server/    File IO + API. dataStore.ts (data folder, zod-validated load/save
                the version is written, and attach the result or the reason
                there is none).
 src/ui/        React pages (Workbench, Search, Dashboard, Profile, Methodology),
+               io/ (browser-only storage: fsaFileStore.ts — the
+               FileSystemDirectoryHandle driver, atomic whole-file writes via
+               createWritable→close — and browserWriterGuard.ts, Web Locks +
+               the lease layered into the single-writer guard),
                api.ts (typed client), nav.ts (the URL: /page/tab paths, parsed
                and written against the History API — no router dependency),
                theme.ts (light/dark tokens + useChartTheme for Recharts),

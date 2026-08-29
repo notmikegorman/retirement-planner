@@ -163,30 +163,39 @@ dependency rather than a dev one. Only the UI is bundled.
 ## Checks
 
 ```bash
-npm test              # 2,277 tests, node-env, seconds — the fast loop
+npm test              # ~2,500 tests, node-env, seconds — the fast loop
 npm run typecheck     # tsc --noEmit; covers src, tests and scripts
 npx vitest run tests/server/singleWriter.test.ts     # one file
 
 npx playwright install chromium   # ONE-TIME per machine, before the first browser run
-npm run test:browser  # the browser lane: engine parity in real headless Chromium
+npm run test:browser  # the browser lane: engine parity + storage in headless Chromium
 ```
 
 Run the first two before committing. The engine's golden digests will tell you
 immediately if a change moved a number, which is usually the question.
 
 **The browser lane** (`tests/browser/`, config `vitest.browser.config.ts`) is
-the parity gate of the browser port: it builds the sim-worker harness with
-Vite, serves it on an OS-assigned ephemeral port — never :5174/:5599, which on
-a dev machine may be a live app on real data — and drives headless Chromium
-with Playwright to prove the browser-built engine produces **byte-identical**
-RunResults, runKeys and input hashes to the Node engine on six seeded fixtures
-built from `data-defaults`. It is deliberately not part of `npm test`: it pays
-for a bundle build and a browser launch (~10s), and the fast loop must stay
-fast. Run it whenever you touch `src/engine`, `src/tax`, `src/shared`, the
-workers, or anything Vite-related; CI runs it on every push either way. It
-works from a fresh clone: `npm ci`, the one-time
-`npx playwright install chromium`, then `npm run test:browser` — no dev
-server, no data folder, no network.
+the byte-equivalence gate of the browser port, two harness pages in one Vite
+build served on an OS-assigned ephemeral port — never :5174/:5599, which on a
+dev machine may be a live app on real data — and driven in headless Chromium
+with Playwright. Page one (`parity.test.ts`) proves the browser-built engine
+produces **byte-identical** RunResults, runKeys and input hashes to the Node
+engine on six seeded fixtures built from `data-defaults`. Page two
+(`stores.test.ts`, Phase 3) proves the STORAGE side: the
+FileSystemDirectoryHandle driver passes the same driver-contract cases as the
+node:fs and in-memory drivers, the ported store suite (tests/store/) runs
+green against real OPFS, the golden cross-driver sequence writes
+byte-identical folder trees on node and OPFS, and the Web Locks + lease
+writer guard refuses/takes over exactly as specified — with two real tabs of
+one browser profile. OPFS is the test double for the picked folder because it
+hands back the same `FileSystemDirectoryHandle` API without a picker, which
+headless Chromium cannot click. The lane is deliberately not part of
+`npm test`: it pays for a bundle build and a browser launch (~10s), and the
+fast loop must stay fast. Run it whenever you touch `src/engine`, `src/tax`,
+`src/shared`, `src/store`, `src/ui/io`, the workers, or anything
+Vite-related; CI runs it on every push either way. It works from a fresh
+clone: `npm ci`, the one-time `npx playwright install chromium`, then
+`npm run test:browser` — no dev server, no data folder, no network.
 
 **If you change anything under `src/engine` — or `src/shared/sha256.ts`**,
 bump `ENGINE_VERSION` in `src/shared/types.ts` and re-pin `engineSourceSha256`

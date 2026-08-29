@@ -1,0 +1,21 @@
+<!doctype html>
+<!--
+  The browser half of the Phase-3 storage gates (see ../stores.test.ts). A
+  blank page whose only job is to run storeMain.ts, which binds the
+  environment-neutral store layer to the OPFS-backed FileSystemDirectoryHandle
+  driver and exposes window.__store for Playwright to drive. No styles, no
+  visible UI: anything rendered here would be tested by nobody.
+
+  Open as store.html to start with a wiped OPFS test root; open as
+  store.html?keep to attach WITHOUT wiping (the second tab of the Web Locks
+  scenarios must not delete the first tab's folders).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>storage harness</title>
+  </head>
+  <body>
+    <script type="module" src="./storeMain.ts"></script>
+  </body>
+</html>

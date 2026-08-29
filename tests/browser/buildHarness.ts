@@ -26,6 +26,15 @@ export async function buildParityHarness(): Promise<void> {
       // bundle, and minification changes no arithmetic worth testing.
       minify: false,
       target: 'es2022',
+      rollupOptions: {
+        // Two pages, one build: index.html is the engine-parity harness
+        // (Phase 1), store.html the storage harness (Phase 3 — OPFS driver,
+        // ported store suite, golden cross-driver sequence, writer guard).
+        input: {
+          index: `${HARNESS_DIR}/index.html`,
+          store: `${HARNESS_DIR}/store.html`,
+        },
+      },
     },
     worker: {
       // ES-module worker chunks, matching the { type: 'module' } spawn.
