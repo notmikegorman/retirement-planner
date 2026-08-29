@@ -78,6 +78,13 @@ export type PlanComparability = 'comparable' | 'changed' | 'unknown';
 
 /** One tick on the shared axis: a snapshot, scored or not. */
 export interface ScorePoint {
+  /**
+   * The snapshot's own id — what lets a tooltip ask the LIVE questions about
+   * this point (is its spend solve still running? is it interrupted?), which
+   * are facts about the in-flight registry and the intent file, not about the
+   * stored row.
+   */
+  id: string;
   /** X tick and tooltip header, identical to the bar above it. */
   date: string;
   /**
@@ -508,27 +515,46 @@ export function scoreTooltipLines(point: ScorePoint): string[] {
  * reader who assumes both lines were measured alike will over-read a $2,000
  * step here.
  */
-export function spendTooltipLines(point: ScorePoint): string[] {
+export function spendTooltipLines(point: ScorePoint, solving = false): string[] {
   const score = point.score;
   if (score === null) {
+    // A run in flight is neither of the at-rest absences: the probability
+    // lands first, and this hole is about to be filled.
+    if (solving) {
+      return [
+        'Scoring is still running — the probability lands first, then the spend figure is ' +
+          'solved. This gap fills itself.',
+      ];
+    }
     return point.reason === null
       ? ['Not scored — this snapshot has no score, so nothing solved for spending.']
       : [`Not scored — ${point.reason}`];
   }
   if (score.sustainableSpend === undefined) {
-    // ABSENT IS NOT ZERO, and the two absences mean different things: a solve
+    // ABSENT IS NOT ZERO, and the absences mean different things: a solve
     // that reported a reason (the plan clears the top of the bracket) is a
-    // fact about the plan, while silence means nobody asked.
-    // It does not name a cause. "Scored before the spend was measured" is true
-    // of the August rows and false of a row whose solve was interrupted between
-    // the probability and the bisection, and the row stores no way to tell the
-    // two apart.
-    return score.sustainableSpendError === undefined
-      ? [
-          'No figure — none was solved alongside this score, and none can be added: solving it ' +
-            'today would answer for today, not for the day this row records.',
-        ]
-      : [`No figure — ${score.sustainableSpendError}`];
+    // fact about the plan, while silence means nobody asked — EXCEPT while
+    // the solve is literally still running (`solving`, from the in-flight
+    // registry), which used to fall through to the permanent none-can-be-
+    // added sentence below and claim finality about a figure that was a
+    // dozen runs from landing (the Phase-4 wording quirk, fixed here).
+    if (score.sustainableSpendError !== undefined) {
+      return [`No figure — ${score.sustainableSpendError}`];
+    }
+    if (solving) {
+      return [
+        'Solving the spend figure — the probability above landed and its bisection is still ' +
+          'running; the figure lands on this row when it finishes.',
+      ];
+    }
+    // At rest it does not name a cause. "Scored before the spend was
+    // measured" is true of the August rows and false of a row whose solve was
+    // interrupted between the probability and the bisection, and the row
+    // stores no way to tell the two apart.
+    return [
+      'No figure — none was solved alongside this score, and none can be added: solving it ' +
+        'today would answer for today, not for the day this row records.',
+    ];
   }
   const lines: string[] = [];
   lines.push(
@@ -579,6 +605,7 @@ export function buildScoreSeries(snapshots: readonly NetWorthSnapshot[]): ScoreS
     if (score !== null) previous = score;
     const date = formatSnapshotDate(s.takenAt);
     return {
+      id: s.id,
       date,
       axisKey: scoreAxisKey(index, date),
       takenAt: s.takenAt,

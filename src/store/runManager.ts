@@ -94,6 +94,15 @@ export interface RunManager {
   lookupCachedRun(req: RunRequest): Promise<RunResult | null>;
   startRun(req: RunRequest): Promise<{ runId: string }>;
   getRun(runId: string): Promise<RunProgress | null>;
+  /**
+   * The runKey startRun WOULD compute for this request, and nothing else — no
+   * simulation, no registry entry. It exists for the write-ahead scoring
+   * intent (store/scoringIntent.ts), which must record the key of the run it
+   * is about to start THROUGH THIS INSTANCE's own resolution: a second
+   * resolver could disagree by one field and the intent would name a run that
+   * never happens.
+   */
+  resolveRunKey(req: RunRequest): Promise<string>;
 }
 
 export interface RunManagerOptions {
@@ -300,5 +309,11 @@ export function createRunManager(opts: RunManagerOptions): RunManager {
     return null;
   }
 
-  return { readCachedResult, lookupCachedRun, startRun, getRun };
+  return {
+    readCachedResult,
+    lookupCachedRun,
+    startRun,
+    getRun,
+    resolveRunKey: async (req) => runKeyFor(await resolveRunInput(req)),
+  };
 }

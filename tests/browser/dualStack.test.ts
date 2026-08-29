@@ -834,6 +834,15 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
       ),
     );
 
+    // Phase 6: the write-ahead scoring intent is TRANSIENT, and this asserts
+    // it ABSENT rather than excluding it (deliberately NOT in TREE_EXCLUDED —
+    // stronger than a mask). Both stacks scored a snapshot and a plan version
+    // in this session, so both wrote intents; a finished tree still carrying
+    // one means some terminal path forgot to clear it, which is exactly the
+    // leak that would make every later boot claim an interruption.
+    expect(Object.keys(nodeFolder)).not.toContain('.scoring-intent.json');
+    expect(Object.keys(localFolder)).not.toContain('.scoring-intent.json');
+
     // The same files exist — including the same runs/<runKey>.json NAMES,
     // which is the content-keyed cache agreeing across backends.
     expect(Object.keys(localFolder)).toEqual(Object.keys(nodeFolder));

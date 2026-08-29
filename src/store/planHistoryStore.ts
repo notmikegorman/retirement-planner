@@ -303,11 +303,15 @@ export function createPlanHistoryStore(data: DataStore): PlanHistoryStore {
      * blank, one that must never be filled today, because a figure solved
      * against today's balances beside a probability solved months ago makes
      * one row report two moments as one. What protects it is reachability,
-     * not a test here: `scoreVersion` is the only caller, and it reaches this
-     * line only after `attachPlanHistoryScore` returned 'attached' — which a
-     * version with a score never does. So the score under any spend figure
-     * this writes is one the same run computed seconds earlier. (Pinned in
-     * planVersionScore.test.ts, "the run stops at the score".)
+     * not a test here, through exactly two callers: `scoreVersion` reaches
+     * this line only after `attachPlanHistoryScore` returned 'attached' —
+     * which a version with a score never does — so the score under its figure
+     * is one the same run computed seconds earlier; and the intent finisher
+     * (`finishInterrupted`, Phase 6) reaches it only behind a write-ahead
+     * intent whose runKey verified IDENTICAL against today's inputs — the
+     * proof the world has not moved between the recorded probability and the
+     * figure being filled in, which the pre-scoring blanks can never show.
+     * (Pinned in planVersionScore.test.ts, "the run stops at the score".)
      */
     async attachPlanHistorySpend(
       id: string,

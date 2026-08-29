@@ -3031,6 +3031,36 @@ export interface NetWorthSnapshot {
  * the real movement this trend exists to show. Both are pinned to the profile's
  * own settings so successive snapshots stay comparable by default.
  */
+/**
+ * THE TWO KINDS OF RECORD A SCORING RUN CAN BELONG TO — a net-worth row or a
+ * version in the plan's history. The write-ahead scoring intent
+ * (store/scoringIntent.ts) names its target with one of these, and the pages
+ * use the same names to put the Finish-scoring offer on the right row.
+ */
+export type ScoringTargetKind = 'snapshot' | 'plan-version';
+
+/**
+ * WHERE A SCORING RUN WAS when it was interrupted. 'score' is the probability
+ * run (nothing has landed yet); 'spend' is the sustainable-spend bisection
+ * (the probability is already on the record, the dollars are not).
+ */
+export type ScoringPhase = 'score' | 'spend';
+
+/**
+ * One interrupted scoring run, as the pages read it (GET /api/scoring/intents
+ * — same shape from both backends). The runKey the run would have computed
+ * stays server-side in the intent file; the page needs only which row, which
+ * half, and when the run began.
+ */
+export interface InterruptedScoring {
+  kind: ScoringTargetKind;
+  /** The snapshot id or plan-history entry id the run belonged to. */
+  id: string;
+  phase: ScoringPhase;
+  /** ISO moment the interrupted phase's run was started. */
+  startedAt: string;
+}
+
 export interface SnapshotScore extends PlanScore {
   /**
    * The identity of the plan this scored (shared/planIdentity.ts).

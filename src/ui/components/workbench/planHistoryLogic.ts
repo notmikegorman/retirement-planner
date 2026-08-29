@@ -133,10 +133,29 @@ export type ScoreReading =
       spendConditions: string | null;
       /** Why there is no spend figure, when the solve reported a reason. */
       spendMissing: string | null;
+      /**
+       * The spend blank is not at rest: the bisection is running RIGHT NOW
+       * (the in-flight registry says so). The permanent none-can-be-added
+       * sentence must not render while this is true — it used to (the
+       * Phase-4 wording quirk), claiming finality about a figure that was a
+       * dozen runs from landing.
+       */
+      spendSolving: boolean;
+      /**
+       * The spend solve was INTERRUPTED and the write-ahead intent still
+       * verifies against today's inputs — the probability stands, and Finish
+       * scoring may complete the same bisection (store/scoringIntent.ts).
+       */
+      spendInterrupted: boolean;
       /** Paths, seed, engine and the moment — on the row, not in a legend. */
       conditions: string;
     }
   | { state: 'scoring' }
+  /**
+   * Nothing landed before the run was cut short, and the intent still
+   * verifies: the whole measurement may be finished as a blank-fill.
+   */
+  | { state: 'interrupted' }
   | { state: 'failed'; reason: string }
   | { state: 'never' };
 
@@ -164,10 +183,11 @@ export function spendConditions(score: PlanScore): string | null {
 
 export function readScore(
   entry: PlanHistoryEntry,
-  opts: { scoring: boolean },
+  opts: { scoring: boolean; interrupted?: boolean },
 ): ScoreReading {
   if (entry.score !== undefined) {
     const s = entry.score;
+    const spendBlank = s.sustainableSpend === undefined && s.sustainableSpendError === undefined;
     return {
       state: 'scored',
       success: `${(s.success * 100).toFixed(1)}%`,
@@ -175,13 +195,21 @@ export function readScore(
       spend: s.sustainableSpend === undefined ? null : `${formatUSD(s.sustainableSpend)}/yr`,
       spendConditions: spendConditions(s),
       spendMissing: s.sustainableSpendError ?? null,
+      // In flight wins over interrupted: a Finish press joins the registry,
+      // and from that moment the truth is "running", not "waiting".
+      spendSolving: opts.scoring && spendBlank,
+      spendInterrupted: !opts.scoring && spendBlank && opts.interrupted === true,
       conditions: scoreConditions(s),
     };
   }
   // Order matters: a version being scored right now has usually just failed
   // once (that is why the button was pressed), and showing the old reason
-  // beside a live run would say the opposite of what is happening.
+  // beside a live run would say the opposite of what is happening. And
+  // 'interrupted' outranks 'failed'/'never' for the same reason the intent
+  // file exists: while it stands, the honest description of this blank is
+  // "cut short and still finishable", not "permanent".
   if (opts.scoring) return { state: 'scoring' };
+  if (opts.interrupted === true) return { state: 'interrupted' };
   if (entry.scoreError !== undefined) return { state: 'failed', reason: entry.scoreError };
   return { state: 'never' };
 }
@@ -216,6 +244,23 @@ export function readScore(
 export function scoringOffer(score: ScoreReading): string | null {
   if (score.state === 'never') return 'Score it';
   if (score.state === 'failed') return 'Try scoring again';
+  return null;
+}
+
+/**
+ * THE OTHER BUTTON — Finish scoring, offered only behind a write-ahead intent
+ * that still verifies against today's inputs (store/scoringIntent.ts,
+ * decision D4). It is NOT the removed re-score button in new clothes: a
+ * re-score measured a different day and filed it here; a finish completes the
+ * run that was already in flight for THIS record, provably the same
+ * measurement, and the backend re-verifies at the press. Two shapes qualify:
+ * a version whose run was cut short before anything landed ('interrupted'),
+ * and a scored version whose spend bisection alone was lost — the Aug-20
+ * shape, the incident the intent machinery exists to close.
+ */
+export function finishOffer(score: ScoreReading): string | null {
+  if (score.state === 'interrupted') return 'Finish scoring';
+  if (score.state === 'scored' && score.spendInterrupted) return 'Finish scoring';
   return null;
 }
 
@@ -349,6 +394,12 @@ export interface HistoryRowOptions {
   currentPlan: Scenario | null;
   /** Ids with a simulation in flight right now, from the server's own memory. */
   scoring: readonly string[];
+  /**
+   * Ids whose scoring was interrupted and still verifies completable — from
+   * the write-ahead intent file (api.getScoringIntents). Optional so callers
+   * without the answer render the at-rest readings unchanged.
+   */
+  interrupted?: readonly string[];
   engineVersion: string;
   people: readonly Person[];
   accounts?: readonly Pick<Account, 'id' | 'owner'>[];
@@ -386,7 +437,10 @@ export function historyRows(
         label: label.trim() === '' ? 'Unnamed version' : label,
         named: label.trim() !== '',
         why: kindLabel(entry.kind),
-        score: readScore(entry, { scoring: opts.scoring.includes(entry.id) }),
+        score: readScore(entry, {
+          scoring: opts.scoring.includes(entry.id),
+          interrupted: opts.interrupted?.includes(entry.id) === true,
+        }),
         warnings: planVersionWarnings(entry, {
           engineVersion: opts.engineVersion,
           people: opts.people,

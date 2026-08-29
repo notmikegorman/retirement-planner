@@ -817,7 +817,11 @@ describe('spendDomain — a dollar axis that cannot invent movement', () => {
 describe('the spend chart’s wiring (source scan)', () => {
   it('is a THIRD plot, not a second axis on either of the other two', () => {
     expect(page).toContain('SPEND_AXIS_LABEL');
-    expect(page).toContain('spec={SPEND_TREND}');
+    // The spec is completed per render (its tooltip needs the LIVE in-flight
+    // registry — the Phase-4 wording-quirk fix), but it is still the spend
+    // spec on its own third plot.
+    expect(page).toContain('spec={spendTrend}');
+    expect(page).toMatch(/\.\.\.SPEND_TREND/);
     // Still one y axis per chart. A second <YAxis yAxisId=...> is exactly the
     // shape this decision rejects — dollars and a percentage on one plot make
     // the eye read a crossing point that means nothing.

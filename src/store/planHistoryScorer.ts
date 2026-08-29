@@ -39,9 +39,14 @@
  * prints, never merged into one "no number here".
  */
 import type { PlanHistoryEntry } from '../shared/types';
-import { ConflictError } from './dataStore';
+import { ConflictError, NotFoundError } from './dataStore';
 import { localDayKey, type PlanHistoryStore } from './planHistoryStore';
-import type { ScoreRunner, ScoringDeps } from './scoreRunner';
+import { message, type ScoreRunner, type ScoringDeps } from './scoreRunner';
+import {
+  inputsMovedReason,
+  type ScoringIntentStore,
+  type ScoringIntentTarget,
+} from './scoringIntent';
 
 export type VersionScoringOutcome =
   | { status: 'scored' }
@@ -59,6 +64,17 @@ export interface PlanHistoryScorer {
   versionsBeingScored(): string[];
   startVersionScoring(id: string, deps?: ScoringDeps): Promise<VersionScoringOutcome>;
   scorePlanVersion(id: string, deps?: ScoringDeps): Promise<{ ok: true; scoring: boolean }>;
+  /**
+   * Complete an INTERRUPTED scoring run — the Finish behind an orphaned
+   * intent (decision D4, store/scoringIntent.ts). Verifies the intent's
+   * runKey against today's inputs first; 'identical' completes the SAME
+   * measurement as a blank-fill, 'moved' stamps the missing half with the
+   * honest reason and clears the intent. This is the one path that may write
+   * a spend figure onto a version scored in an EARLIER process — legitimate
+   * exactly because the runKey proves the world has not moved between the
+   * probability and the figure.
+   */
+  finishVersionScoring(id: string, deps?: ScoringDeps): Promise<VersionScoringOutcome>;
 }
 
 export interface PlanHistoryScorerOptions {
@@ -66,10 +82,21 @@ export interface PlanHistoryScorerOptions {
   runner: ScoreRunner;
   /** The environment's real ScoringDeps; tests pass their own per call. */
   defaultDeps: ScoringDeps;
+  /** The write-ahead intent store — see SnapshotScorerOptions.intents. */
+  intents?: ScoringIntentStore;
+  /** Registry-size hook — see SnapshotScorerOptions.onInFlightChange. */
+  onInFlightChange?: (inFlight: number) => void;
 }
 
 export function createPlanHistoryScorer(opts: PlanHistoryScorerOptions): PlanHistoryScorer {
-  const { planHistory, runner, defaultDeps } = opts;
+  const { planHistory, runner, defaultDeps, intents } = opts;
+
+  const target = (id: string): ScoringIntentTarget => ({ kind: 'plan-version', id });
+
+  /** Clear the entry's intent; never throws — see snapshotScorer.clearIntent. */
+  async function clearIntent(id: string): Promise<void> {
+    await intents?.clear(target(id)).catch(() => undefined);
+  }
 
   /** Versions with a simulation in flight, keyed so a double-press joins it. */
   const inFlight = new Map<string, Promise<VersionScoringOutcome>>();
@@ -79,17 +106,27 @@ export function createPlanHistoryScorer(opts: PlanHistoryScorerOptions): PlanHis
     return [...inFlight.keys()];
   }
 
+  /** The one registry door — see snapshotScorer.launch for why it is one. */
+  function launch(
+    id: string,
+    work: () => Promise<VersionScoringOutcome>,
+  ): Promise<VersionScoringOutcome> {
+    const existing = inFlight.get(id);
+    if (existing) return existing;
+    const running = work().finally(() => {
+      inFlight.delete(id);
+      opts.onInFlightChange?.(inFlight.size);
+    });
+    inFlight.set(id, running);
+    opts.onInFlightChange?.(inFlight.size);
+    return running;
+  }
+
   function startVersionScoring(
     id: string,
     deps: ScoringDeps = defaultDeps,
   ): Promise<VersionScoringOutcome> {
-    const existing = inFlight.get(id);
-    if (existing) return existing;
-    const work = scoreVersion(id, deps).finally(() => {
-      inFlight.delete(id);
-    });
-    inFlight.set(id, work);
-    return work;
+    return launch(id, () => scoreVersion(id, deps));
   }
 
   async function scoreVersion(id: string, deps: ScoringDeps): Promise<VersionScoringOutcome> {
@@ -99,29 +136,132 @@ export function createPlanHistoryScorer(opts: PlanHistoryScorerOptions): PlanHis
     // entry anyway, but only after a 10,000-path run and a dozen-run bisection
     // had been computed for a number with nowhere to go.
     if (entry.score !== undefined) return { status: 'already_scored' };
-    const attempt = await runner.scorePlan(entry.plan, deps);
+    // The runner records the write-ahead intent before each phase's run —
+    // see scoreRunner.runToCompletion and store/scoringIntent.ts.
+    const attempt = await runner.scorePlan(entry.plan, deps, target(id));
     if (!attempt.ok) {
       const trimmed =
         attempt.reason.length > 1000 ? `${attempt.reason.slice(0, 997)}...` : attempt.reason;
       const attached = await planHistory.attachPlanHistoryScore(id, { error: trimmed });
+      // A recorded failure IS the outcome; the intent clears (attach first,
+      // clear second — a kill between the two reads as satisfied at boot).
+      await clearIntent(id);
       return attached === 'attached' ? { status: 'failed', reason: trimmed } : { status: attached };
     }
     const attached = await planHistory.attachPlanHistoryScore(id, { score: attempt.score });
-    if (attached !== 'attached') return { status: attached };
+    if (attached !== 'attached') {
+      await clearIntent(id);
+      return { status: attached };
+    }
 
     // Then the expensive half, on a version that already carries its number —
     // see snapshotScorer for why the two are attached separately. It matters
     // more here than anywhere: this household's success rate saturates, so
     // "what could this version afford" is the question that actually tells two
     // of them apart.
-    const spend = await runner.solveSustainableSpend(entry.plan, deps);
+    const spend = await runner.solveSustainableSpend(entry.plan, deps, target(id));
     await planHistory.attachPlanHistorySpend(
       id,
       spend.ok
         ? { sustainableSpend: spend.sustainableSpend, sustainableSpendPaths: spend.sustainableSpendPaths }
         : { error: spend.reason.length > 1000 ? `${spend.reason.slice(0, 997)}...` : spend.reason },
     );
+    await clearIntent(id);
     return { status: 'scored' };
+  }
+
+  /**
+   * The Finish button's work for a plan version — the mirror of
+   * snapshotScorer.finishInterrupted, over the entry's own frozen plan (a
+   * version cannot drift; only the world around it can). Never throws: it is
+   * fired unawaited from the finish route, so every failure is an outcome.
+   */
+  function finishVersionScoring(
+    id: string,
+    deps: ScoringDeps = defaultDeps,
+  ): Promise<VersionScoringOutcome> {
+    return launch(id, () => finishInterrupted(id, deps));
+  }
+
+  async function finishInterrupted(
+    id: string,
+    deps: ScoringDeps,
+  ): Promise<VersionScoringOutcome> {
+    if (!intents) {
+      return { status: 'failed', reason: 'This backend has no intent machinery composed.' };
+    }
+    try {
+      const intent = (await intents.list()).find(
+        (i) => i.kind === 'plan-version' && i.id === id,
+      );
+      let entry: PlanHistoryEntry;
+      try {
+        entry = await planHistory.getPlanHistoryEntry(id);
+      } catch (err) {
+        if (err instanceof NotFoundError) {
+          await clearIntent(id);
+          return { status: 'entry_gone' };
+        }
+        throw err;
+      }
+      const complete =
+        entry.scoreError !== undefined ||
+        (entry.score !== undefined &&
+          (entry.score.sustainableSpend !== undefined ||
+            entry.score.sustainableSpendError !== undefined));
+      if (complete) {
+        await clearIntent(id);
+        return { status: 'already_scored' };
+      }
+      if (!intent) {
+        return {
+          status: 'failed',
+          reason:
+            'No interrupted scoring is recorded for this version, so there is nothing to finish.',
+        };
+      }
+
+      let verdict: 'identical' | 'moved';
+      try {
+        verdict = await runner.verifyIntent(entry.plan, intent);
+      } catch (err) {
+        // Transient: nothing is stamped, the intent stays, the button stays.
+        return {
+          status: 'failed',
+          reason: `The interrupted run could not be verified against today’s inputs: ${message(err)}`,
+        };
+      }
+
+      if (verdict === 'moved') {
+        const reason = inputsMovedReason(entry.score === undefined ? 'score' : 'spend');
+        if (entry.score === undefined) {
+          await planHistory.attachPlanHistoryScore(id, { error: reason });
+        } else {
+          await planHistory.attachPlanHistorySpend(id, { error: reason });
+        }
+        await clearIntent(id);
+        return { status: 'failed', reason };
+      }
+
+      if (entry.score === undefined) return await scoreVersion(id, deps);
+
+      // The Aug-20 shape: probability standing, bisection lost. Fill the one
+      // blank the kill left, under the runKey the interrupted solve carried.
+      const spend = await runner.solveSustainableSpend(entry.plan, deps, target(id));
+      await planHistory.attachPlanHistorySpend(
+        id,
+        spend.ok
+          ? {
+              sustainableSpend: spend.sustainableSpend,
+              sustainableSpendPaths: spend.sustainableSpendPaths,
+            }
+          : { error: spend.reason.length > 1000 ? `${spend.reason.slice(0, 997)}...` : spend.reason },
+      );
+      await clearIntent(id);
+      return { status: 'scored' };
+    } catch (err) {
+      return { status: 'failed', reason: message(err) };
+    }
   }
 
   /**
@@ -151,7 +291,7 @@ export function createPlanHistoryScorer(opts: PlanHistoryScorerOptions): PlanHis
     return { ok: true, scoring: true };
   }
 
-  return { versionsBeingScored, startVersionScoring, scorePlanVersion };
+  return { versionsBeingScored, startVersionScoring, scorePlanVersion, finishVersionScoring };
 }
 
 /**

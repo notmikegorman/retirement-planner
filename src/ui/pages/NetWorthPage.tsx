@@ -388,6 +388,13 @@ const SCORE_TREND: TrendSpec = {
   tick: (v) => `${v}%`,
 };
 
+/**
+ * The spend spec's static half. Its `lines` is completed per render inside
+ * the component, because "is this row's solve still running" is a fact about
+ * the in-flight registry — live state — and a module constant cannot see it.
+ * That gap is exactly what used to make a mid-solve row show the permanent
+ * none-can-be-added sentence (the Phase-4 wording quirk).
+ */
 const SPEND_TREND: TrendSpec = {
   dataKey: 'spend',
   label: 'Most it could spend',
@@ -679,6 +686,16 @@ export function NetWorthPage(_props: PageProps) {
   const [scoring, setScoring] = useState<string[]>([]);
   const scoringRef = useRef<string[]>([]);
   /**
+   * Rows whose scoring run was INTERRUPTED (a killed tab, a restart) and
+   * still verifies completable against today's inputs — from the write-ahead
+   * intent file, via the backend's boot healer (store/scoringIntent.ts).
+   * These get the one-click Finish-scoring offer (decision D4): completing
+   * one fills the blank the kill left with the SAME measurement, which the
+   * runKey check makes provable rather than hoped.
+   */
+  const [interrupted, setInterrupted] = useState<string[]>([]);
+  const [finishError, setFinishError] = useState<string | null>(null);
+  /**
    * The home-value box's committed value. Null until the defaults load —
    * last snapshot's figure first, the profile's current home value only when
    * the ledger is empty (the profile is a starting guess, not a record).
@@ -753,6 +770,17 @@ export function NetWorthPage(_props: PageProps) {
       setSuccessTarget(profile.settings.successTarget);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
+    }
+    // Separately and non-fatally: which rows are interrupted. A backend
+    // without the answer must not take the ledger down with it.
+    try {
+      setInterrupted(
+        (await api.getScoringIntents()).intents
+          .filter((i) => i.kind === 'snapshot')
+          .map((i) => i.id),
+      );
+    } catch {
+      // Keep whatever we knew; the offer is additive, never load-bearing.
     }
   }, []);
 
@@ -843,6 +871,42 @@ export function NetWorthPage(_props: PageProps) {
       setDeleteError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  /**
+   * The Finish-scoring press: hand the interrupted row back to the backend,
+   * which re-verifies the intent's runKey before a single path runs — the
+   * click is a request, not an override. On accept the row goes straight to
+   * "scoring…" (same immediate-mark idiom as taking a snapshot) and the
+   * ordinary poll carries it home; whatever lands — the completed figure, or
+   * the honest inputs-moved reason — arrives through `load` like any other
+   * outcome.
+   */
+  const finish = async (id: string) => {
+    setFinishError(null);
+    try {
+      await api.finishScoring({ kind: 'snapshot', id });
+      setInterrupted((prev) => prev.filter((x) => x !== id));
+      setScoringIds([...scoringRef.current.filter((x) => x !== id), id]);
+    } catch (e) {
+      setFinishError(e instanceof Error ? e.message : String(e));
+      // The refusal may mean the intent is already resolved — re-read rather
+      // than leave a button that can only refuse again.
+      void load();
+    }
+  };
+
+  /**
+   * The spend spec, completed with the live half of its tooltip: whether a
+   * point's solve is still running is a fact about the in-flight registry,
+   * so the module constant cannot know it — see SPEND_TREND.
+   */
+  const spendTrend = useMemo<TrendSpec>(
+    () => ({
+      ...SPEND_TREND,
+      lines: (p: ScorePoint) => spendTooltipLines(p, scoring.includes(p.id)),
+    }),
+    [scoring],
+  );
 
   if (loadError) {
     return (
@@ -1167,7 +1231,7 @@ export function NetWorthPage(_props: PageProps) {
                 points={scoreSeries.points}
                 domain={scoreSeries.spendDomain}
                 chart={chart}
-                spec={SPEND_TREND}
+                spec={spendTrend}
               />
               <div className="chip-list" style={{ marginTop: 4 }}>
                 <span className="wb-chip">
@@ -1206,6 +1270,7 @@ export function NetWorthPage(_props: PageProps) {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Snapshots</h2>
         {deleteError === null ? null : <div className="error-banner">{deleteError}</div>}
+        {finishError === null ? null : <div className="error-banner">{finishError}</div>}
         {snapshots.length === 0 ? (
           <div className="muted">Nothing recorded yet.</div>
         ) : (
@@ -1236,18 +1301,25 @@ export function NetWorthPage(_props: PageProps) {
                   <td style={{ textAlign: 'right' }}>{formatUSD(s.total - s.homeValue)}</td>
                   <td style={{ textAlign: 'right' }}>{formatUSD(s.homeValue)}</td>
                   {/*
-                    FOUR DIFFERENT STATES, and none of them is a zero. A score;
-                    a run still going; a run that failed, with its reason on the
-                    row; and a row nobody ever measured, which is not a failure
-                    and is not dressed as one. Printing 0% for any of the last
-                    three would claim this plan fails in every simulated future.
+                    FIVE DIFFERENT STATES, and none of them is a zero. A score;
+                    a run still going; a run that was INTERRUPTED and can still
+                    be finished honestly (below); a run that failed, with its
+                    reason on the row; and a row nobody ever measured, which is
+                    not a failure and is not dressed as one. Printing 0% for
+                    any of the last four would claim this plan fails in every
+                    simulated future.
 
-                    THE LAST TWO ARE PERMANENT NOW, and they say so rather than
+                    THE LAST TWO ARE PERMANENT, and they say so rather than
                     reading as a gap waiting to be filled. There is no re-score:
                     a run that died took the only chance this row had, and "not
                     measured" is the true and final statement about that day.
                     The alternative on offer was a button that measured a
-                    DIFFERENT day and filed the answer here.
+                    DIFFERENT day and filed the answer here. INTERRUPTED is the
+                    one exception, and it is not an exception to the rule: the
+                    write-ahead intent's runKey proves today's inputs still
+                    produce the very run that was cut short, so Finish scoring
+                    completes the SAME measurement — a blank filled, never a
+                    number rewritten (store/scoringIntent.ts).
                   */}
                   <td style={{ textAlign: 'right' }}>
                     {s.score ? (
@@ -1256,6 +1328,13 @@ export function NetWorthPage(_props: PageProps) {
                       </span>
                     ) : scoring.includes(s.id) ? (
                       <span className="muted">scoring…</span>
+                    ) : interrupted.includes(s.id) ? (
+                      <span
+                        className="flag"
+                        title="Scoring was interrupted before this row's number landed, and today's inputs still produce the same run — press Finish scoring to complete the same measurement."
+                      >
+                        interrupted
+                      </span>
                     ) : s.scoreError ? (
                       <span
                         className="flag"
@@ -1274,16 +1353,25 @@ export function NetWorthPage(_props: PageProps) {
                   </td>
                   <td className="muted">{s.note ?? ''}</td>
                   <td>
-                    {/* DELETE IS THE ONLY ACTION ON A ROW, and that is the
-                        point. There was a scoring button here — "Score it" on a
-                        blank row, "Try again" on a failed one, "Add the spend
-                        figure" on a row scored before the solve existed — and
-                        every one of them ran TODAY's plan against TODAY's
-                        profile and filed the answer on a row recorded weeks
-                        ago. The number it produced was never true of the row it
-                        landed on. A snapshot is a record of a moment; nothing
-                        here rewrites one. */}
+                    {/* DELETE IS THE ONLY UNCONDITIONAL ACTION ON A ROW, and
+                        that is the point. There was a scoring button here in
+                        three costumes — score a blank row, retry a failed one,
+                        add the missing dollars to one scored before the solve
+                        existed — and every one of them ran TODAY's plan against
+                        TODAY's profile and filed the answer on a row recorded
+                        weeks ago. The number it produced was never true of the
+                        row it landed on. FINISH SCORING is not that button
+                        back: it appears only behind a write-ahead intent whose
+                        runKey still verifies against today's inputs, and the
+                        backend re-verifies at the press — it completes the
+                        interrupted measurement or refuses with the reason,
+                        never measures a different day. */}
                     <div className="row" style={{ gap: 6 }}>
+                      {interrupted.includes(s.id) && !scoring.includes(s.id) && (
+                        <button className="primary" onClick={() => void finish(s.id)}>
+                          Finish scoring
+                        </button>
+                      )}
                       <button className="danger" onClick={() => void remove(s.id)}>
                         Delete
                       </button>
@@ -1301,12 +1389,34 @@ export function NetWorthPage(_props: PageProps) {
             sentence reads like a problem waiting for the button that used to be
             beside it. */}
         {snapshots
-          .filter((s) => s.scoreError !== undefined && s.score === undefined)
+          .filter(
+            (s) =>
+              s.scoreError !== undefined &&
+              s.score === undefined &&
+              !interrupted.includes(s.id),
+          )
           .map((s) => (
             <div key={s.id} className="field-help" style={{ marginTop: 6 }}>
               <strong>{formatSnapshotDate(s.takenAt)}</strong> has no score: {s.scoreError} That
               row stays unscored — the plan is scored once, when the snapshot is taken, so what
               this day would have measured is not recoverable.
+            </div>
+          ))}
+        {/* The interrupted rows, in full — same idiom as the failure blocks
+            above: a state the user has to hover to understand is a state they
+            will not understand. It says WHY finishing is honest here and
+            nowhere else: the write-ahead intent recorded which run was in
+            flight, and today's inputs still produce exactly that run. */}
+        {snapshots
+          .filter((s) => interrupted.includes(s.id) && !scoring.includes(s.id))
+          .map((s) => (
+            <div key={s.id} className="field-help" style={{ marginTop: 6 }}>
+              <strong>{formatSnapshotDate(s.takenAt)}</strong> was interrupted mid-scoring —
+              the app closed before the measurement finished. Today&rsquo;s plan and prices
+              still produce exactly the run that was cut short, so <em>Finish scoring</em>{' '}
+              completes the same measurement: a blank being filled, not a number being
+              rewritten. If the inputs change first, the row will say so and stay honestly
+              unmeasured instead.
             </div>
           ))}
         <div className="field-help" style={{ marginTop: 4 }}>

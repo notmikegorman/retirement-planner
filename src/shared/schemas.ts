@@ -1077,6 +1077,35 @@ export const netWorthSnapshotWriteSchema = z.strictObject({
   note: z.string().max(500).optional(),
 });
 
+/**
+ * One write-ahead scoring intent, and the file that holds them
+ * (.scoring-intent.json — store/scoringIntent.ts). Validated like every other
+ * data file so a hand-edited or half-synced entry fails loudly at the seam
+ * rather than steering the healer; the store treats an unparseable FILE as
+ * empty (a torn write cannot name what was in flight), but a file that parses
+ * must mean what it says.
+ */
+const scoringIntentSchema = z.object({
+  kind: z.enum(['snapshot', 'plan-version']),
+  id: z.string().min(1).max(64),
+  phase: z.enum(['score', 'spend']),
+  runKey: z.string().regex(/^[0-9a-f]{64}$/, 'must be a sha256 hex digest'),
+  startedAt: z.string().min(1),
+});
+
+/** .scoring-intent.json: the in-flight scoring runs, at most one per record. */
+export const scoringIntentFileSchema = z.array(scoringIntentSchema);
+
+/**
+ * POST /api/scoring/finish body: which interrupted record to finish. The
+ * backend re-verifies the intent's runKey against today's inputs before a
+ * single path is simulated — the click is a request, not an override.
+ */
+export const finishScoringRequestSchema = z.strictObject({
+  kind: z.enum(['snapshot', 'plan-version']),
+  id: z.string().min(1).max(64),
+});
+
 /** Format a ZodError into a short human-readable message list. */
 export function formatZodError(err: z.ZodError): string {
   return err.issues

@@ -236,11 +236,15 @@ export function createNetworthStore(data: DataStore): NetworthStore {
      * be filled — and any pre-scoring row is exactly such a blank, one that
      * must never be filled now, because a figure solved against today's
      * balances beside a probability solved months ago makes one row report
-     * two moments as one. Reachability is what protects it: `scoreSnapshot`
-     * is the only caller and reaches this line only after `attachScore`
-     * returned 'attached', which a row with a score never does. So the score
-     * under any figure this writes is one the same run computed seconds
-     * earlier.
+     * two moments as one. Reachability is what protects it, through exactly
+     * two callers: `scoreSnapshot` reaches this line only after `attachScore`
+     * returned 'attached' (which a row with a score never does), so the score
+     * under its figure is one the same run computed seconds earlier; and the
+     * intent finisher (`finishInterrupted`, Phase 6) reaches it only behind a
+     * write-ahead intent whose runKey verified IDENTICAL against today's
+     * inputs — the proof that the world has not moved between the recorded
+     * probability and the figure being filled in, which is precisely the
+     * condition the pre-scoring blanks can never meet.
      */
     async attachSustainableSpend(
       id: string,

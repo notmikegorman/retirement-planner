@@ -15,6 +15,7 @@ import type { z } from 'zod';
 import { ENGINE_VERSION } from '../shared/types';
 import type { MarketAssumptions, RunRequest, SearchRequest } from '../shared/types';
 import {
+  finishScoringRequestSchema,
   netWorthSnapshotWriteSchema,
   parseOrThrow,
   planKeepSchema,
@@ -42,6 +43,7 @@ import { defaultRefreshSymbols, refreshQuotes } from './quotes';
 import { deleteSnapshot, listSnapshots, takeSnapshot } from './networthStore';
 import { snapshotsBeingScored, startScoring } from './snapshotScorer';
 import { scorePlanVersion, versionsBeingScored } from './planHistoryScorer';
+import { finishScoring, healScoringIntents, listScoringIntents } from './scoringIntents';
 import { getRun, lookupCachedRun, startRun } from './runManager';
 import { cancelSearch, getSearch, getSearchReport, listSearches, startSearch } from './searchManager';
 import {
@@ -141,6 +143,13 @@ async function main(): Promise<void> {
   });
 
   const init = await initDataDir();
+
+  // Orphaned write-ahead scoring intents resolve BEFORE the first route can
+  // answer: a page must never read a row whose fate is still being decided.
+  // Clearly-moved intents stamp their honest reason; completable ones stay,
+  // and the pages offer Finish scoring (store/scoringIntent.ts — the Aug-20
+  // restart-mid-solve loss is the incident this closes).
+  await healScoringIntents();
 
   const app = Fastify({ logger: false });
 
@@ -316,6 +325,23 @@ async function main(): Promise<void> {
   // Memory-only, and therefore empty after a restart — which is the truth: no
   // run survived it.
   app.get('/api/plan/history/scoring', async () => ({ scoring: versionsBeingScored() }));
+
+  // ----- Interrupted scoring ----------------------------------------------
+  // The records whose scoring run was interrupted (a restart, a killed tab)
+  // and still verifies completable against today's inputs. The boot healer
+  // above has already retired every intent that was satisfied or whose
+  // inputs moved, so what this lists is exactly the rows the pages should
+  // draw as Interrupted with a Finish-scoring offer.
+  app.get('/api/scoring/intents', async () => ({ intents: await listScoringIntents() }));
+
+  // Finish one interrupted record. The backend re-verifies the intent's
+  // runKey against today's inputs before a single path runs: 'identical'
+  // completes the SAME measurement (a blank-fill under the scored-once
+  // rules), 'moved' stamps the honest reason instead. Answers immediately;
+  // the row reads "scoring…" through the same registries as a forming run.
+  app.post('/api/scoring/finish', async (req) =>
+    finishScoring(validateBody(finishScoringRequestSchema, req.body, 'finish scoring')),
+  );
 
   // ----- Runs -------------------------------------------------------------
   app.post('/api/run', async (req) => {

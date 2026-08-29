@@ -37,6 +37,7 @@ import {
   historyEmptyNote,
   historyMoment,
   historyRows,
+  finishOffer,
   kindLabel,
   localDayKey,
   planVersionWarnings,
@@ -724,5 +725,112 @@ describe('the tab’s wiring (source scan)', () => {
     expect(panelCode).not.toContain('originStatusText');
     expect(panelCode).not.toContain('Save this plan');
     expect(panelCode).not.toContain("id: 'saved'");
+  });
+});
+
+describe('the live spend blank says SOLVING, never the permanent sentence (the Phase-4 quirk, fixed)', () => {
+  /**
+   * A score lands in two parts — the probability first, the bisection a dozen
+   * runs later — and the poll reloads the list between them. So a row with a
+   * probability and no dollars EXISTS TRANSIENTLY on every ordinary scoring,
+   * and it used to render the permanent none-can-be-added sentence while the
+   * solve was literally still running. The in-flight registry is the fact
+   * that tells the two apart, and now the reading carries it.
+   */
+  it('marks the blank as solving while the id is in the in-flight registry', () => {
+    const half = score({ sustainableSpend: undefined, sustainableSpendPaths: undefined });
+    const reading = readScore(entry({ score: half }), { scoring: true });
+    expect(reading).toMatchObject({ state: 'scored', spend: null, spendSolving: true });
+  });
+
+  it('reads at-rest once the registry no longer lists it — the permanent sentence is then true', () => {
+    const half = score({ sustainableSpend: undefined, sustainableSpendPaths: undefined });
+    expect(readScore(entry({ score: half }), { scoring: false })).toMatchObject({
+      spendSolving: false,
+      spendInterrupted: false,
+    });
+  });
+
+  it('never marks a COMPLETE score as solving, whatever the registry says', () => {
+    // The registry can list a row whose file already carries both halves for
+    // one poll interval; claiming a landed figure is still being solved would
+    // be the same lie in the other direction.
+    expect(readScore(entry({ score: score() }), { scoring: true })).toMatchObject({
+      state: 'scored',
+      spendSolving: false,
+    });
+    const reasoned = score({
+      sustainableSpend: undefined,
+      sustainableSpendPaths: undefined,
+      sustainableSpendError: 'more than this',
+    });
+    expect(readScore(entry({ score: reasoned }), { scoring: true })).toMatchObject({
+      spendSolving: false,
+    });
+  });
+
+  it('the card renders the solving line on that flag, before the permanent branch', () => {
+    expect(card).toContain('score.spendSolving');
+    expect(card).toContain('Solving the spend figure');
+    // The permanent sentence is now explicitly gated on NOT solving/interrupted.
+    expect(card).toMatch(/!score\.spendSolving\s*&&\s*\n?\s*!score\.spendInterrupted/);
+  });
+});
+
+describe('interrupted scoring reads as its own state, with Finish as its own offer', () => {
+  it('a blank entry with a still-verifying intent reads interrupted, outranking failed/never', () => {
+    expect(readScore(entry(), { scoring: false, interrupted: true })).toEqual({
+      state: 'interrupted',
+    });
+    // A stamped failure UNDER a live intent still reads interrupted: while
+    // the intent stands, "cut short and finishable" is the honest reading.
+    expect(
+      readScore(entry({ scoreError: 'old failure' }), { scoring: false, interrupted: true }),
+    ).toEqual({ state: 'interrupted' });
+  });
+
+  it('a run in flight outranks interrupted — a Finish press joins the registry and the row says scoring', () => {
+    expect(readScore(entry(), { scoring: true, interrupted: true })).toEqual({
+      state: 'scoring',
+    });
+  });
+
+  it('a scored entry with a spend-phase intent reads spendInterrupted — the Aug-20 shape', () => {
+    const half = score({ sustainableSpend: undefined, sustainableSpendPaths: undefined });
+    expect(
+      readScore(entry({ score: half }), { scoring: false, interrupted: true }),
+    ).toMatchObject({ state: 'scored', spendInterrupted: true, spendSolving: false });
+  });
+
+  it('finishOffer appears exactly on the two interrupted shapes, and scoringOffer never joins it', () => {
+    const interrupted = readScore(entry(), { scoring: false, interrupted: true });
+    expect(finishOffer(interrupted)).toBe('Finish scoring');
+    expect(scoringOffer(interrupted)).toBeNull();
+
+    const half = score({ sustainableSpend: undefined, sustainableSpendPaths: undefined });
+    const spendInterrupted = readScore(entry({ score: half }), {
+      scoring: false,
+      interrupted: true,
+    });
+    expect(finishOffer(spendInterrupted)).toBe('Finish scoring');
+    expect(scoringOffer(spendInterrupted)).toBeNull();
+
+    // And nowhere else: at-rest readings keep their own offers untouched.
+    expect(finishOffer(readScore(entry(), { scoring: false }))).toBeNull();
+    expect(finishOffer(readScore(entry({ score: score() }), { scoring: false }))).toBeNull();
+    expect(
+      finishOffer(readScore(entry({ scoreError: 'died' }), { scoring: false })),
+    ).toBeNull();
+    expect(finishOffer(readScore(entry(), { scoring: true, interrupted: true }))).toBeNull();
+  });
+
+  it('historyRows threads the interrupted ids through to the readings', () => {
+    const rows = historyRows([entry()], rowOpts({ interrupted: ['ph-1'] }));
+    expect(rows[0].score).toEqual({ state: 'interrupted' });
+  });
+
+  it('the card wires the Finish button through finishOffer and api.finishScoring', () => {
+    expect(card).toContain('finishOffer(score)');
+    expect(card).toContain("api.finishScoring({ kind: 'plan-version', id })");
   });
 });

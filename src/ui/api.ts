@@ -28,6 +28,7 @@ import type {
   Assumptions,
   CachedRunResponse,
   DerivedProfileResponse,
+  InterruptedScoring,
   MarketAssumptions,
   NetWorthSnapshot,
   Profile,
@@ -38,6 +39,7 @@ import type {
   RunProgress,
   RunRequest,
   Scenario,
+  ScoringTargetKind,
   SearchProgress,
   SearchReport,
   SearchRequest,
@@ -189,6 +191,27 @@ const httpApi = {
     ),
   /** Which versions have a run in flight right now (memory-only, server-side). */
   planVersionsScoring: () => request<{ scoring: string[] }>('/api/plan/history/scoring'),
+
+  // ----- Interrupted scoring ----------------------------------------------
+  /**
+   * Records whose scoring run was interrupted (a restart, a killed tab) and
+   * still verifies completable against today's inputs — the rows the pages
+   * draw as Interrupted with a Finish-scoring offer. The backend's boot
+   * healer has already stamped-and-retired every intent whose inputs moved.
+   */
+  getScoringIntents: () => request<{ intents: InterruptedScoring[] }>('/api/scoring/intents'),
+  /**
+   * Finish one interrupted record (decision D4's one-click button). The
+   * backend re-verifies the intent's runKey against today's inputs first:
+   * 'identical' completes the SAME measurement as a blank-fill; 'moved'
+   * stamps the honest reason instead. Answers immediately, like every
+   * scoring start — the row reads "scoring…" through the ordinary polls.
+   */
+  finishScoring: (body: { kind: ScoringTargetKind; id: string }) =>
+    request<{ ok: true; scoring: boolean }>('/api/scoring/finish', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   // ----- Search -----------------------------------------------------------
   /**
@@ -351,6 +374,8 @@ function localApi(): Api {
     restorePlan: (id) => b().then((x) => x.restorePlan(id)),
     scorePlanVersion: (id) => b().then((x) => x.scorePlanVersion(id)),
     planVersionsScoring: () => b().then((x) => x.planVersionsScoring()),
+    getScoringIntents: () => b().then((x) => x.getScoringIntents()),
+    finishScoring: (body) => b().then((x) => x.finishScoring(body)),
     startSearch: (req) => b().then((x) => x.startSearch(req)),
     getSearch: (searchId) => b().then((x) => x.getSearch(searchId)),
     getSearchReport: (searchId) => b().then((x) => x.getSearchReport(searchId)),

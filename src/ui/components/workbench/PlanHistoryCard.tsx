@@ -46,6 +46,7 @@ import { api } from '../../api';
 import { useToast } from '../../toast';
 import { InfoTip } from '../profile/fields';
 import {
+  finishOffer,
   historyEmptyNote,
   historyRows,
   restoreOutcome,
@@ -90,6 +91,13 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
    */
   const [scoring, setScoring] = useState<string[]>([]);
   const scoringRef = useRef<string[]>([]);
+  /**
+   * Versions whose scoring was INTERRUPTED (a killed tab, a restart) and
+   * still verifies completable against today's inputs — the write-ahead
+   * intent file's answer (store/scoringIntent.ts). These rows carry the
+   * Finish-scoring offer instead of the permanent readings.
+   */
+  const [interrupted, setInterrupted] = useState<string[]>([]);
   /** Which row is asking "are you sure?" — at most one at a time. */
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -112,6 +120,18 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
       setEntries(await api.planHistory());
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
+    }
+    // Separately and non-fatally, like the Net Worth page: the interrupted
+    // offer is additive, and a backend without the answer must not take the
+    // history down with it.
+    try {
+      setInterrupted(
+        (await api.getScoringIntents()).intents
+          .filter((i) => i.kind === 'plan-version')
+          .map((i) => i.id),
+      );
+    } catch {
+      // Keep whatever we knew.
     }
   }, []);
 
@@ -170,6 +190,29 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
     }
   };
 
+  /**
+   * Finish an interrupted version's scoring. The backend re-verifies the
+   * intent's runKey before a single path runs — this press is a request, not
+   * an override — and whatever lands (the completed figure, or the honest
+   * inputs-moved reason) arrives through the ordinary poll like any outcome.
+   */
+  const finish = async (id: string) => {
+    setActionError(null);
+    setBusy(id);
+    try {
+      await api.finishScoring({ kind: 'plan-version', id });
+      setInterrupted((prev) => prev.filter((x) => x !== id));
+      setScoringIds([...scoringRef.current.filter((x) => x !== id), id]);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+      // A refusal may mean the intent is already resolved — re-read rather
+      // than leave a button that can only refuse again.
+      void load();
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const restore = async (row: HistoryRow) => {
     setActionError(null);
     setBusy(row.entry.id);
@@ -202,6 +245,7 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
   const rows = historyRows(entries ?? [], {
     currentPlan: plan,
     scoring,
+    interrupted,
     engineVersion: ENGINE_VERSION,
     people: profile.people,
     accounts: profile.accounts,
@@ -262,6 +306,7 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
             onCancelRestore={() => setConfirming(null)}
             onRestore={() => void restore(row)}
             onScore={() => void score(row.entry.id)}
+            onFinish={() => void finish(row.entry.id)}
           />
         ))
       )}
@@ -291,6 +336,7 @@ function HistoryRowView({
   onCancelRestore,
   onRestore,
   onScore,
+  onFinish,
 }: {
   row: HistoryRow;
   busy: boolean;
@@ -303,9 +349,11 @@ function HistoryRowView({
   onCancelRestore: () => void;
   onRestore: () => void;
   onScore: () => void;
+  onFinish: () => void;
 }) {
   const { entry, score } = row;
   const offer = scoringOffer(score);
+  const finishLabel = finishOffer(score);
   return (
     <div className={row.isCurrent ? 'hist-row is-current' : 'hist-row'}>
       <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
@@ -365,6 +413,14 @@ function HistoryRowView({
               {offer}
             </button>
           )}
+          {/* Finish scoring — only behind a still-verifying write-ahead
+              intent (finishOffer holds the rule and the argument for why this
+              is not the removed re-score button back). */}
+          {finishLabel !== null && (
+            <button className="primary" disabled={busy} onClick={onFinish}>
+              {finishLabel}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -390,6 +446,18 @@ function ScoreLine({ score }: { score: HistoryRow['score'] }) {
     return (
       <div className="hist-score muted" role="status">
         scoring… (a final-quality run, then the spend solve — minutes, not seconds)
+      </div>
+    );
+  }
+  if (score.state === 'interrupted') {
+    return (
+      <div className="hist-score">
+        <span className="flag">interrupted</span>{' '}
+        <span className="muted">
+          Scoring was cut short before anything landed — the app closed mid-run. Today&rsquo;s
+          inputs still produce exactly the run that was in flight, so Finish scoring completes
+          the same measurement: a blank being filled, not a number being rewritten.
+        </span>
       </div>
     );
   }
@@ -438,6 +506,27 @@ function ScoreLine({ score }: { score: HistoryRow['score'] }) {
           No sustainable-spend figure: {score.spendMissing}
         </div>
       )}
+      {/* THE LIVE BLANK: the bisection is running right now (the in-flight
+          registry says so). This used to fall through to the permanent
+          sentence below — the Phase-4 wording quirk — and claim finality
+          about a figure that was a dozen runs from landing. */}
+      {score.spend === null && score.spendMissing === null && score.spendSolving && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 3 }} role="status">
+          Solving the spend figure — the probability landed and its bisection is still
+          running; the figure lands on this row when it finishes.
+        </div>
+      )}
+      {/* THE INTERRUPTED BLANK: the bisection was cut short, and the
+          write-ahead intent still verifies against today's inputs — so this
+          one, uniquely, is completable (the Aug-20 shape, with its repair). */}
+      {score.spend === null && score.spendMissing === null && score.spendInterrupted && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+          The spend solve was interrupted — the probability above stands (it was measured),
+          and today&rsquo;s inputs still produce exactly the bisection that was cut short.
+          Finish scoring completes it: the same measurement, filling the one blank the
+          interruption left.
+        </div>
+      )}
       {/* A PRE-SCORING "Baseline — saved Aug 18" IS THIS ROW: 93.8% and no
           dollars, because the solve did not exist when it was scored. It says
           the figure is absent and permanent, and offers nothing — solving it
@@ -450,8 +539,13 @@ function ScoreLine({ score }: { score: HistoryRow['score'] }) {
           was interrupted — a server restart between the probability and the
           bisection leaves exactly this shape, and "Baseline — frozen Aug 20"
           became one on the afternoon this rule shipped. The entry stores no way
-          to tell the two apart, so the line states what it knows. */}
-      {score.spend === null && score.spendMissing === null && (
+          to tell the two apart, so the line states what it knows. (A row whose
+          interruption IS known — a still-verifying intent — renders the
+          completable sentence above instead of this one.) */}
+      {score.spend === null &&
+        score.spendMissing === null &&
+        !score.spendSolving &&
+        !score.spendInterrupted && (
         <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
           No sustainable-spend figure — none was solved alongside this score, and none can be
           added now: a figure solved today would belong to today, not to the day this score was

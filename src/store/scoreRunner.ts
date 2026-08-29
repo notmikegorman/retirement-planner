@@ -26,18 +26,25 @@
  */
 import type {
   PlanScore,
+  Profile,
   RunProgress,
   RunRequest,
   RunResult,
   Scenario,
+  ScoringPhase,
 } from '../shared/types';
 import { formatUSD } from '../shared/util';
 // Read, never written: the solver's own bracket and its inner path cap. A
 // second copy of these numbers here would drift from the engine's silently,
 // and both of the answers below are ABOUT the bracket.
 import { INNER_PATH_CAP, MAX_SPEND_HI, MAX_SPEND_LO } from '../engine/solvers';
-import type { DataStore } from './dataStore';
+import { ValidationError, type DataStore } from './dataStore';
 import type { RunManager } from './runManager';
+import type {
+  ScoringIntent,
+  ScoringIntentStore,
+  ScoringIntentTarget,
+} from './scoringIntent';
 
 /**
  * The mode a recorded score is always computed in. Only Monte Carlo answers
@@ -98,6 +105,38 @@ export function planForScoring(scenario: Scenario): Scenario {
   return rest;
 }
 
+/**
+ * THE TWO REQUESTS A SCORING RUN CAN BE, built in exactly one place.
+ *
+ * scorePlan and solveSustainableSpend run these; the write-ahead intent
+ * records their runKeys before they start; and the intent healer/finisher
+ * rebuilds them from today's inputs to ask "is the interrupted run still the
+ * run these inputs produce?". Three call sites, one builder each — a second
+ * copy that drifted by one field would make the healer compare the intent
+ * against a run nobody would ever start, and every interruption would resolve
+ * to 'moved' (or worse, to a false 'identical').
+ */
+export function scoreRunRequest(plan: Scenario, profile: Profile): RunRequest {
+  return {
+    scenario: planForScoring(plan),
+    mode: SCORE_MODE,
+    paths: profile.settings.mcPathsFinal,
+    seed: profile.settings.seed,
+  };
+}
+
+export function spendRunRequest(plan: Scenario, profile: Profile): RunRequest {
+  return {
+    // The plan's own solver (if it had one) is stripped first: what runs here
+    // is a max_spend sweep of the plan as written, not whatever sweep someone
+    // typed into the Raw JSON editor.
+    scenario: { ...planForScoring(plan), solver: { type: 'max_spend' } },
+    mode: SCORE_MODE,
+    paths: profile.settings.mcPathsFinal,
+    seed: profile.settings.seed,
+  };
+}
+
 export function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -115,23 +154,75 @@ export type SpendAttempt =
   | { ok: true; sustainableSpend: number; sustainableSpendPaths: number }
   | { ok: false; reason: string };
 
-export interface ScoreRunner {
-  scorePlan(plan: Scenario, deps: ScoringDeps): Promise<ScoreAttempt>;
-  solveSustainableSpend(plan: Scenario, deps: ScoringDeps): Promise<SpendAttempt>;
+/**
+ * The write-ahead half of the runner (Phase 6 of the browser port): the
+ * intent store to record into, and the resolver that computes the runKey a
+ * request will run under — THE run manager's own resolver, never a copy, so
+ * the recorded key and the executed run cannot disagree (see
+ * store/scoringIntent.ts for the whole design and the Aug-20 incident it
+ * closes). Optional at the factory so tests of the polling machinery need no
+ * intent fixture; the composed services always pass it.
+ */
+export interface ScoringWal {
+  intents: ScoringIntentStore;
+  resolveRunKey: (req: RunRequest) => Promise<string>;
 }
 
-export function createScoreRunner(data: DataStore): ScoreRunner {
-  /** Start a run and wait for it, or say why there is no result. */
+export interface ScoreRunner {
+  scorePlan(
+    plan: Scenario,
+    deps: ScoringDeps,
+    target?: ScoringIntentTarget,
+  ): Promise<ScoreAttempt>;
+  solveSustainableSpend(
+    plan: Scenario,
+    deps: ScoringDeps,
+    target?: ScoringIntentTarget,
+  ): Promise<SpendAttempt>;
+  /**
+   * Does this orphaned intent still name the run TODAY'S inputs produce?
+   * 'identical' means the interrupted measurement is provably the same
+   * measurement (same resolved profile, same plan, same engine — the runKey
+   * covers all of it) and may be completed as a blank-fill; 'moved' means a
+   * figure computed now would belong to now. A ValidationError from the
+   * resolver (a holdings symbol with no stored quote — a deterministic
+   * statement that today's inputs cannot produce ANY run, let alone that one)
+   * reads as 'moved'; any other failure to look propagates, so a transient
+   * error can never be mistaken for a verdict.
+   */
+  verifyIntent(plan: Scenario, intent: ScoringIntent): Promise<'identical' | 'moved'>;
+}
+
+export function createScoreRunner(data: DataStore, wal?: ScoringWal): ScoreRunner {
+  /**
+   * Start a run and wait for it, or say why there is no result. When a target
+   * is named, the write-ahead intent is recorded FIRST, inside the same step:
+   * an intent recorded after the run started would leave a window where a
+   * kill loses the run and no file says so — the exact window this exists to
+   * close.
+   */
   async function runToCompletion(
     request: RunRequest,
     deps: ScoringDeps,
+    intent?: { target: ScoringIntentTarget; phase: ScoringPhase },
   ): Promise<{ ok: true; result: RunResult } | { ok: false; reason: string }> {
     let runId: string;
     try {
+      if (wal && intent) {
+        await wal.intents.record({
+          kind: intent.target.kind,
+          id: intent.target.id,
+          phase: intent.phase,
+          runKey: await wal.resolveRunKey(request),
+          startedAt: deps.now().toISOString(),
+        });
+      }
       ({ runId } = await deps.startRun(request));
     } catch (err) {
       // The usual one: a holdings symbol with no stored quote. The message names
-      // the symbol and the fix, so it is passed through whole.
+      // the symbol and the fix, so it is passed through whole. (resolveRunKey
+      // resolves the same inputs startRun would, so its failure is the same
+      // failure with the same words.)
       return { ok: false, reason: `The simulation could not start: ${message(err)}` };
     }
 
@@ -174,24 +265,27 @@ export function createScoreRunner(data: DataStore): ScoreRunner {
    * conditions it was computed under, and those are the ones this number
    * actually has.
    */
-  async function scorePlan(plan: Scenario, deps: ScoringDeps): Promise<ScoreAttempt> {
+  async function scorePlan(
+    plan: Scenario,
+    deps: ScoringDeps,
+    target?: ScoringIntentTarget,
+  ): Promise<ScoreAttempt> {
     let request: RunRequest;
     try {
       // Only `settings` is read here — the paths and seed that make successive
       // scores comparable. The run resolves the profile itself (holdings priced
       // from stored quotes), which is what puts today's balances in the run key.
       const profile = await data.loadProfile();
-      request = {
-        scenario: planForScoring(plan),
-        mode: SCORE_MODE,
-        paths: profile.settings.mcPathsFinal,
-        seed: profile.settings.seed,
-      };
+      request = scoreRunRequest(plan, profile);
     } catch (err) {
       return { ok: false, reason: `The profile could not be read: ${message(err)}` };
     }
 
-    const run = await runToCompletion(request, deps);
+    const run = await runToCompletion(
+      request,
+      deps,
+      target === undefined ? undefined : { target, phase: 'score' },
+    );
     if (!run.ok) return run;
     const result = run.result;
     return {
@@ -233,24 +327,21 @@ export function createScoreRunner(data: DataStore): ScoreRunner {
   async function solveSustainableSpend(
     plan: Scenario,
     deps: ScoringDeps,
+    target?: ScoringIntentTarget,
   ): Promise<SpendAttempt> {
     let request: RunRequest;
     try {
       const profile = await data.loadProfile();
-      request = {
-        // The plan's own solver (if it had one) is stripped first: what runs here
-        // is a max_spend sweep of the plan as written, not whatever sweep someone
-        // typed into the Raw JSON editor.
-        scenario: { ...planForScoring(plan), solver: { type: 'max_spend' } },
-        mode: SCORE_MODE,
-        paths: profile.settings.mcPathsFinal,
-        seed: profile.settings.seed,
-      };
+      request = spendRunRequest(plan, profile);
     } catch (err) {
       return { ok: false, reason: `The profile could not be read: ${message(err)}` };
     }
 
-    const run = await runToCompletion(request, deps);
+    const run = await runToCompletion(
+      request,
+      deps,
+      target === undefined ? undefined : { target, phase: 'spend' },
+    );
     if (!run.ok) return run;
 
     const answer = run.result.solverOutput?.answer;
@@ -280,5 +371,24 @@ export function createScoreRunner(data: DataStore): ScoreRunner {
     };
   }
 
-  return { scorePlan, solveSustainableSpend };
+  /** See the interface doc — the honesty check behind Finish scoring. */
+  async function verifyIntent(
+    plan: Scenario,
+    intent: ScoringIntent,
+  ): Promise<'identical' | 'moved'> {
+    if (!wal) {
+      throw new Error('This score runner was composed without the intent machinery.');
+    }
+    const profile = await data.loadProfile();
+    const request =
+      intent.phase === 'score' ? scoreRunRequest(plan, profile) : spendRunRequest(plan, profile);
+    try {
+      return (await wal.resolveRunKey(request)) === intent.runKey ? 'identical' : 'moved';
+    } catch (err) {
+      if (err instanceof ValidationError) return 'moved';
+      throw err;
+    }
+  }
+
+  return { scorePlan, solveSustainableSpend, verifyIntent };
 }

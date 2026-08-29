@@ -23,14 +23,21 @@
  * changed instead of drawing through it, and a point can offer to restore the
  * plan it was scored under. One plan, and a memory of every day of it.
  *
- * IN-FLIGHT STATE IS MEMORY-ONLY. Nothing about "a run is going" is written to
- * disk: a process restarted mid-run leaves the row exactly as it was — scoreless
- * — rather than carrying a persisted "scoring…" that would be a lie forever
- * after. The page asks who is in flight through `snapshotsBeingScored()`, and
- * gets an empty list after a restart, which is the truth. (In the browser the
- * process is the TAB, so a killed tab leaves a scoreless row the same way; the
- * write-ahead intent file that would let a reopened tab resolve it is Phase 6,
- * deliberately not here.)
+ * IN-FLIGHT STATE IS MEMORY-ONLY — but since Phase 6 of the browser port it
+ * leaves a WRITE-AHEAD INTENT behind it. The in-flight registry still lives in
+ * memory and still answers empty after a restart (a persisted "scoring…" flag
+ * would be a lie forever after); what IS on disk is the intent file
+ * (store/scoringIntent.ts): {which row, which phase, the runKey the run will
+ * compute}, recorded before each run starts and cleared when both attaches
+ * complete. That file is what turns the Aug-20 class of loss — a restart
+ * between the two attaches permanently cost a real record its sustainable-
+ * spend figure, because nothing on disk said a solve had been in flight —
+ * into a recoverable state: on boot an orphaned intent whose runKey still
+ * resolves identically from today's inputs makes the row INTERRUPTED with a
+ * one-click Finish (`finishScoring` below, decision D4), and one whose
+ * inputs have moved resolves to honestly-unmeasured with the reason. In the
+ * browser the process is the tab, so this is the difference between "a rare
+ * restart" and "every accidental tab close".
  *
  * A SCORE IS ATTACHED ONCE, WHEN THE ROW IS FORMED, AND NEVER AGAIN. There was
  * a re-score button on the ledger and a POST /api/networth/:id/score behind it,
@@ -45,11 +52,16 @@
  * moment — nobody measured it — and the page says exactly that. The alternative
  * was a button that filled the gap with a measurement of a different day.
  */
-import type { Scenario, SnapshotScore } from '../shared/types';
+import type { NetWorthSnapshot, Scenario, SnapshotScore } from '../shared/types';
 import type { NetworthStore } from './networthStore';
 import { planHash, type PlanHistoryStore } from './planHistoryStore';
 import type { PlanStore } from './planStore';
 import { message, type ScoreRunner, type ScoringDeps } from './scoreRunner';
+import {
+  inputsMovedReason,
+  type ScoringIntentStore,
+  type ScoringIntentTarget,
+} from './scoringIntent';
 
 /** What a scoring attempt did — reported to the caller, never to disk. */
 export type ScoringOutcome =
@@ -70,6 +82,15 @@ export type ScoringOutcome =
 export interface SnapshotScorer {
   snapshotsBeingScored(): string[];
   startScoring(snapshotId: string, deps?: ScoringDeps): Promise<ScoringOutcome>;
+  /**
+   * Complete an INTERRUPTED scoring run — the one-click Finish behind an
+   * orphaned intent (decision D4). Verifies first that the intent's runKey
+   * still resolves identically from today's inputs; on 'identical' it
+   * completes the SAME measurement (a blank-fill, never an overwrite — the
+   * run cache may even hold the finished result), on 'moved' it stamps the
+   * missing half with the honest reason and clears the intent.
+   */
+  finishScoring(snapshotId: string, deps?: ScoringDeps): Promise<ScoringOutcome>;
 }
 
 export interface SnapshotScorerOptions {
@@ -79,10 +100,36 @@ export interface SnapshotScorerOptions {
   runner: ScoreRunner;
   /** The environment's real ScoringDeps; tests pass their own per call. */
   defaultDeps: ScoringDeps;
+  /**
+   * The write-ahead intent store (store/scoringIntent.ts). Optional so unit
+   * tests of the attach machinery need no intent fixture; the composed
+   * services always pass it — without it an interruption is a silent
+   * permanent blank, the pre-Phase-6 behaviour.
+   */
+  intents?: ScoringIntentStore;
+  /**
+   * Fired with the registry's size on every change — the seam the local
+   * backend arms its beforeunload warning through (exactly while any scoring
+   * is in flight, mirroring the search guard's arm/disarm discipline).
+   */
+  onInFlightChange?: (inFlight: number) => void;
 }
 
 export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScorer {
-  const { networth, planHistory, plan: planStore, runner, defaultDeps } = opts;
+  const { networth, planHistory, plan: planStore, runner, defaultDeps, intents } = opts;
+
+  const target = (snapshotId: string): ScoringIntentTarget => ({
+    kind: 'snapshot',
+    id: snapshotId,
+  });
+
+  /** Clear the row's intent, if the machinery is wired. Never throws: the
+   *  outcome is already attached, and a failed cleanup must not turn a scored
+   *  row into a rejected promise — the healer clears satisfied intents at the
+   *  next boot anyway. */
+  async function clearIntent(snapshotId: string): Promise<void> {
+    await intents?.clear(target(snapshotId)).catch(() => undefined);
+  }
 
   /**
    * Snapshot ids with a simulation in flight right now, keyed to the promise so
@@ -101,6 +148,26 @@ export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScore
   }
 
   /**
+   * Register one piece of scoring work in the registry — the single door for
+   * both the forming run and a Finish, so joining, the page's "scoring…" and
+   * the unload guard's arm/disarm cannot differ between them.
+   */
+  function launch(
+    snapshotId: string,
+    work: () => Promise<ScoringOutcome>,
+  ): Promise<ScoringOutcome> {
+    const existing = inFlight.get(snapshotId);
+    if (existing) return existing;
+    const running = work().finally(() => {
+      inFlight.delete(snapshotId);
+      opts.onInFlightChange?.(inFlight.size);
+    });
+    inFlight.set(snapshotId, running);
+    opts.onInFlightChange?.(inFlight.size);
+    return running;
+  }
+
+  /**
    * Score `snapshotId` in the background and return the promise for it.
    *
    * The caller does not await this: the snapshot flow answers with the row the
@@ -116,14 +183,7 @@ export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScore
     snapshotId: string,
     deps: ScoringDeps = defaultDeps,
   ): Promise<ScoringOutcome> {
-    const existing = inFlight.get(snapshotId);
-    if (existing) return existing;
-
-    const work = scoreSnapshot(snapshotId, deps).finally(() => {
-      inFlight.delete(snapshotId);
-    });
-    inFlight.set(snapshotId, work);
-    return work;
+    return launch(snapshotId, () => scoreSnapshot(snapshotId, deps));
   }
 
   /**
@@ -151,7 +211,9 @@ export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScore
       return fail(snapshotId, `The plan could not be read: ${message(err)}`);
     }
 
-    const attempt = await runner.scorePlan(plan, deps);
+    // The runner records the write-ahead intent (phase 'score', this run's
+    // key) before the simulation starts — see runToCompletion.
+    const attempt = await runner.scorePlan(plan, deps, target(snapshotId));
     if (!attempt.ok) return fail(snapshotId, attempt.reason);
 
     const hash = planHash(plan);
@@ -162,7 +224,11 @@ export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScore
       ...(historyId !== undefined ? { planHistoryId: historyId } : {}),
     };
     const attached = await networth.attachScore(snapshotId, { score });
-    if (attached !== 'attached') return { status: attached };
+    if (attached !== 'attached') {
+      // Nothing left in flight for this row — the score had nowhere to go.
+      await clearIntent(snapshotId);
+      return { status: attached };
+    }
 
     /*
      * THEN THE EXPENSIVE HALF, on the row that already has its number.
@@ -178,13 +244,17 @@ export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScore
      * until the whole thing lands and the page keeps saying "scoring…" — which
      * is the truth: a simulation is still running.
      */
-    const spend = await runner.solveSustainableSpend(plan, deps);
+    // The runner updates the intent at this phase boundary (phase 'spend',
+    // the bisection's own run key) before the solve starts.
+    const spend = await runner.solveSustainableSpend(plan, deps, target(snapshotId));
     await networth.attachSustainableSpend(
       snapshotId,
       spend.ok
         ? { sustainableSpend: spend.sustainableSpend, sustainableSpendPaths: spend.sustainableSpendPaths }
         : { error: spend.reason.length > 1000 ? `${spend.reason.slice(0, 997)}...` : spend.reason },
     );
+    // BOTH attaches are on the row; only now is there nothing left to lose.
+    await clearIntent(snapshotId);
     return { status: 'scored', score };
   }
 
@@ -194,8 +264,129 @@ export function createSnapshotScorer(opts: SnapshotScorerOptions): SnapshotScore
     // kilobytes, and the ledger is not a log file.
     const trimmed = reason.length > 1000 ? `${reason.slice(0, 997)}...` : reason;
     const attached = await networth.attachScore(snapshotId, { error: trimmed });
+    // The failure is RECORDED — the scoring completed, with a reason instead
+    // of a number — so the intent clears. Attach first, clear second: a kill
+    // between the two leaves an intent pointing at a row that carries its
+    // outcome, which the boot healer clears as satisfied.
+    await clearIntent(snapshotId);
     return attached === 'attached' ? { status: 'failed', reason: trimmed } : { status: attached };
   }
 
-  return { snapshotsBeingScored, startScoring };
+  /**
+   * The Finish button's work (see the interface doc). Runs through `launch`,
+   * so the page's "scoring…" cell and the unload guard treat a completion
+   * exactly like the forming run it resumes. Never throws: it is fired
+   * unawaited from the finish route, so every failure is an outcome.
+   */
+  function finishScoring(
+    snapshotId: string,
+    deps: ScoringDeps = defaultDeps,
+  ): Promise<ScoringOutcome> {
+    return launch(snapshotId, () => finishInterrupted(snapshotId, deps));
+  }
+
+  async function finishInterrupted(
+    snapshotId: string,
+    deps: ScoringDeps,
+  ): Promise<ScoringOutcome> {
+    if (!intents) {
+      return { status: 'failed', reason: 'This backend has no intent machinery composed.' };
+    }
+    try {
+      const intent = (await intents.list()).find(
+        (i) => i.kind === 'snapshot' && i.id === snapshotId,
+      );
+      const rows = await networth.listSnapshots();
+      const row = rows.find((r) => r.id === snapshotId);
+      if (!row) {
+        await clearIntent(snapshotId);
+        return { status: 'row_gone' };
+      }
+      if (rowComplete(row)) {
+        // Nothing left to finish — the outcome is already on the row (a race
+        // with the healer, or a double press across a reload).
+        await clearIntent(snapshotId);
+        return { status: 'already_scored' };
+      }
+      if (!intent) {
+        // No recorded intent for a still-blank row: there is nothing that says
+        // what was in flight, so there is nothing that may honestly be
+        // finished. NOT written to the row — the row already reads as
+        // permanently unmeasured, which is the truth.
+        return {
+          status: 'failed',
+          reason:
+            'No interrupted scoring is recorded for this row, so there is nothing to finish.',
+        };
+      }
+
+      let plan: Scenario;
+      try {
+        plan = await planStore.loadPlan();
+      } catch (err) {
+        // Transient by assumption: nothing is stamped, the intent stays, the
+        // button stays. A permanent verdict needs a readable world.
+        return { status: 'failed', reason: `The plan could not be read: ${message(err)}` };
+      }
+
+      let verdict: 'identical' | 'moved';
+      try {
+        verdict = await runner.verifyIntent(plan, intent);
+      } catch (err) {
+        return {
+          status: 'failed',
+          reason: `The interrupted run could not be verified against today’s inputs: ${message(err)}`,
+        };
+      }
+
+      if (verdict === 'moved') {
+        // Finishing would file a figure that belongs to now. Stamp the honest
+        // reason on the missing half and retire the intent.
+        const reason = inputsMovedReason(row.score === undefined ? 'score' : 'spend');
+        if (row.score === undefined) await networth.attachScore(snapshotId, { error: reason });
+        else await networth.attachSustainableSpend(snapshotId, { error: reason });
+        await clearIntent(snapshotId);
+        return { status: 'failed', reason };
+      }
+
+      // Identical: the interrupted measurement is still THE measurement.
+      if (row.score === undefined) {
+        // Nothing landed before the kill — the whole flow re-runs. Same plan,
+        // same resolved inputs (just verified), so the run cache may answer
+        // both halves without simulating a path.
+        return await scoreSnapshot(snapshotId, deps);
+      }
+      // The probability landed; only the bisection was lost. This is the
+      // Aug-20 shape, completed: the spend attach below fills the one blank
+      // the kill left, under the same runKey the interrupted solve carried.
+      const spend = await runner.solveSustainableSpend(plan, deps, target(snapshotId));
+      await networth.attachSustainableSpend(
+        snapshotId,
+        spend.ok
+          ? {
+              sustainableSpend: spend.sustainableSpend,
+              sustainableSpendPaths: spend.sustainableSpendPaths,
+            }
+          : { error: spend.reason.length > 1000 ? `${spend.reason.slice(0, 997)}...` : spend.reason },
+      );
+      await clearIntent(snapshotId);
+      return { status: 'scored', score: row.score };
+    } catch (err) {
+      // Fired unawaited — a rejection here would be an unhandled rejection in
+      // a background task nobody is watching. Nothing is stamped: the intent
+      // survives for the next attempt or the next boot's healer.
+      return { status: 'failed', reason: message(err) };
+    }
+  }
+
+  return { snapshotsBeingScored, startScoring, finishScoring };
+}
+
+/** Nothing left to finish: an outcome (number or reason) fills every slot. */
+function rowComplete(row: NetWorthSnapshot): boolean {
+  if (row.scoreError !== undefined) return true;
+  if (row.score === undefined) return false;
+  return (
+    row.score.sustainableSpend !== undefined || row.score.sustainableSpendError !== undefined
+  );
 }

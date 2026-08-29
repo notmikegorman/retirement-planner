@@ -19,16 +19,20 @@
  * picked real folder arrives with Phase 7's PWA work; nothing here may care
  * which one it is handed (the driver's own rule, fsaFileStore.ts).
  *
- * QUOTES HAVE NO NETWORK YET, honestly. The one network step in the app needs
- * the Phase-6 CORS proxy — browsers cannot call Yahoo's endpoint (no CORS
- * header, mandatory User-Agent) — so until it ships, the default fetcher
- * fails EVERY symbol with a message naming the proxy as the missing piece.
- * Per-symbol failure is data, not a thrown refresh (the store's own rule), so
- * a refresh "succeeds" with every symbol reporting why it could not, stored
- * quotes keep working with their honest asOf, and runs still refuse on
- * missing quotes. Tests (and Phase 6) inject a working fetcher through
- * `globalThis.__fplanLocalOptions` — the injection seam the quote service has
- * always had, reachable from outside the bundle.
+ * QUOTES GO THROUGH THE PHASE-6 PROXY, once one is configured. Browsers
+ * cannot call Yahoo's endpoint directly (no CORS header, mandatory
+ * User-Agent), so the one network step routes through the ~15-line Cloudflare
+ * Worker in workers/quote-proxy via proxyQuoteFetcher.ts — which also owns
+ * where the proxy URL comes from (VITE_FPLAN_QUOTE_PROXY at build time, the
+ * localStorage override for deploy-then-point without a rebuild). Until a URL
+ * is configured, the default fetcher fails EVERY symbol with a message naming
+ * exactly what to deploy and where the instructions live. Per-symbol failure
+ * is data, not a thrown refresh (the store's own rule), so a refresh
+ * "succeeds" with every symbol reporting why it could not, stored quotes keep
+ * working with their honest asOf, and runs still refuse on missing quotes.
+ * Tests inject their own fetcher through `globalThis.__fplanLocalOptions` —
+ * the injection seam the quote service has always had, reachable from outside
+ * the bundle.
  */
 import type { z } from 'zod';
 import type {
@@ -42,6 +46,7 @@ import type {
 } from '../../shared/types';
 import { ENGINE_VERSION } from '../../shared/types';
 import {
+  finishScoringRequestSchema,
   netWorthSnapshotWriteSchema,
   parseOrThrow,
   planKeepSchema,
@@ -65,6 +70,12 @@ import { bundledDefaults } from './bundledDefaults';
 import { createBrowserRunExecutor } from './browserRunExecutor';
 import { createBrowserSearchRunner } from './searchClient';
 import { acquireGuardInWorker } from './guardClient';
+import {
+  QUOTE_PROXY_STORAGE_KEY,
+  createProxyQuoteFetcher,
+  resolveQuoteProxyUrl,
+} from './proxyQuoteFetcher';
+import { setScoringInFlight } from './scoringGuard';
 
 /** The OPFS directory the local backend keeps the data folder in. */
 const OPFS_FOLDER = 'fplan-data';
@@ -112,14 +123,43 @@ function writerIdentity(): { clientId: string; label: string } {
   return { clientId, label: 'Finance Planner (browser tab)' };
 }
 
-/** The one network step's stand-in until Phase 6 — see the module header. */
+/** The stand-in while no proxy URL is configured — see the module header. */
 const proxyMissingFetcher: FetchLike = async () => {
   throw new Error(
-    'quote refresh needs the quote proxy, which is not deployed yet — a browser page ' +
+    'quote refresh needs the quote proxy, and no proxy URL is configured — a browser page ' +
       'cannot reach Yahoo directly (no CORS header, and the User-Agent Yahoo requires ' +
-      'cannot be set from a page). Stored quotes keep working with their recorded asOf.',
+      'cannot be set from a page). Deploy the Worker in workers/quote-proxy (one command: ' +
+      'npx wrangler deploy) and point this app at the printed URL — ' +
+      'workers/quote-proxy/README.md has both steps. Stored quotes keep working with their ' +
+      'recorded asOf.',
   );
 };
+
+/**
+ * The production quote fetcher: the proxy client when a URL is configured
+ * (build-time VITE var or the localStorage override — proxyQuoteFetcher.ts
+ * owns the rule and its safety argument), the honest refusal otherwise.
+ */
+function configuredQuoteFetcher(): FetchLike {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(QUOTE_PROXY_STORAGE_KEY);
+  } catch {
+    stored = null; // storage disabled: the build-time default still applies
+  }
+  const { url, rejected } = resolveQuoteProxyUrl({
+    stored,
+    buildDefault: import.meta.env?.VITE_FPLAN_QUOTE_PROXY as string | undefined,
+  });
+  if (rejected !== null) {
+    console.warn(
+      `[quotes] ignoring a quote-proxy URL that is not https (or http on localhost): ` +
+        `"${rejected}" — the proxy sees every symbol the portfolio holds, so only a ` +
+        `trustworthy scheme may receive it.`,
+    );
+  }
+  return url === null ? proxyMissingFetcher : createProxyQuoteFetcher(url);
+}
 
 /**
  * Boot the local backend: folder → guard → seed/migrate → compose. Called
@@ -154,7 +194,17 @@ export async function bootLocalBackend(): Promise<Api> {
   const files = createFsaFileStore(handle, '(browser data folder)');
   const stores: Stores = createStores({ files, defaults: await bundledDefaults() });
   const init = await stores.data.initDataDir();
-  const services: Services = createServices(stores, createBrowserRunExecutor());
+  const services: Services = createServices(stores, createBrowserRunExecutor(), {
+    // The beforeunload warning, armed exactly while any scoring is in flight
+    // (scoringGuard.ts — the same discipline as the search guard).
+    onScoringInFlightChange: setScoringInFlight,
+  });
+
+  // Orphaned write-ahead scoring intents resolve BEFORE the first call can
+  // answer — the same position the server's boot gives this, for the same
+  // reason: no page may read a row whose fate is still being decided
+  // (store/scoringIntent.ts; the Aug-20 loss is the incident this closes).
+  await services.scoringIntents.heal();
 
   /**
    * SEARCH, live in local mode since Phase 5: the neutral manager over this
@@ -174,7 +224,7 @@ export async function bootLocalBackend(): Promise<Api> {
     }),
   });
 
-  const quoteFetcher = options.quoteFetcher ?? proxyMissingFetcher;
+  const quoteFetcher = options.quoteFetcher ?? configuredQuoteFetcher();
 
   /** parseOrThrow, rethrown as ValidationError — server.ts's validateBody. */
   function validateBody<T>(schema: z.ZodType<T>, body: unknown, label: string): T {
@@ -226,11 +276,12 @@ export async function bootLocalBackend(): Promise<Api> {
      * for every holdings symbol FIRST (a snapshot must record today's prices,
      * not August's), write the row, and start scoring WITHOUT awaiting it —
      * the row answers now, the score lands when the simulation does. In this
-     * environment "fire and forget" lives exactly as long as the tab; a
-     * killed tab leaves a scoreless row, re-scorable only where the rules
-     * have always allowed (never — a snapshot is scored once, at formation).
-     * The write-ahead intent file that lets a reopened tab resolve the
-     * interruption is Phase 6, deliberately not here.
+     * environment "fire and forget" lives exactly as long as the tab — which
+     * is why the scorer records a write-ahead intent before each run (Phase
+     * 6, store/scoringIntent.ts): a killed tab leaves a row the reopened tab
+     * resolves explicitly — Interrupted with a Finish-scoring offer while
+     * today's inputs still produce the same run, honestly-unmeasured with
+     * the reason once they don't. Never a silent permanent blank.
      */
     takeNetWorthSnapshot: async (body: { homeValue: number; note?: string }) => {
       const write = validateBody(netWorthSnapshotWriteSchema, body, 'net worth snapshot');
@@ -285,6 +336,16 @@ export async function bootLocalBackend(): Promise<Api> {
     planVersionsScoring: async () => ({
       scoring: services.planHistoryScorer.versionsBeingScored(),
     }),
+
+    // ----- Interrupted scoring ----------------------------------------------
+    // The same two "routes" the server registers, over the same shared
+    // service — the boot healer above has already retired everything that is
+    // not honestly finishable or still undecided.
+    getScoringIntents: async () => ({ intents: await services.scoringIntents.list() }),
+    finishScoring: async (body: { kind: 'snapshot' | 'plan-version'; id: string }) =>
+      services.scoringIntents.finish(
+        validateBody(finishScoringRequestSchema, body, 'finish scoring'),
+      ),
 
     // ----- Search -----------------------------------------------------------
     // The same per-"route" glue as the server's search routes: validate the
