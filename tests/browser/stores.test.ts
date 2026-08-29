@@ -273,6 +273,22 @@ describe('browser storage engine (OPFS, real Chromium)', () => {
       await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('stale'));
     });
 
+    it('an IO failure during acquisition releases the Web Lock — a throw never wedges the tab', async () => {
+      // The lease read throws (an IO failure, not a refusal). The error must
+      // surface AND the Web Lock must come back, or this tab would be told
+      // "another tab is writing" forever about a tab that does not exist.
+      const broken = await store(page).evaluate(() =>
+        (window as unknown as StoreWindow).__store.leaseAcquireOverBrokenIO('broken-io'),
+      );
+      expect(broken.threw).toBe(true);
+      // The SAME folderId acquires cleanly right after: the lock was released.
+      const retry = await store(page).evaluate(() =>
+        (window as unknown as StoreWindow).__store.leaseAcquire('broken-io', 'client-a', 'Tab One'),
+      );
+      expect(retry.ok).toBe(true);
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('broken-io'));
+    });
+
     it('refuses to open a folder carrying sync-conflict artifacts until resolved', async () => {
       await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseWrite('conflicted', '.plan.json.icloud', ''));
       const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('conflicted', 'client-a', 'Tab One'));

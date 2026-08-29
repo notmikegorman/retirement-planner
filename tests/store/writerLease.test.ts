@@ -338,4 +338,65 @@ describe('acquireWriterLease — the lifecycle', () => {
     await result.guard.release();
     expect(parseLease(await files.readText(LEASE_FILENAME))?.holder).toEqual(OTHER);
   });
+
+  it('a beat that hits a transient IO failure logs, keeps beating, and recovers', async () => {
+    // The failure this pins: a heartbeat that died SILENTLY on one bad read
+    // or write would let the lease age out under a live writer — an open
+    // invitation for another machine to take the folder mid-session, with
+    // nothing logged on either side. A transient failure must say so and try
+    // again on the next beat.
+    const files = createMemoryFileStore();
+    const timers = manualTimers();
+    const logged: string[] = [];
+    let failNextRead = false;
+    let failNextWrite = false;
+    const flaky = {
+      ...files,
+      async readText(relPath: string): Promise<string> {
+        if (failNextRead && relPath === LEASE_FILENAME) {
+          failNextRead = false;
+          throw new Error('transient read failure (a sync engine holds the file)');
+        }
+        return files.readText(relPath);
+      },
+      async writeText(relPath: string, text: string): Promise<void> {
+        if (failNextWrite && relPath === LEASE_FILENAME) {
+          failNextWrite = false;
+          throw new Error('transient write failure (quota hiccup)');
+        }
+        return files.writeText(relPath, text);
+      },
+    };
+    let tick = 0;
+    const result = await acquireWriterLease({
+      files: flaky,
+      self: SELF,
+      now: () => at(++tick * 1000),
+      schedule: timers.schedule,
+      cancel: timers.cancel,
+      onLog: (m) => logged.push(m),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Beat 1: the read fails — logged, lease NOT lost, next beat scheduled.
+    failNextRead = true;
+    await timers.fire();
+    expect(logged.some((m) => m.includes('heartbeat failed, will retry'))).toBe(true);
+    expect(result.guard.lost).toBe(false);
+    expect(timers.pending()).toBe(1);
+
+    // Beat 2: the write fails — same story.
+    const renewedBefore = parseLease(await files.readText(LEASE_FILENAME))!.renewedAt;
+    failNextWrite = true;
+    await timers.fire();
+    expect(result.guard.lost).toBe(false);
+    expect(timers.pending()).toBe(1);
+    expect(parseLease(await files.readText(LEASE_FILENAME))!.renewedAt).toBe(renewedBefore);
+
+    // Beat 3: healthy again — the renewal lands.
+    await timers.fire();
+    expect(parseLease(await files.readText(LEASE_FILENAME))!.renewedAt).not.toBe(renewedBefore);
+    expect(parseLease(await files.readText(LEASE_FILENAME))!.holder).toEqual(SELF);
+  });
 });

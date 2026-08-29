@@ -141,6 +141,7 @@ export interface StoreWindow {
       clientId: string,
       label: string,
     ): Promise<LeaseAcquireReply>;
+    leaseAcquireOverBrokenIO(folder: string): Promise<{ threw: boolean }>;
     leaseRelease(folder: string): Promise<{ leaseGone: boolean }>;
   };
 }
@@ -232,6 +233,39 @@ export interface StoreWindow {
     if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
     heldGuards.set(folder, result.guard);
     return { ok: true, takeoverNote: result.guard.takeoverNote };
+  },
+
+  /**
+   * Attempt the guard over a store whose lease read THROWS (an IO failure,
+   * not a refusal). The point is the Web Lock's exception hygiene: a throw
+   * out of the lease layer must release the lock, or this tab would go on
+   * holding it while reporting failure — and a retry would be refused as
+   * "another tab" that does not exist. The vitest side proves the release by
+   * acquiring the SAME folderId normally right after.
+   */
+  async leaseAcquireOverBrokenIO(folder: string): Promise<{ threw: boolean }> {
+    const files = await namedFolder(folder);
+    const broken = {
+      ...files,
+      async readText(relPath: string): Promise<string> {
+        if (relPath === LEASE_FILENAME) throw new Error('injected IO failure');
+        return files.readText(relPath);
+      },
+    };
+    try {
+      const result = await acquireBrowserWriterGuard({
+        files: broken,
+        folderId: folder,
+        self: { clientId: 'client-broken', label: 'Broken IO Tab' },
+        onLog: () => undefined,
+      });
+      // Reachable only if the throw was swallowed somewhere — release so a
+      // failed expectation does not wedge later scenarios, then report.
+      if (result.ok) await result.guard.release();
+      return { threw: false };
+    } catch {
+      return { threw: true };
+    }
   },
 
   async leaseRelease(folder: string): Promise<{ leaseGone: boolean }> {

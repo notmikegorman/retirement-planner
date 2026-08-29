@@ -347,26 +347,36 @@ export async function acquireWriterLease(opts: AcquireLeaseOptions): Promise<Acq
 
   const beat = async (): Promise<void> => {
     if (stopped) return;
-    // Read before renewing: blindly rewriting would stomp a takeover that
-    // happened while this tab was frozen past its own staleness window (a
-    // laptop lid, a background-tab deep freeze). Losing the lease is the
-    // advisory layer working, and the honest response is to stop claiming.
-    let current: WriterLease | null = null;
     try {
-      current = parseLease(await files.readText(LEASE_FILENAME));
+      // Read before renewing: blindly rewriting would stomp a takeover that
+      // happened while this tab was frozen past its own staleness window (a
+      // laptop lid, a background-tab deep freeze). Losing the lease is the
+      // advisory layer working, and the honest response is to stop claiming.
+      let current: WriterLease | null = null;
+      try {
+        current = parseLease(await files.readText(LEASE_FILENAME));
+      } catch (err) {
+        if (!(err instanceof FileNotFoundError)) throw err;
+      }
+      if (current !== null && current.holder.clientId !== self.clientId) {
+        lost = true;
+        stopped = true;
+        onLog(
+          `writer lease lost to ${current.holder.label || current.holder.clientId} — ` +
+            'this session was presumably frozen past its own staleness window; stopping renewals',
+        );
+        return;
+      }
+      await writeLease();
     } catch (err) {
-      if (!(err instanceof FileNotFoundError)) throw err;
+      // A transient IO failure (a sync engine holding the file, a quota
+      // hiccup) must not end renewals SILENTLY: a heartbeat that dies
+      // quietly lets the lease go stale under a live writer, which is an
+      // invitation for another machine to take over mid-session. Say so and
+      // keep beating — the next beat may well succeed, and if it never does,
+      // the log says why the lease aged out.
+      onLog(`writer lease heartbeat failed, will retry: ${(err as Error).message}`);
     }
-    if (current !== null && current.holder.clientId !== self.clientId) {
-      lost = true;
-      stopped = true;
-      onLog(
-        `writer lease lost to ${current.holder.label || current.holder.clientId} — ` +
-          'this session was presumably frozen past its own staleness window; stopping renewals',
-      );
-      return;
-    }
-    await writeLease();
     timer = schedule(() => void beat().catch(() => undefined), heartbeatMs);
   };
   timer = schedule(() => void beat().catch(() => undefined), heartbeatMs);

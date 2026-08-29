@@ -112,7 +112,18 @@ export async function acquireBrowserWriterGuard(
     };
   }
 
-  const leaseResult = await acquireWriterLease({ files, self, heartbeatMs, onLog });
+  // A THROW out of the lease layer (an IO failure, not a refusal) must not
+  // strand the Web Lock: this tab would keep holding the profile-wide lock
+  // while reporting failure, and every retry in the SAME tab would then be
+  // told "another tab is writing" about a tab that does not exist. Release
+  // on the way out and let the error surface as itself.
+  let leaseResult;
+  try {
+    leaseResult = await acquireWriterLease({ files, self, heartbeatMs, onLog });
+  } catch (err) {
+    releaseWebLock();
+    throw err;
+  }
   if (!leaseResult.ok) {
     releaseWebLock();
     return { ok: false, reason: leaseResult.reason, message: leaseResult.message };
