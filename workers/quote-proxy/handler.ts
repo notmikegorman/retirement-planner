@@ -20,10 +20,12 @@
  *   symbol list is a portfolio fingerprint, and this Worker must be
  *   structurally unable to remember one. It sees symbols and an IP; it
  *   keeps neither.
- * - CORS is an ALLOWLIST that echoes the matched origin — never `*`. The app
- *   origin (decision D6: GitHub Pages) plus localhost dev origins, so the
- *   dev server and the offline browser-test lane work against the same
- *   handler bytes that deploy.
+ * - CORS is OPEN (`*`) — the owner's explicit 2026-08-29 decision, revising
+ *   D3's allowlist. The relay carries only public market data and sees only
+ *   symbols, so the sole exposure of `*` is quota freeloading: another site
+ *   could embed this URL as a free relay, and the worst case is the free
+ *   tier's 100k/day exhausting so the owner's own refresh fails until the
+ *   day rolls over. He priced that and chose reachable-from-anywhere.
  * - The UPSTREAM BASE comes from the environment with the Yahoo default, so
  *   the test lane points it at a local fixture server and stays fully
  *   offline. The timeout is env-tunable for the same reason; 10s means
@@ -44,16 +46,6 @@ const DEFAULT_UPSTREAM_BASE = 'https://query1.finance.yahoo.com';
 /** Per-request upstream budget. Yahoo answers in ~100ms; 10s means "hung". */
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-/** The app's origin — decision D6 (GitHub Pages on the public repo). */
-const APP_ORIGIN = 'https://notmikegorman.github.io';
-
-/**
- * Dev origins: the Vite dev server and the browser test lane, which serves
- * the built app from an OS-assigned ephemeral port — hence any-port, but
- * loopback-host only and only over http where https is impossible anyway.
- */
-const LOCAL_DEV_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-
 export interface QuoteProxyEnv {
   /** Override for tests/fixtures; production omits it and gets Yahoo. */
   UPSTREAM_BASE?: string;
@@ -62,18 +54,15 @@ export interface QuoteProxyEnv {
 }
 
 /**
- * The CORS headers for one request: the matched origin echoed back, or
- * nothing. Never `*` — an allowlist that names its members is the difference
- * between "the app's page may read this" and "any page that lures the owner
- * may harvest quote traffic". `vary: origin` keeps a shared cache from
- * serving one origin's grant to another.
+ * OPEN CORS, the owner's explicit choice (2026-08-29, revising the D3
+ * allowlist): any page may read quotes through this relay. `*` is safe HERE
+ * because the response is public market data keyed by nothing but a symbol —
+ * no cookie, no credential, no per-user anything — so the grant leaks
+ * nothing; the only cost `*` can incur is someone else spending the free
+ * tier's request quota. Constant for every request, so no `vary: origin`.
  */
-export function corsHeadersFor(origin: string | null): Record<string, string> {
-  if (origin === null) return {};
-  if (origin === APP_ORIGIN || LOCAL_DEV_ORIGIN_RE.test(origin)) {
-    return { 'access-control-allow-origin': origin, vary: 'origin' };
-  }
-  return {};
+export function corsHeadersFor(_origin: string | null): Record<string, string> {
+  return { 'access-control-allow-origin': '*' };
 }
 
 /** A JSON error the client's per-symbol loop records as that symbol's data. */

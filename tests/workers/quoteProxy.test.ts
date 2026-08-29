@@ -9,9 +9,9 @@
  * What must hold, in order of what it protects:
  *   1. Privacy: no logging, ever (D3) — pinned by scanning the source for
  *      console.* the same way the repo pins node-imports out of portable code.
- *   2. CORS: the allowlist echoes the matched origin and NEVER answers `*` —
- *      a symbol list is a portfolio fingerprint, and `*` would let any page
- *      that lures the owner read quote traffic.
+ *   2. CORS: a constant `*` on every branch — the owner's explicit
+ *      2026-08-29 open-relay decision (public data, symbol-keyed, nothing
+ *      per-user in the response; the only cost of `*` is quota freeloading).
  *   3. The gate: bad symbols 400 before a byte goes upstream.
  *   4. The pipe: good symbols relay Yahoo's bytes and status verbatim; a
  *      down or hung upstream is a 502 the app records per-symbol.
@@ -105,50 +105,40 @@ describe('no logging, structurally (decision D3)', () => {
   });
 });
 
-describe('CORS: an allowlist that echoes, never a star', () => {
-  it('echoes the app origin (D6) and varies on origin', () => {
-    expect(corsHeadersFor(APP_ORIGIN)).toEqual({
-      'access-control-allow-origin': APP_ORIGIN,
-      vary: 'origin',
-    });
-  });
-
-  it('echoes localhost dev origins on any port, http or https', () => {
+describe('CORS: open by the owner\u2019s 2026-08-29 decision \u2014 a constant star', () => {
+  /*
+   * The original D3 allowlist echoed only the app origin. The owner revised
+   * it: the relay carries public market data keyed by nothing but a symbol,
+   * so the grant leaks nothing and the only cost of `*` is someone else
+   * spending the free tier\u2019s quota. These tests pin the NEW policy \u2014 every
+   * origin, including the lookalikes the allowlist used to refuse, gets the
+   * same constant star, and no branch of a real request omits it.
+   */
+  it('answers a constant star for every origin, lookalikes included', () => {
     for (const origin of [
+      APP_ORIGIN,
       'http://localhost:5174',
-      'http://127.0.0.1:49301',
-      'https://localhost:8443',
-      'http://localhost',
-    ]) {
-      expect(corsHeadersFor(origin)['access-control-allow-origin']).toBe(origin);
-    }
-  });
-
-  it('answers nothing at all for any other origin — including lookalikes', () => {
-    for (const origin of [
       'https://evil.example',
       'https://notmikegorman.github.io.evil.example',
-      'http://localhost.evil.example',
       'http://192.168.1.10:5174',
-      'https://xnotmikegorman.github.io',
+      null,
     ]) {
-      expect(corsHeadersFor(origin)).toEqual({});
+      expect(corsHeadersFor(origin)).toEqual({ 'access-control-allow-origin': '*' });
     }
   });
 
-  it('never emits a star, on any branch of a real request', async () => {
+  it('emits the star on every branch of a real request \u2014 success, 400, and 405', async () => {
     for (const origin of [APP_ORIGIN, 'https://evil.example', undefined]) {
       for (const query of ['?symbol=VTI', '?symbol=bad!', '']) {
         const res = await get(query, origin);
-        expect(res.headers.get('access-control-allow-origin')).not.toBe('*');
+        expect(res.headers.get('access-control-allow-origin')).toBe('*');
       }
     }
   });
 
-  it('a no-origin request (curl, tests) gets the body with no CORS header', async () => {
-    const res = await get('?symbol=VTI');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+  it('does not vary on origin \u2014 the grant is constant, so caches may share it', async () => {
+    const res = await get('?symbol=VTI', APP_ORIGIN);
+    expect(res.headers.get('vary')).toBeNull();
   });
 });
 
@@ -226,8 +216,8 @@ describe('the dumb pipe', () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('did not answer within 0.1s');
-    // Even the failure carries the CORS echo, so the page can READ it.
-    expect(res.headers.get('access-control-allow-origin')).toBe(APP_ORIGIN);
+    // Even the failure carries the CORS grant, so the page can READ it.
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('answers 502 when the upstream is not there at all', async () => {

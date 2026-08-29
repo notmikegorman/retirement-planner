@@ -22,10 +22,14 @@ GET https://<your-worker>.workers.dev/?symbol=VTI
   `error`; the app records either as that one symbol's failure, never the
   batch's.
 - Any other method is a `405`.
-- CORS: the matched origin is echoed for `https://notmikegorman.github.io`
-  (the app's origin, decision D6) and for localhost/127.0.0.1 dev origins on
-  any port. Never `*`. Serving the app from a different origin someday means
-  editing `APP_ORIGIN` in `handler.ts` and redeploying.
+- CORS: open (`*`), by the owner's explicit 2026-08-29 decision revising the
+  original allowlist. The response is public market data keyed by nothing but
+  a symbol — no cookie, no credential, nothing per-user — so the grant leaks
+  nothing. The one cost of `*` is quota freeloading: another site could embed
+  this URL as a free relay, and the worst case is the free tier's 100k
+  requests/day exhausting so your own refresh fails until the day rolls over.
+  If that ever actually happens, restoring the allowlist is a ten-line revert
+  in `handler.ts` and one redeploy.
 
 **No logging — a standing constraint (decision D3).** The Worker sees ticker
 symbols and an IP, and a symbol list is a portfolio fingerprint. There is no
