@@ -8,9 +8,12 @@
  * that are NOT on screen, and its output is a wide document — a leaderboard, a
  * forest plot, an attribution table — that would be strangled in a column
  * sized for a fan chart. It is also the one thing in this app that keeps
- * working while you are somewhere else: the search runs server-side, so
- * leaving this page or closing the tab does not stop it, and coming back
- * re-attaches. That is a page, not a panel.
+ * working while you are somewhere else: the search runs behind the api seam —
+ * server-side in HTTP mode (closing the tab does not stop it), in a dedicated
+ * coordinator worker in local mode (leaving this PAGE does not stop it; the
+ * tab is the process, so closing THAT does — the seam warns via beforeunload,
+ * and a killed search's bookmark 404s honestly on reopen). Coming back
+ * re-attaches to whatever survived. That is a page, not a panel.
  *
  * The two features meet in the plan's history: a finalist here can be KEPT
  * under a name, and the workbench's History tab restores it into the one plan.

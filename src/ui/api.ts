@@ -195,6 +195,14 @@ const httpApi = {
    * A search runs for minutes, so POST hands back an id and the work continues
    * server-side: closing the tab does not stop it, and re-opening the page
    * re-attaches to it (SearchPage does exactly that).
+   *
+   * HONESTY NOTE, because the two backends genuinely differ here: that
+   * closing-the-tab promise is the SERVER's. In local mode the tab is the
+   * process — the search runs in a coordinator worker that dies with the tab
+   * (decision D5: no checkpointing; a beforeunload warning is the guard), a
+   * killed tab loses that search's progress, and on reopen the forgotten
+   * bookmark 404s rather than pretending anything survived. A CANCELLED
+   * search keeps its partial report in both modes.
    */
   startSearch: (req: SearchRequest) =>
     request<{ searchId: string }>('/api/search', { method: 'POST', body: JSON.stringify(req) }),
@@ -274,25 +282,16 @@ function decideBackendMode(): BackendMode {
 export const backendMode: BackendMode = decideBackendMode();
 
 /**
- * What the Search page tells the user in local mode. Search is Phase 5: the
- * pool, the coordinator worker and the persisted reports have not been built
- * for the browser, and pretending otherwise (an empty page that spins) would
- * be worse than the sentence.
+ * The seam's capability declaration, read by the Search page (never
+ * `backendMode`). Phase 5 of the browser port made search real in local mode
+ * — the coordinator worker, the Web Worker pool, the persisted reports — so
+ * the declaration no longer varies: flipping this constant was the entire
+ * page-side change, exactly as designed. The shape stays declared (rather
+ * than deleted) because it is the pattern any future capability gap will use,
+ * and because the page's honest-refusal branch should keep compiling against
+ * a real type, not a memory.
  */
-export const SEARCH_UNAVAILABLE_IN_LOCAL_MODE =
-  'Search is not yet available in browser-only mode — it still needs the server ' +
-  '(npm start). Every other page works; search arrives in a later phase of the ' +
-  'browser port.';
-
-/**
- * The one capability the seam admits differs between backends today, declared
- * rather than sniffed: the Search page reads THIS — never `backendMode` — so
- * when Phase 5 lands, flipping this constant is the entire page-side change.
- */
-export const searchAvailability: { available: boolean; reason?: string } =
-  backendMode === 'local'
-    ? { available: false, reason: SEARCH_UNAVAILABLE_IN_LOCAL_MODE }
-    : { available: true };
+export const searchAvailability: { available: boolean; reason?: string } = { available: true };
 
 /**
  * The local backend, booted lazily and once: folder opened, writer guard

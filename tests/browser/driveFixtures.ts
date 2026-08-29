@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Profile, QuotesFile } from '../../src/shared/types';
+import type { Profile, QuotesFile, Scenario, SearchRequest } from '../../src/shared/types';
 import { parseYahooChart } from '../../src/store/quotes';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -81,5 +81,81 @@ export function driveSeedFiles(): Record<string, string> {
   return {
     'profile.json': `${JSON.stringify(driveProfile(), null, 2)}\n`,
     'quotes.json': `${JSON.stringify(driveQuotes(), null, 2)}\n`,
+  };
+}
+
+/**
+ * The Phase-5 search leg: small but REAL — two axes, drive-scale paths, fixed
+ * seeds, every stage on (attribution, polish, the per-seed spend bisection) so
+ * the persisted report carries scores, runKeys, rankings and verdict
+ * sentences worth byte-comparing. Everything nondeterministic is pinned:
+ * seedBase fixes both seed sets and the sampler; workers is pinned at 2 (the
+ * CI runner's own size — pool size never touches the numbers, only the
+ * clock); widowProbe off keeps the lane's runtime sane. `base` is each
+ * stack's OWN saved plan (byte-equal across stacks by the Phase-4 gate),
+ * so inputsHash and spaceHash must land identical too.
+ */
+export const DRIVE_SEARCH_SEED_BASE = 777_000;
+
+export function driveSearchRequest(base: Scenario): SearchRequest {
+  return {
+    base,
+    label: 'dual-stack search',
+    axes: [
+      { dim: 'retireYear', levels: [2033, 2035] },
+      { dim: 'stockShare', levels: [0.6, 0.8] },
+    ],
+    budget: {
+      candidates: 8,
+      enumerate: true,
+      finalists: 2,
+      // 100 is the schema's floor (min(100) on every path knob): a ranking
+      // needs SOME resolution, and the drive wants the cheapest legal search.
+      screenPaths: 100,
+      racePaths: 100,
+      reportPaths: 100,
+      selectionSeedCount: 2,
+      reportSeedCount: 3,
+      polishSeedCount: 2,
+      seedBase: DRIVE_SEARCH_SEED_BASE,
+      attribution: true,
+      polish: true,
+      widowProbe: false,
+      workers: 2,
+    },
+  };
+}
+
+/**
+ * The cancel leg: deliberately far too big to finish — thousands of planned
+ * evaluations at real path counts — so the cancel provably lands mid-flight
+ * on both stacks and the truncated-partial-report shape can be compared. Its
+ * report is written AFTER the folder snapshot and excluded from the byte
+ * comparison: where a cancel interrupts is wall-clock, not arithmetic.
+ */
+export function driveCancelSearchRequest(base: Scenario): SearchRequest {
+  return {
+    base,
+    label: 'dual-stack cancel',
+    axes: [
+      { dim: 'retireYear', levels: [2030, 2031, 2032, 2033, 2034, 2035] },
+      { dim: 'stockShare', levels: [0.3, 0.5, 0.7, 0.9] },
+      { dim: 'claimAge', levels: [62, 65, 67, 70] },
+    ],
+    budget: {
+      candidates: 64,
+      enumerate: false,
+      finalists: 4,
+      screenPaths: 400,
+      racePaths: 800,
+      reportPaths: 800,
+      selectionSeedCount: 8,
+      reportSeedCount: 12,
+      seedBase: 888_000,
+      attribution: true,
+      polish: true,
+      widowProbe: false,
+      workers: 2,
+    },
   };
 }

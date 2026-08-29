@@ -29,6 +29,15 @@
  * draw itself. None of them is a search axis.
  */
 import type { DeltaVerdict, PairedDelta, SeedStat } from '../../shared/types';
+/*
+ * Why not Math.log/Math.exp: the ES spec lets engines approximate them, and
+ * node's V8 and Chromium's V8 disagree by 1 ULP on some inputs — which forked
+ * a search report between the two backends at a single ci95 digit (caught by
+ * the dual-stack byte gate). Every OTHER operation in this module is IEEE-
+ * correctly-rounded and engine-identical; these two come from the vendored
+ * fdlibm port (./ieee754.ts) so the whole module is bit-deterministic.
+ */
+import { exp, log } from './ieee754';
 
 // ---------------------------------------------------------------------------
 // Student's t, from scratch
@@ -42,10 +51,10 @@ function logGamma(x: number): number {
   ];
   let y = x;
   let tmp = x + 5.5;
-  tmp -= (x + 0.5) * Math.log(tmp);
+  tmp -= (x + 0.5) * log(tmp);
   let ser = 1.000000000190015;
   for (const c of g) ser += c / ++y;
-  return -tmp + Math.log((2.5066282746310005 * ser) / x);
+  return -tmp + log((2.5066282746310005 * ser) / x);
 }
 
 /** Continued fraction for the incomplete beta (Numerical Recipes betacf). */
@@ -87,8 +96,8 @@ function betaContinuedFraction(a: number, b: number, x: number): number {
 export function incompleteBeta(a: number, b: number, x: number): number {
   if (x <= 0) return 0;
   if (x >= 1) return 1;
-  const front = Math.exp(
-    logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x),
+  const front = exp(
+    logGamma(a + b) - logGamma(a) - logGamma(b) + a * log(x) + b * log(1 - x),
   );
   return x < (a + 1) / (a + b + 2)
     ? (front * betaContinuedFraction(a, b, x)) / a
@@ -352,14 +361,14 @@ export function normalQuantile(p: number): number {
   let q: number;
   let r: number;
   if (p < pLow) {
-    q = Math.sqrt(-2 * Math.log(p));
+    q = Math.sqrt(-2 * log(p));
     return (
       (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
       ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     );
   }
   if (p > pHigh) {
-    q = Math.sqrt(-2 * Math.log(1 - p));
+    q = Math.sqrt(-2 * log(1 - p));
     return (
       -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
       ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)

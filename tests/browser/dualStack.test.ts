@@ -25,6 +25,17 @@
  * guard end-to-end: a second tab of the same profile gets the guard's own
  * refusal page while the first holds the folder.
  *
+ * PHASE 5 EXTENDS THE GATE with the search legs: the same small-but-real
+ * search request (two axes, drive-scale paths, fixed seeds, attribution +
+ * polish + the per-seed spend bisection all on) driven through each stack's
+ * own seam — HTTP for the server, window.__fplanApi for local mode, where it
+ * runs in the coordinator worker over a Web Worker pool. The persisted
+ * searches/<id>.json reports must be byte-equal under the enumerated masks
+ * (searchId, createdAt, elapsedMs — ids and wall clock, nothing else), the
+ * slim score-cache trees equal INCLUDING their runKey filenames, and a second
+ * oversized search cancelled mid-flight must leave the same truncated
+ * partial-report shape on both stacks, wording compared verbatim.
+ *
  * Lane discipline as everywhere else in tests/browser: self-contained,
  * offline (every off-origin request aborted), ephemeral ports, temp dirs.
  */
@@ -37,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { build } from 'vite';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import type { Scenario, SearchProgress, SearchReport, SearchRequest } from '../../src/shared/types';
 import { maskGoldenTree } from '../golden/goldenStoreSequence';
 import {
   DRIVE_HOME_VALUE,
@@ -45,6 +57,8 @@ import {
   DRIVE_PATHS_FINAL,
   DRIVE_PATHS_INTERACTIVE,
   VTI_FIXTURE_TEXT,
+  driveCancelSearchRequest,
+  driveSearchRequest,
   driveSeedFiles,
 } from './driveFixtures';
 import { serveStatic, type StaticServer } from './staticServer';
@@ -144,9 +158,31 @@ function maskDriveTree(tree: Record<string, string>): Record<string, string> {
       // machine, not of the plan.
       masked = masked.replace(/^(\s*)"elapsedMs": [0-9.eE+-]+/gm, '$1"elapsedMs": "MASKED"');
     }
-    out[rel] = masked;
+    let outRel = rel;
+    if (rel.startsWith('searches/scores/')) {
+      // Slim scores are compact JSON; elapsedMs is the one machine measurement
+      // in them. The FILENAMES (runKeys) are deliberately not masked — the
+      // cross-backend runKey agreement is half of what this gate exists to pin.
+      masked = masked.replace(/"elapsedMs":[0-9.eE+-]+/g, '"elapsedMs":"MASKED"');
+    } else if (/^searches\/[0-9a-z]{8,40}\.json$/.test(rel)) {
+      // The completed search's report. Exactly one exists at snapshot time
+      // (the cancel leg runs after the trees are read); its NAME is the
+      // searchId — timestamp36 + random, a different id per stack by
+      // construction — so the file is renamed to a fixed key and the id
+      // masked inside. createdAt/elapsedMs are the machine's clock, same as
+      // everywhere. Scores, runKeys, rankings, verdict sentences, caveats,
+      // hashes all stay compared verbatim.
+      outRel = 'searches/REPORT.json';
+      masked = masked
+        .replace(/^(\s*)"searchId": "[^"]+"/gm, '$1"searchId": "MASKED"')
+        .replace(/^(\s*)"createdAt": "[^"]+"/gm, '$1"createdAt": "MASKED"')
+        .replace(/^(\s*)"elapsedMs": [0-9.eE+-]+/gm, '$1"elapsedMs": "MASKED"');
+    }
+    out[outRel] = masked;
   }
-  return out;
+  // Re-sorted after the rename so key ORDER (asserted below via toEqual on the
+  // key lists) cannot depend on where each stack's searchId happened to sort.
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
 
 /** Point at the first differing byte with context (the lane's house diff). */
@@ -165,6 +201,258 @@ function assertByteEqual(label: string, nodeText: string, localText: string): vo
       'maskDriveTree WITH its justification. Anything else is a real backend fork — ' +
       'find it before touching the masks.',
   );
+}
+
+// ---------------------------------------------------------------------------
+// The search legs — Phase 5's extension of this gate
+// ---------------------------------------------------------------------------
+
+const TERMINAL_SEARCH = new Set(['done', 'error', 'cancelled']);
+
+/** What a mid-flight cancel leaves behind; compared verbatim across stacks. */
+interface CancelShape {
+  status: string;
+  stageLabel: string;
+  truncated: boolean;
+  firstCaveat: string;
+}
+
+/** The node stack's seam is HTTP; this is api.ts's request(), test-side. */
+async function httpJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(
+    url,
+    init?.body === undefined
+      ? init
+      : { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } },
+  );
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) {
+    throw new Error(typeof body.error === 'string' ? body.error : `${res.status} for ${url}`);
+  }
+  return body;
+}
+
+/**
+ * Run the drive's search to completion against the Node server and wait for
+ * its report to reach the folder. The status flips to done BEFORE the report
+ * is persisted (the manager sets progress, then awaits the write), so the
+ * wait is on the FILE — the terminal state the folder comparison reads.
+ */
+async function nodeSearchLeg(origin: string, dataDir: string): Promise<void> {
+  const base = await httpJson<Scenario>(`${origin}/api/plan`);
+  const { searchId } = await httpJson<{ searchId: string }>(`${origin}/api/search`, {
+    method: 'POST',
+    body: JSON.stringify(driveSearchRequest(base)),
+  });
+  const done = await until(
+    () => httpJson<SearchProgress>(`${origin}/api/search/${searchId}`),
+    (p) => TERMINAL_SEARCH.has(p.status),
+    'the node search to finish',
+    480_000,
+    500,
+  );
+  expect(done.status).toBe('done');
+  await until(
+    () =>
+      fs.access(path.join(dataDir, 'searches', `${searchId}.json`)).then(
+        () => true,
+        () => false,
+      ),
+    (ok) => ok,
+    'the node search report to persist',
+    60_000,
+    250,
+  );
+}
+
+/** Start the oversized cancel-leg search, stop it mid-flight, keep the shape. */
+async function nodeCancelLeg(origin: string, dataDir: string): Promise<CancelShape> {
+  const base = await httpJson<Scenario>(`${origin}/api/plan`);
+  const { searchId } = await httpJson<{ searchId: string }>(`${origin}/api/search`, {
+    method: 'POST',
+    body: JSON.stringify(driveCancelSearchRequest(base)),
+  });
+  // Provably mid-flight: running, with real evaluations already burned.
+  await until(
+    () => httpJson<SearchProgress>(`${origin}/api/search/${searchId}`),
+    (p) => p.status === 'running' && p.evaluated >= 3,
+    'the node cancel-leg search to get going',
+    240_000,
+    100,
+  );
+  await httpJson<{ ok: true }>(`${origin}/api/search/${searchId}/cancel`, { method: 'POST' });
+  const terminal = await until(
+    () => httpJson<SearchProgress>(`${origin}/api/search/${searchId}`),
+    (p) => TERMINAL_SEARCH.has(p.status),
+    'the cancelled node search to settle',
+    240_000,
+    250,
+  );
+  const report = await httpJson<SearchReport>(`${origin}/api/search/${searchId}/report`);
+  // A cancelled search persists its partial report like any other.
+  await until(
+    () =>
+      fs.access(path.join(dataDir, 'searches', `${searchId}.json`)).then(
+        () => true,
+        () => false,
+      ),
+    (ok) => ok,
+    'the cancelled node report to persist',
+    60_000,
+    250,
+  );
+  return {
+    status: terminal.status,
+    stageLabel: terminal.stageLabel,
+    truncated: report.truncated,
+    firstCaveat: report.caveats[0] ?? '',
+  };
+}
+
+/** The local stack's seam is window.__fplanApi — the same object the UI calls. */
+type SearchApiWindow = Window & {
+  __fplanApi: {
+    getPlan(): Promise<Scenario>;
+    startSearch(req: SearchRequest): Promise<{ searchId: string }>;
+    getSearch(id: string): Promise<SearchProgress>;
+    getSearchReport(id: string): Promise<SearchReport>;
+    cancelSearch(id: string): Promise<{ ok: true; stopping: boolean }>;
+  };
+};
+
+async function localReportPersisted(page: Page, searchId: string, label: string): Promise<void> {
+  await until(
+    () =>
+      page.evaluate(async (id: string) => {
+        try {
+          const opfs = await navigator.storage.getDirectory();
+          const root = await opfs.getDirectoryHandle('fplan-data');
+          const dir = await root.getDirectoryHandle('searches');
+          await dir.getFileHandle(`${id}.json`);
+          return true;
+        } catch {
+          return false;
+        }
+      }, searchId),
+    (ok) => ok,
+    label,
+    60_000,
+    250,
+  );
+}
+
+async function localSearchLeg(page: Page): Promise<void> {
+  // The SAME fixture request the node leg posts, built on THIS stack's own
+  // saved plan (byte-equal across stacks by the Phase-4 half of this gate).
+  const base = await page.evaluate(() =>
+    (window as unknown as SearchApiWindow).__fplanApi.getPlan(),
+  );
+  const started = await page.evaluate(
+    (req: SearchRequest) =>
+      (window as unknown as SearchApiWindow).__fplanApi.startSearch(req),
+    driveSearchRequest(base),
+  );
+  const done = await until(
+    () =>
+      page.evaluate(async (id: string) => {
+        const p = await (window as unknown as SearchApiWindow).__fplanApi.getSearch(id);
+        return { status: p.status, evaluated: p.evaluated, stageLabel: p.stageLabel };
+      }, started.searchId),
+    (p) => TERMINAL_SEARCH.has(p.status),
+    'the local search to finish',
+    480_000,
+    500,
+  );
+  expect(done.status).toBe('done');
+  await localReportPersisted(page, started.searchId, 'the local search report to persist');
+}
+
+/** Every OPFS file under fplan-data as {relPath → text}, read via the page. */
+function readOpfsTree(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(async () => {
+    const opfs = await navigator.storage.getDirectory();
+    const root = await opfs.getDirectoryHandle('fplan-data');
+    const out: Record<string, string> = {};
+    const walk = async (dir: FileSystemDirectoryHandle, prefix: string): Promise<void> => {
+      for await (const entry of dir.values()) {
+        const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+        if (entry.kind === 'directory') {
+          await walk(entry as FileSystemDirectoryHandle, rel);
+        } else {
+          out[rel] = await (await (entry as FileSystemFileHandle).getFile()).text();
+        }
+      }
+    };
+    await walk(root, '');
+    return out;
+  });
+}
+
+async function localCancelLeg(page: Page): Promise<CancelShape> {
+  const base = await page.evaluate(() =>
+    (window as unknown as SearchApiWindow).__fplanApi.getPlan(),
+  );
+  const started = await page.evaluate(
+    (req: SearchRequest) =>
+      (window as unknown as SearchApiWindow).__fplanApi.startSearch(req),
+    driveCancelSearchRequest(base),
+  );
+  await until(
+    () =>
+      page.evaluate(async (id: string) => {
+        const p = await (window as unknown as SearchApiWindow).__fplanApi.getSearch(id);
+        return { status: p.status, evaluated: p.evaluated };
+      }, started.searchId),
+    (p) => p.status === 'running' && p.evaluated >= 3,
+    'the local cancel-leg search to get going',
+    240_000,
+    100,
+  );
+  // THE KILLED-TAB GUARD (decision D5), observed live: while a search is in
+  // flight the local backend holds a beforeunload confirmation — a synthetic
+  // cancelable dispatch reports defaultPrevented without closing anything.
+  expect(
+    await page.evaluate(() => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    }),
+  ).toBe(true);
+  await page.evaluate(
+    (id: string) => (window as unknown as SearchApiWindow).__fplanApi.cancelSearch(id),
+    started.searchId,
+  );
+  const terminal = await until(
+    () =>
+      page.evaluate(async (id: string) => {
+        const p = await (window as unknown as SearchApiWindow).__fplanApi.getSearch(id);
+        return { status: p.status, stageLabel: p.stageLabel };
+      }, started.searchId),
+    (p) => TERMINAL_SEARCH.has(p.status),
+    'the cancelled local search to settle',
+    240_000,
+    250,
+  );
+  const report = await page.evaluate(async (id: string) => {
+    const r = await (window as unknown as SearchApiWindow).__fplanApi.getSearchReport(id);
+    return { truncated: r.truncated, firstCaveat: r.caveats[0] ?? '' };
+  }, started.searchId);
+  await localReportPersisted(page, started.searchId, 'the cancelled local report to persist');
+  // ... and the guard disarms the moment no search is in flight: closing the
+  // tab now costs nothing, so the warning would be a cry of wolf.
+  expect(
+    await page.evaluate(() => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    }),
+  ).toBe(false);
+  return {
+    status: terminal.status,
+    stageLabel: terminal.stageLabel,
+    truncated: report.truncated,
+    firstCaveat: report.firstCaveat,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +645,9 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
   let localState: DriveUiState;
   let nodeFolder: Record<string, string>;
   let localFolder: Record<string, string>;
+  let rawLocalTree: Record<string, string>;
+  let nodeCancel: CancelShape;
+  let localCancel: CancelShape;
 
   const wirePage = (p: Page): void => {
     p.on('pageerror', (err) => pageErrors.push(String(err)));
@@ -444,13 +735,23 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     await nodeContext.close();
     nodeContext = undefined;
 
-    // A clean SIGTERM: the single-writer lock releases on the way out, so the
-    // folder read below is the settled, post-session truth.
+    // Phase 5's search leg, driven through the server's own seam (HTTP).
+    await nodeSearchLeg(origin, nodeDataDir);
+
+    // Snapshot BEFORE the cancel leg: where a cancel lands is wall-clock, not
+    // arithmetic, so its report and its late slim scores are deliberately
+    // outside the byte-compared world. Reading under the live server is safe
+    // here because every compared write was waited to its terminal state ON
+    // DISK (the session's settle waits above, the report-file wait in the
+    // search leg) — not merely to a status flag.
+    nodeFolder = maskDriveTree(await nodeTree(nodeDataDir));
+
+    nodeCancel = await nodeCancelLeg(origin, nodeDataDir);
+
     serverProc.kill('SIGTERM');
     await new Promise((r) => serverProc!.once('exit', r));
     serverProc = undefined;
-    nodeFolder = maskDriveTree(await nodeTree(nodeDataDir));
-  }, 600_000);
+  }, 900_000);
 
   it('drives the same session in local mode (seeded OPFS, no server anywhere)', async () => {
     staticServer = await serveStatic(distUi, { spaFallback: true });
@@ -499,8 +800,16 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     }, driveSeedFiles());
 
     localState = await driveSession(localPage, `${origin}/?backend=local`);
+
+    // The same search, in the coordinator worker over the same folder — then
+    // the OPFS snapshot at the same moment the node leg took its own (after
+    // the completed search, before the cancel leg), so the two byte-compared
+    // worlds hold the same set of settled writes.
+    await localSearchLeg(localPage);
+    rawLocalTree = await readOpfsTree(localPage);
+    localCancel = await localCancelLeg(localPage);
     // The page stays open: the guard-refusal test below needs the writer alive.
-  }, 600_000);
+  }, 900_000);
 
   it('a second tab of the same profile gets the guard’s refusal, rendered', async () => {
     const page2 = await localContext!.newPage();
@@ -515,31 +824,11 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
   }, 120_000);
 
   it('the two folders are byte-equal under the enumerated masks', async () => {
-    // Read OPFS through the page that holds the folder, then close it.
-    const rawLocal = await localPage.evaluate(async () => {
-      const opfs = await navigator.storage.getDirectory();
-      const root = await opfs.getDirectoryHandle('fplan-data');
-      const out: Record<string, string> = {};
-      const walk = async (dir: FileSystemDirectoryHandle, prefix: string): Promise<void> => {
-        for await (const entry of dir.values()) {
-          const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
-          if (entry.kind === 'directory') {
-            await walk(entry as FileSystemDirectoryHandle, rel);
-          } else {
-            out[rel] = await (
-              await (entry as FileSystemFileHandle).getFile()
-            ).text();
-          }
-        }
-      };
-      await walk(root, '');
-      return out;
-    });
     await localContext!.close();
     localContext = undefined;
     localFolder = maskDriveTree(
       Object.fromEntries(
-        Object.entries(rawLocal)
+        Object.entries(rawLocalTree)
           .filter(([rel]) => !TREE_EXCLUDED.has(rel.split('/').pop() ?? rel))
           .sort(([a], [b]) => (a < b ? -1 : 1)),
       ),
@@ -574,7 +863,35 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     expect(nodeFolder['networth.json']).toContain('"sustainableSpend');
     expect(nodeFolder['plan-history.json']).toContain('"sustainableSpend');
     expect(nodeFolder['networth.json']).toContain(`"note": "${DRIVE_NOTE}"`);
+
+    // Phase 5's anti-vacuity: the search leg really persisted its world.
+    // One completed report (renamed from its per-stack id by the mask); a
+    // real population of slim scores whose FILENAMES are runKeys — their
+    // equality across stacks (pinned by the key-list comparison above) is the
+    // cross-backend runKey/score-cache agreement this phase must not fork.
+    expect(Object.keys(nodeFolder)).toContain('searches/REPORT.json');
+    const scoreFiles = Object.keys(nodeFolder).filter((f) => f.startsWith('searches/scores/'));
+    expect(scoreFiles.length).toBeGreaterThanOrEqual(20);
+    for (const f of scoreFiles) expect(f).toMatch(/^searches\/scores\/[0-9a-f]{64}\.json$/);
+    const report = nodeFolder['searches/REPORT.json'];
+    expect(report).toContain('"label": "dual-stack search"');
+    expect(report).toContain('"truncated": false');
+    expect(report).toContain('"rank": 1');
+    // The verdict prose is inside the byte-compared body; prove it exists so
+    // the comparison above cannot be passing on an empty report.
+    expect(report).toMatch(/"note": "/);
   }, 120_000);
+
+  it('a cancel mid-search produces the same truncated shape on both stacks', () => {
+    expect(nodeCancel.status).toBe('cancelled');
+    expect(nodeCancel.truncated).toBe(true);
+    expect(nodeCancel.stageLabel).toBe('stopped early — partial report');
+    expect(nodeCancel.firstCaveat).toMatch(/^CANCELLED before the search finished/);
+    // Verbatim across the stacks — the truncated-partial-report contract is
+    // shared executor/manager code, and this pins that it STAYS shared: same
+    // status, same stage label, same leading caveat sentence.
+    expect(localCancel).toEqual(nodeCancel);
+  });
 
   it('the UI told the same story on both stacks', () => {
     /**

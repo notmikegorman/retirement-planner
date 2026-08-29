@@ -48,6 +48,7 @@ import {
   profileSchema,
   quotesRefreshRequestSchema,
   scenarioSchema,
+  searchRequestSchema,
 } from '../../shared/schemas';
 import { holdingsSymbols } from '../../shared/holdings';
 import { createStores, type Stores } from '../../store';
@@ -55,11 +56,14 @@ import { NotFoundError, ValidationError } from '../../store/dataStore';
 import type { FetchLike } from '../../store/quotes';
 import { defaultRefreshSymbols } from '../../store/quotes';
 import { createServices, type Services } from '../../store/services';
+import { createScoreStore } from '../../store/search/scoreStore';
+import { createSearchManager } from '../../store/searchManager';
 import { randomHex } from '../../shared/random';
 import { createFsaFileStore } from '../io/fsaFileStore';
-import { SEARCH_UNAVAILABLE_IN_LOCAL_MODE, type Api } from '../api';
+import type { Api } from '../api';
 import { bundledDefaults } from './bundledDefaults';
 import { createBrowserRunExecutor } from './browserRunExecutor';
+import { createBrowserSearchRunner } from './searchClient';
 import { acquireGuardInWorker } from './guardClient';
 
 /** The OPFS directory the local backend keeps the data folder in. */
@@ -151,6 +155,24 @@ export async function bootLocalBackend(): Promise<Api> {
   const stores: Stores = createStores({ files, defaults: await bundledDefaults() });
   const init = await stores.data.initDataDir();
   const services: Services = createServices(stores, createBrowserRunExecutor());
+
+  /**
+   * SEARCH, live in local mode since Phase 5: the neutral manager over this
+   * folder's stores, its runner the coordinator-worker client. The IO trio
+   * handed to the runner is built HERE, from THIS composed store set — the
+   * coordinator's every folder touch comes back through these three calls, on
+   * this guarded context, which is what keeps the search inside the
+   * single-writer discipline (see searchClient.ts / searchWorker.ts).
+   */
+  const scoreStore = createScoreStore(stores.data.files);
+  const searchManager = createSearchManager({
+    data: stores.data,
+    runner: createBrowserSearchRunner({
+      readScore: scoreStore.readScore,
+      writeScore: scoreStore.writeScore,
+      readCachedResult: (runKey) => services.runManager.readCachedResult(runKey),
+    }),
+  });
 
   const quoteFetcher = options.quoteFetcher ?? proxyMissingFetcher;
 
@@ -264,19 +286,36 @@ export async function bootLocalBackend(): Promise<Api> {
       scoring: services.planHistoryScorer.versionsBeingScored(),
     }),
 
-    // ----- Search: Phase 5, and the page says so honestly -------------------
-    startSearch: async (_req: SearchRequest) => {
-      throw new Error(SEARCH_UNAVAILABLE_IN_LOCAL_MODE);
-    },
+    // ----- Search -----------------------------------------------------------
+    // The same per-"route" glue as the server's search routes: validate the
+    // request, translate a null progress into the route's NotFound sentence,
+    // and let a cancel of something already finished say so without erroring.
+    startSearch: async (req: SearchRequest) =>
+      searchManager.startSearch(
+        validateBody(
+          searchRequestSchema as unknown as z.ZodType<SearchRequest>,
+          req,
+          'search request',
+        ),
+      ),
     getSearch: async (searchId: string) => {
-      throw new NotFoundError(`Unknown search "${searchId}" — ${SEARCH_UNAVAILABLE_IN_LOCAL_MODE}`);
+      const progress = await searchManager.getSearch(searchId);
+      if (!progress) throw new NotFoundError(`Unknown search "${searchId}"`);
+      return progress;
     },
-    getSearchReport: async (searchId: string) => {
-      throw new NotFoundError(`No report for search "${searchId}" — ${SEARCH_UNAVAILABLE_IN_LOCAL_MODE}`);
+    getSearchReport: (searchId: string) => searchManager.getSearchReport(searchId),
+    cancelSearch: async (searchId: string) => {
+      const stopping = searchManager.cancelSearch(searchId);
+      if (!stopping) {
+        // Already finished, already failed, or never existed. Not an error:
+        // the owner pressed stop and the search is not running, which is what
+        // they wanted either way.
+        const progress = await searchManager.getSearch(searchId);
+        if (!progress) throw new NotFoundError(`Unknown search "${searchId}"`);
+        return { ok: true as const, stopping: false, status: progress.status };
+      }
+      return { ok: true as const, stopping: true };
     },
-    cancelSearch: async (_searchId: string) => {
-      throw new Error(SEARCH_UNAVAILABLE_IN_LOCAL_MODE);
-    },
-    listSearches: async () => [],
+    listSearches: () => searchManager.listSearches(),
   };
 }
