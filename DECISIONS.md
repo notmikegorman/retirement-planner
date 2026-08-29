@@ -1466,3 +1466,101 @@ browser's honest core count. The decisions worth recording:
   coordinator, whose event loop is idle between chunks while the pool
   computes — so a cancel lands at the next chunk boundary in both worlds and
   the truncated-report wording is shared code, compared verbatim by the gate.
+
+## Quote proxy + interruption-proofing (browser-port Phase 6, 2026-08-29)
+
+Two deliverables with one theme — the app stops depending on luck. The only
+network step gets its missing piece (the CORS proxy the browser cannot live
+without), and the only unprotected loss window left in scoring — the one that
+cost a real record its sustainable-spend figure on Aug 20 — gets a write-ahead
+intent that makes every interruption resolve explicitly. The decisions worth
+recording:
+
+- **The proxy is a dumb pipe, built and tested with no Cloudflare account.**
+  `workers/quote-proxy/handler.ts` is a plain `(Request, env) → Response`
+  fetch handler: symbol validated with the app's own SYMBOL_RE discipline
+  (400 before a byte goes upstream; encodeURIComponent regardless), Yahoo's
+  body relayed VERBATIM with Yahoo's status (parsing stays client-side in
+  parseYahooChart, so a Yahoo shape change is an app fix), a 10s upstream
+  timeout, and a CORS allowlist that echoes the matched origin — the D6 app
+  origin plus localhost dev origins — never `*`. The upstream base is an env
+  parameter with the Yahoo default, which is what keeps every test offline:
+  unit tests drive the handler with Request objects against a local fixture
+  server; the browser lane mounts the same module in a ~10-line node http
+  adapter. wrangler is not a dependency — it enters once, at deploy time
+  (`npx wrangler deploy`, README.md), which the owner runs himself.
+
+- **No logging is a pinned structural property, not a habit (D3).** The
+  handler contains no log statement, no storage binding, no metrics;
+  wrangler.toml keeps observability off; and a source-scan test holds all of
+  it, the same way the repo pins node-imports out of portable code. A symbol
+  list is a portfolio fingerprint — the Worker must be unable to remember one.
+
+- **Deploy-then-point runs through localStorage, not a URL parameter.** The
+  local backend reads the proxy URL from `VITE_FPLAN_QUOTE_PROXY` at build
+  time with a runtime override in `localStorage['fplan-quote-proxy']`
+  (proxyQuoteFetcher.ts owns the rule), so pointing the deployed app at a
+  freshly deployed Worker is one console line and a reload — no rebuild. A
+  `?quoteProxy=` parameter was rejected on purpose: a link someone hands the
+  owner must not be able to re-route his symbol traffic, and localStorage is
+  writable only by the user or same-origin code. Either layer must be
+  https:// (or http:// on localhost, for dev and the offline lane); anything
+  else is ignored with the reason logged. Until a URL is configured, every
+  refresh fails per-symbol with a message naming exactly what to deploy and
+  where the instructions live.
+
+- **The write-ahead intent lives in the SHARED core, so both backends heal
+  identically.** `src/store/scoringIntent.ts` + wiring in scoreRunner and
+  both scorers: before each phase's run starts the runner records
+  {record, phase, runKey} through the guarded store path — the runKey from
+  THE run manager's own resolver, never a copy — updates it at the
+  probability/spend boundary, and clears it when both attaches land (or a
+  failure is recorded, which is also an outcome). On boot, both server.ts and
+  the local backend call the same healer before serving anything: intents
+  whose record is gone or complete clear; a runKey that still resolves
+  identically from today's inputs stays, and the row shows Interrupted with a
+  one-click Finish-scoring button (D4's default — the button, never a silent
+  auto-complete); a runKey that no longer matches stamps the missing half
+  with the shared reason sentence — a figure computed now would belong to
+  now — and clears. Finishing re-verifies at the press, so a world that moved
+  between boot and click still gets the honest refusal, and a completed
+  finish is provably the SAME measurement: the interruption gate asserts the
+  healed networth.json byte-equal to an uninterrupted session's under masked
+  wall-clock stamps.
+
+- **Finish is not the removed re-score button back.** Every deleted scoring
+  button measured a different day and filed it on an old row. Finish appears
+  only behind a still-verifying intent, completes only the run that was
+  already in flight, and fills only blanks — `finishOffer` in
+  planHistoryLogic holds the rule for the History tab, the Net Worth page
+  keys off the same intent list, and the attach guards underneath never
+  loosened (the spend-slot immutability comments in both stores now name the
+  finisher as their second reachable caller, guarded by runKey identity).
+
+- **The intent file is transient, and the gate asserts ABSENCE.** The
+  dual-stack drive now checks `.scoring-intent.json` is NOT in either
+  finished tree — deliberately not added to the excluded-artifacts set, which
+  would only have masked a leak. A finished session that still carries an
+  intent means a terminal path forgot to clear it, and every later boot would
+  claim an interruption that never happened.
+
+- **A torn intent file reads as empty and is deleted.** The node driver's
+  writeText is not atomic, so a crash mid-write can leave torn JSON; a torn
+  intent cannot name what was in flight, and the rows it named stay scoreless
+  with the standard permanent wording — exactly the pre-Phase-6 behaviour,
+  never worse. Failing the boot on it would brick the app over a file whose
+  whole job is to be discardable.
+
+- **The scoring unload guard mirrors the search guard's discipline.** armed
+  exactly while either scorer's registry is non-empty (the services layer
+  reports the SUM through one hook; `src/ui/local/scoringGuard.ts` holds the
+  listener), observed arming and disarming in the interruption gate. Browser
+  only: the node server outlives its tabs, so its services pass no hook.
+
+- **The Phase-4 wording quirk is fixed at its root.** A row whose probability
+  had landed while its bisection still ran used to show the permanent
+  "none can be added" sentence — finality claimed about a figure a dozen runs
+  from landing. The readings now carry the live half (`spendSolving` off the
+  in-flight registry, `spendInterrupted` off the intent list) and the
+  permanent sentence renders only when both are false, on the Net Worth
+  spend tooltip and the History tab alike.
