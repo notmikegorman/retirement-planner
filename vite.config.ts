@@ -17,6 +17,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Pins the test process's data-folder fallback to a throwaway directory
+    // so late/leaked IO can never land in the user's real data folder.
+    setupFiles: ['tests/vitest.setup.ts'],
     include: ['tests/**/*.test.ts'],
     // The browser lane (Playwright + Chromium, vitest.browser.config.ts) is
     // excluded so `npm test` stays the seconds-fast loop: those tests build a
