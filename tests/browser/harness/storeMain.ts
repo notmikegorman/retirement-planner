@@ -23,11 +23,6 @@
  */
 /// <reference types="vite/client" />
 import { parentDirOf, type FileStore } from '../../../src/shared/fileStore';
-import {
-  createMemoryFileStore,
-  seedMemoryFileStore,
-  type MemoryFileStore,
-} from '../../../src/shared/memoryFileStore';
 import { createStores } from '../../../src/store';
 import { parseLease, LEASE_FILENAME } from '../../../src/store/writerLease';
 import { createFsaFileStore } from '../../../src/ui/io/fsaFileStore';
@@ -35,6 +30,7 @@ import {
   acquireBrowserWriterGuard,
   type BrowserWriterGuard,
 } from '../../../src/ui/io/browserWriterGuard';
+import { bundledDefaults } from '../../../src/ui/local/bundledDefaults';
 import { fileStoreContractCases } from '../../store/fileStoreContract';
 import { storeSuiteCases, type StoreSuiteContext } from '../../store/storeSuite';
 import {
@@ -45,27 +41,9 @@ import {
 } from '../../golden/goldenStoreSequence';
 import vtiFixture from '../../fixtures/yahoo-chart-vti.json';
 
-// ---------------------------------------------------------------------------
-// Bundled defaults — the production shape of data-defaults in a browser
-// ---------------------------------------------------------------------------
-
-const rawDefaults = import.meta.glob('../../../data-defaults/**/*', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-async function bundledDefaults(): Promise<MemoryFileStore> {
-  const store = createMemoryFileStore('(bundled defaults)');
-  const manifest: Record<string, string> = {};
-  for (const [key, text] of Object.entries(rawDefaults)) {
-    const idx = key.indexOf('data-defaults/');
-    if (idx < 0) continue;
-    manifest[key.slice(idx + 'data-defaults/'.length)] = text;
-  }
-  await seedMemoryFileStore(store, manifest);
-  return store;
-}
+// Bundled defaults: the PRODUCTION module (src/ui/local/bundledDefaults.ts,
+// imported above) — the harness proves the exact seeding path the local
+// backend ships, not a test copy of it.
 
 // ---------------------------------------------------------------------------
 // OPFS test-root management

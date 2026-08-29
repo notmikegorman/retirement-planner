@@ -26,7 +26,7 @@ import type {
   SearchReport,
   SearchSummary,
 } from '../../shared/types';
-import { api } from '../api';
+import { api, searchAvailability } from '../api';
 import {
   SEARCH_TAB_IDS,
   SEARCH_TAB_STORAGE_KEY,
@@ -413,6 +413,24 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
   };
 
   // ---- render -------------------------------------------------------------
+
+  /*
+   * A backend without search gets the honest page, not a page that spins: the
+   * capability is DECLARED by the seam (api.searchAvailability), so this
+   * component never asks which backend it is on — and when search lands in
+   * the browser (Phase 5), the declaration flips and this branch dies without
+   * this file changing again.
+   */
+  if (!searchAvailability.available) {
+    return (
+      <div>
+        <h1>Search</h1>
+        <div className="muted" style={{ maxWidth: '44rem' }}>
+          {searchAvailability.reason}
+        </div>
+      </div>
+    );
+  }
 
   if (loadError) {
     return (

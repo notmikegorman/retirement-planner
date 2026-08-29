@@ -1,7 +1,28 @@
 /**
- * Typed API client. The server (src/server) implements exactly these routes.
- * All responses are JSON; errors come back as { error: string } with a 4xx/5xx
- * status and are thrown as Error(message).
+ * THE ONE CLIENT — and, since Phase 4 of the browser port, the app's backend
+ * SEAM. Every call the UI makes goes through the `api` object below; nothing
+ * under src/ui fetches anywhere else. That single point is what makes the
+ * whole app swappable between two backends the pages cannot tell apart:
+ *
+ *   - HTTP (the default): exactly the client this file has always been. The
+ *     server (src/server) implements exactly these routes; all responses are
+ *     JSON; errors come back as { error: string } with a 4xx/5xx status and
+ *     are thrown as Error(message). Nothing about this path changed.
+ *   - LOCAL (opt-in): each method calls the in-browser services directly —
+ *     the same stores and scorers, composed over the OPFS folder behind the
+ *     writer guard (src/ui/local/localBackend.ts). Errors are the same
+ *     classes the server maps to statuses, thrown with the same messages, so
+ *     a component reading `err.message` sees identical text either way.
+ *
+ * SELECTION IS EXPLICIT, AT BOOT, and the default is HTTP until Phase 7 flips
+ * it: `?backend=local` in the URL (remembered in localStorage so in-app
+ * navigation and reloads stay in the chosen mode; `?backend=http` clears it),
+ * or a build with VITE_FPLAN_BACKEND=local. resolveBackendMode below is the
+ * whole rule, in one pure function.
+ *
+ * The local implementation is a DYNAMIC import: an HTTP-mode session loads
+ * not one byte of the engine/stores bundle, and today's served app behaves
+ * byte-for-byte as before this seam existed.
  */
 import type {
   Assumptions,
@@ -52,7 +73,7 @@ export interface ServerMeta {
   dataDirInitialized: boolean;
 }
 
-export const api = {
+const httpApi = {
   meta: () => request<ServerMeta>('/api/meta'),
 
   getProfile: () => request<Profile>('/api/profile'),
@@ -188,6 +209,159 @@ export const api = {
     ),
   listSearches: () => request<SearchSummary[]>('/api/searches'),
 };
+
+/**
+ * The backend contract IS the HTTP client's surface: the local backend
+ * implements exactly this type, so a method added to one without the other
+ * fails to compile rather than quietly forking the app.
+ */
+export type Api = typeof httpApi;
+
+export type BackendMode = 'http' | 'local';
+
+const BACKEND_STORAGE_KEY = 'fplan-backend';
+
+/**
+ * Which backend this session boots — the whole rule, pure so it is testable:
+ *
+ *   1. `?backend=local|http` in the URL wins, and is REMEMBERED: the app's
+ *      router rewrites the URL on every navigation (pushState paths carry no
+ *      query), so without persistence a reload from /workbench would silently
+ *      fall back to HTTP mid-session — the one thing a mode switch must never
+ *      do. `?backend=http` both selects and forgets, so it stays the
+ *      one-query-parameter escape hatch the dual-boot exists for.
+ *   2. Otherwise the remembered choice.
+ *   3. Otherwise the build's default (VITE_FPLAN_BACKEND — Phase 7 will ship
+ *      'local' here), else HTTP.
+ */
+export function resolveBackendMode(opts: {
+  queryBackend: string | null;
+  stored: string | null;
+  buildDefault: string | undefined;
+}): { mode: BackendMode; remember: BackendMode | null } {
+  if (opts.queryBackend === 'local') return { mode: 'local', remember: 'local' };
+  if (opts.queryBackend === 'http') return { mode: 'http', remember: 'http' };
+  if (opts.stored === 'local') return { mode: 'local', remember: null };
+  if (opts.buildDefault === 'local') return { mode: 'local', remember: null };
+  return { mode: 'http', remember: null };
+}
+
+function decideBackendMode(): BackendMode {
+  // Importable under node (unit tests import pages that import this module):
+  // no browser environment means no choice to make — HTTP, the default.
+  if (typeof location === 'undefined') return 'http';
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(BACKEND_STORAGE_KEY);
+  } catch {
+    stored = null;
+  }
+  const { mode, remember } = resolveBackendMode({
+    queryBackend: new URLSearchParams(location.search).get('backend'),
+    stored,
+    buildDefault: import.meta.env?.VITE_FPLAN_BACKEND as string | undefined,
+  });
+  try {
+    if (remember === 'local') localStorage.setItem(BACKEND_STORAGE_KEY, 'local');
+    else if (remember === 'http') localStorage.removeItem(BACKEND_STORAGE_KEY);
+  } catch {
+    // Storage disabled: the mode holds for this load; a reload re-reads the URL.
+  }
+  return mode;
+}
+
+/** The mode this session booted in. Decided once; never changes mid-session. */
+export const backendMode: BackendMode = decideBackendMode();
+
+/**
+ * What the Search page tells the user in local mode. Search is Phase 5: the
+ * pool, the coordinator worker and the persisted reports have not been built
+ * for the browser, and pretending otherwise (an empty page that spins) would
+ * be worse than the sentence.
+ */
+export const SEARCH_UNAVAILABLE_IN_LOCAL_MODE =
+  'Search is not yet available in browser-only mode — it still needs the server ' +
+  '(npm start). Every other page works; search arrives in a later phase of the ' +
+  'browser port.';
+
+/**
+ * The one capability the seam admits differs between backends today, declared
+ * rather than sniffed: the Search page reads THIS — never `backendMode` — so
+ * when Phase 5 lands, flipping this constant is the entire page-side change.
+ */
+export const searchAvailability: { available: boolean; reason?: string } =
+  backendMode === 'local'
+    ? { available: false, reason: SEARCH_UNAVAILABLE_IN_LOCAL_MODE }
+    : { available: true };
+
+/**
+ * The local backend, booted lazily and once: folder opened, writer guard
+ * acquired (in its worker), folder seeded/migrated, services composed. Lazy
+ * so the guard/boot work runs exactly when the first caller needs it — and a
+ * FAILED boot is forgotten, so a "another tab is writing" refusal can be
+ * retried after that tab closes without reloading this one.
+ */
+let localBackendPromise: Promise<Api> | null = null;
+
+function localBackend(): Promise<Api> {
+  localBackendPromise ??= import('./local/localBackend')
+    .then((m) => m.bootLocalBackend())
+    .catch((err: unknown) => {
+      localBackendPromise = null;
+      throw err;
+    });
+  return localBackendPromise;
+}
+
+/**
+ * main.tsx's boot gate awaits this in local mode so a guard refusal renders
+ * as a page, not as 27 methods failing one by one. In HTTP mode it is a no-op.
+ */
+export function ensureBackendReady(): Promise<void> {
+  return backendMode === 'local' ? localBackend().then(() => undefined) : Promise.resolve();
+}
+
+/**
+ * The local facade: every method awaits the booted backend and delegates.
+ * Written out one line per method — the compiler holds it to the full Api
+ * surface, so a new route cannot be added to the HTTP client and forgotten
+ * here.
+ */
+function localApi(): Api {
+  const b = localBackend;
+  return {
+    meta: () => b().then((x) => x.meta()),
+    getProfile: () => b().then((x) => x.getProfile()),
+    putProfile: (profile) => b().then((x) => x.putProfile(profile)),
+    getDerivedProfile: () => b().then((x) => x.getDerivedProfile()),
+    getQuotes: () => b().then((x) => x.getQuotes()),
+    refreshQuotes: (symbols) => b().then((x) => x.refreshQuotes(symbols)),
+    getNetWorth: () => b().then((x) => x.getNetWorth()),
+    takeNetWorthSnapshot: (body) => b().then((x) => x.takeNetWorthSnapshot(body)),
+    deleteNetWorthSnapshot: (id) => b().then((x) => x.deleteNetWorthSnapshot(id)),
+    getNetWorthScoring: () => b().then((x) => x.getNetWorthScoring()),
+    getAssumptions: () => b().then((x) => x.getAssumptions()),
+    putMarket: (market) => b().then((x) => x.putMarket(market)),
+    getPlan: () => b().then((x) => x.getPlan()),
+    putPlan: (plan) => b().then((x) => x.putPlan(plan)),
+    startRun: (req) => b().then((x) => x.startRun(req)),
+    getRun: (runId) => b().then((x) => x.getRun(runId)),
+    lookupCachedRun: (req) => b().then((x) => x.lookupCachedRun(req)),
+    planHistory: () => b().then((x) => x.planHistory()),
+    keepPlan: (body) => b().then((x) => x.keepPlan(body)),
+    restorePlan: (id) => b().then((x) => x.restorePlan(id)),
+    scorePlanVersion: (id) => b().then((x) => x.scorePlanVersion(id)),
+    planVersionsScoring: () => b().then((x) => x.planVersionsScoring()),
+    startSearch: (req) => b().then((x) => x.startSearch(req)),
+    getSearch: (searchId) => b().then((x) => x.getSearch(searchId)),
+    getSearchReport: (searchId) => b().then((x) => x.getSearchReport(searchId)),
+    cancelSearch: (searchId) => b().then((x) => x.cancelSearch(searchId)),
+    listSearches: () => b().then((x) => x.listSearches()),
+  };
+}
+
+/** The client the whole UI calls. Pages import THIS and never choose a mode. */
+export const api: Api = backendMode === 'local' ? localApi() : httpApi;
 
 /** Poll a run until done/error. Calls onProgress on each tick. */
 export async function pollRun(
