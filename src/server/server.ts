@@ -142,6 +142,13 @@ async function main(): Promise<void> {
     },
   });
 
+  // Default seeding — i.e. seedStarterProfile true: the LEGACY server keeps
+  // opening an empty data dir on the fictional starter household, on purpose
+  // (zero-start, 2026-08-29). The browser app collects a real household
+  // through its boot-gate setup step; this parked server has no such step,
+  // and an empty dir with no profile at all would just fail every route.
+  // Documented at InitDataDirOptions (src/store/dataStore.ts) and in README's
+  // legacy-server section.
   const init = await initDataDir();
 
   // Orphaned write-ahead scoring intents resolve BEFORE the first route can

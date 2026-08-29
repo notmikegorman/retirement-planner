@@ -68,6 +68,7 @@ import {
 import type { NetWorthSnapshot, SnapshotScore } from '../../shared/types';
 import { formatPct, formatUSD } from '../../shared/util';
 import { api } from '../api';
+import { NET_WORTH_FIRST_RUN, simulationReadiness } from '../firstRun';
 import type { PageProps } from '../nav';
 import { useChartTheme, type ChartPalette } from '../theme';
 import { useToast } from '../toast';
@@ -712,6 +713,14 @@ export function NetWorthPage(_props: PageProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [taking, setTaking] = useState(false);
   /**
+   * ZERO-START'S GATE (src/ui/firstRun.ts): with zero accounts a snapshot
+   * would record a "total" of nothing and immediately start scoring a
+   * 0-account simulation — a row of zeros pretending to be a measurement.
+   * The button is replaced by the honest note; existing rows (recorded when
+   * accounts existed) stay fully readable.
+   */
+  const [snapshotGated, setSnapshotGated] = useState(false);
+  /**
    * Two error slots, because they are read in two places now. A failed snapshot
    * belongs in the dialog beside the form that caused it; a failed delete
    * belongs beside the table, where the dialog would never be open to show it.
@@ -768,6 +777,7 @@ export function NetWorthPage(_props: PageProps) {
       setSnapshots(list);
       setHomeValue((prev) => prev ?? list[list.length - 1]?.homeValue ?? profile.home.value);
       setSuccessTarget(profile.settings.successTarget);
+      setSnapshotGated(simulationReadiness(profile).state === 'no-accounts');
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     }
@@ -930,26 +940,34 @@ export function NetWorthPage(_props: PageProps) {
     <div>
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Net worth</h2>
-        <div className="row">
-          <button className="primary" onClick={openDialog}>
-            Take snapshot
-          </button>
-          <span className="muted">
-            Records every account at today&rsquo;s prices, plus the home value you type, and
-            scores the plan behind it.
-          </span>
-        </div>
+        {snapshotGated ? (
+          /* Zero-start: no button, and the reason in its place — an empty
+             state, never a $0 row pretending to be a measurement. */
+          <div className="muted">{NET_WORTH_FIRST_RUN}</div>
+        ) : (
+          <>
+            <div className="row">
+              <button className="primary" onClick={openDialog}>
+                Take snapshot
+              </button>
+              <span className="muted">
+                Records every account at today&rsquo;s prices, plus the home value you type, and
+                scores the plan behind it.
+              </span>
+            </div>
 
-        {/* WHAT THE SCORES ON THIS PAGE ARE SCORES OF. Stated here, next to the
-            button that records one: the plan as it stood when the row was
-            scored, which the plan's History remembers even after the plan has
-            moved on. */}
-        <div className="field-help" style={{ marginTop: 10 }}>
-          Every score below is the plan&rsquo;s own, run at final quality on the profile&rsquo;s
-          seed — the plan as it stood at that moment, not as it stands now. It is computed once,
-          when the snapshot is taken, and never again: a row is a record of a day, and a number
-          measured on a later one would not belong to it.
-        </div>
+            {/* WHAT THE SCORES ON THIS PAGE ARE SCORES OF. Stated here, next to
+                the button that records one: the plan as it stood when the row
+                was scored, which the plan's History remembers even after the
+                plan has moved on. */}
+            <div className="field-help" style={{ marginTop: 10 }}>
+              Every score below is the plan&rsquo;s own, run at final quality on the
+              profile&rsquo;s seed — the plan as it stood at that moment, not as it stands now.
+              It is computed once, when the snapshot is taken, and never again: a row is a
+              record of a day, and a number measured on a later one would not belong to it.
+            </div>
+          </>
+        )}
       </div>
 
       <SnapshotDialog

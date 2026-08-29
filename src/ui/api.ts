@@ -82,6 +82,13 @@ export interface ServerMeta {
    * and the Dashboard simply doesn't draw the row.
    */
   runCache?: { files: number; bytes: number };
+  /**
+   * Local mode only (zero-start): whether the folder holds a profile.json,
+   * asked live. `false` is what sends main.tsx's boot to the first-run setup
+   * step; the legacy server seeds a profile unconditionally and omits the
+   * field, which reads as "present" (undefined !== false).
+   */
+  profileExists?: boolean;
 }
 
 const httpApi = {

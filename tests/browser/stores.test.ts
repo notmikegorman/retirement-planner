@@ -193,10 +193,11 @@ describe('browser storage engine (OPFS, real Chromium)', () => {
     // Anti-vacuity: the comparison must have covered the whole seeded surface
     // plus every record file the sequence writes.
     const freshFiles = Object.keys(nodeTrees.fresh);
-    expect(freshFiles.length).toBeGreaterThanOrEqual(14);
+    expect(freshFiles.length).toBeGreaterThanOrEqual(13);
     for (const expected of [
+      // No profile.starter.json: zero-start removed the reference copy from
+      // every seeded folder (see initDataDir).
       'profile.json',
-      'profile.starter.json',
       'plan.json',
       'plan-history.json',
       'networth.json',

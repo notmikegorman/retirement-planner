@@ -416,6 +416,33 @@ export interface DataStoreOptions {
   defaults: FileStore;
 }
 
+/**
+ * ZERO-START (2026-08-29): who still gets the fictional starter household.
+ *
+ * `seedStarterProfile` decides whether an EMPTY folder is seeded with
+ * data-defaults/profile.starter.json (and its pristine reference copy). It
+ * defaults to TRUE for the two callers whose folders are supposed to open on
+ * a filled example:
+ *
+ *   - the LEGACY NODE SERVER (src/server) — parked but supported, and it has
+ *     no setup step to collect a real household with, so an empty
+ *     FPLAN_DATA_DIR keeps opening on the example exactly as it always did
+ *     (documented in README's legacy-server section);
+ *   - the D8 DEMO fallback (Safari/Firefox browser-private storage), whose
+ *     entire purpose is showing the app working on a filled example.
+ *
+ * The BROWSER PRODUCT PATH passes FALSE (src/ui/local/localBackend.ts): a new
+ * user's folder starts with no profile at all, the boot gate collects the few
+ * facts the engine cannot run without, and from the first screen everything
+ * on it is the user's own data. profile.starter.json is therefore no longer
+ * copied into user folders — it survives in the repo as demo/legacy seed
+ * material only. A folder that already holds a profile is untouched either
+ * way (seeding has always been copy-if-missing).
+ */
+export interface InitDataDirOptions {
+  seedStarterProfile?: boolean;
+}
+
 export interface DataStore {
   /** The two stores this instance is bound to, for the sibling factories. */
   readonly files: FileStore;
@@ -424,7 +451,7 @@ export interface DataStore {
   pathExists(relPath: string): Promise<boolean>;
   readJsonFile(relPath: string): Promise<unknown>;
   writeJsonPretty(relPath: string, value: unknown): Promise<void>;
-  initDataDir(): Promise<{ dataDir: string; existedBefore: boolean }>;
+  initDataDir(opts?: InitDataDirOptions): Promise<{ dataDir: string; existedBefore: boolean }>;
   backfillAssumptionDefaults(): Promise<string[]>;
   migrateGivingSplitFiles(): Promise<string[]>;
   loadProfile(): Promise<Profile>;
@@ -497,15 +524,28 @@ export function createDataStore(opts: DataStoreOptions): DataStore {
    * Ensure the data folder exists and is seeded from the defaults store.
    * `existedBefore` is true when a profile.json was already present (i.e.
    * this was an already-initialized data folder, not a fresh seed).
+   *
+   * Whether an empty folder receives the starter PROFILE is the caller's
+   * declaration (InitDataDirOptions — zero-start): assumption files are
+   * reference data and seed unconditionally; the fictional household seeds
+   * only where a filled example is the point (demo, legacy server).
    */
-  async function initDataDir(): Promise<{ dataDir: string; existedBefore: boolean }> {
+  async function initDataDir(
+    opts?: InitDataDirOptions,
+  ): Promise<{ dataDir: string; existedBefore: boolean }> {
     const existedBefore = await files.exists('profile.json');
 
     await files.mkdir('');
-    // profile.starter.json -> profile.json (only when the user has no profile yet)
-    await copyIfMissing('profile.starter.json', 'profile.json');
-    // Also keep the pristine starter alongside, as a reference.
-    await copyIfMissing('profile.starter.json', 'profile.starter.json');
+    if (opts?.seedStarterProfile !== false) {
+      // profile.starter.json -> profile.json (only when the user has no profile yet).
+      // The pristine reference copy that used to land ALONGSIDE (a second
+      // profile.starter.json in the data folder) is gone with zero-start:
+      // the starter is no longer the seed of anyone's data, the pristine
+      // bytes live in the repo/bundle either way, and planting them in every
+      // folder made the fiction look like a record. Folders that already
+      // hold one keep it — init never deletes.
+      await copyIfMissing('profile.starter.json', 'profile.json');
+    }
     await copyTreeIfMissing('assumptions', 'assumptions');
     // No scenarios/ seeding any more: there is one plan, and loadPlan() seeds
     // it on first read. An existing scenarios/ folder from an older data

@@ -30,6 +30,7 @@ import type {
   SearchSummary,
 } from '../../shared/types';
 import { api, searchAvailability } from '../api';
+import { SEARCH_FIRST_RUN, simulationReadiness } from '../firstRun';
 import {
   SEARCH_TAB_IDS,
   SEARCH_TAB_STORAGE_KEY,
@@ -117,6 +118,14 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [space, setSpace] = useState<SpaceState | null>(null);
   /**
+   * ZERO-START'S GATE (src/ui/firstRun.ts): a search is thousands of
+   * simulations, and with zero accounts each would simulate a household that
+   * does not exist. The whole page degrades to the honest note — the same
+   * shape as the capability branch below, because the claim is the same
+   * kind: this page cannot do its job yet, and here is why.
+   */
+  const [firstRun, setFirstRun] = useState(false);
+  /**
    * One line about what the load-time heal dropped from the stored space, or
    * null when it dropped nothing. The stored copy is rewritten at the same
    * moment, so this appears exactly once — the next load has nothing to heal.
@@ -170,8 +179,9 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
   useEffect(() => {
     void (async () => {
       try {
-        const loaded = await api.getPlan();
+        const [loaded, profile] = await Promise.all([api.getPlan(), api.getProfile()]);
         if (!alive.current) return;
+        setFirstRun(simulationReadiness(profile).state === 'no-accounts');
         setPlan(loaded);
         const defaults = defaultAxisDrafts(loaded);
         const stored =
@@ -440,6 +450,17 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
       <div>
         <h1>Search</h1>
         <div className="error-banner">{loadError}</div>
+      </div>
+    );
+  }
+
+  if (firstRun) {
+    return (
+      <div>
+        <h1>Search</h1>
+        <div className="muted" style={{ maxWidth: '44rem' }}>
+          {SEARCH_FIRST_RUN}
+        </div>
       </div>
     );
   }

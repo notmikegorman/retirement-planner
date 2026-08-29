@@ -20,7 +20,11 @@
  *     offered — the cut removed the offer, never the storage.
  */
 import { describe, expect, it } from 'vitest';
-import { parseStorageChoice, resolveBootGate } from '../../src/ui/local/storageChoice';
+import {
+  parseStorageChoice,
+  profileSetupNeeded,
+  resolveBootGate,
+} from '../../src/ui/local/storageChoice';
 import { isSwapArtifact } from '../../src/ui/io/swapArtifacts';
 
 /** Shorthand: facts with first-visit defaults, overridden per case. */
@@ -106,6 +110,26 @@ describe('resolveBootGate', () => {
       kind: 'reconnect',
       folderName: 'your data folder',
     });
+  });
+});
+
+describe('profileSetupNeeded (the gate’s second stage — zero-start)', () => {
+  it('an empty non-demo folder gets the setup step, never an invented household', () => {
+    // Both roads here matter: the picked real folder, and OPFS reached
+    // through the lane seam (or a pre-cut choice) on a picker browser.
+    expect(profileSetupNeeded({ demo: false, profileExists: false })).toBe(true);
+  });
+
+  it('a populated folder just opens — byte-for-byte the returning-user boot', () => {
+    expect(profileSetupNeeded({ demo: false, profileExists: true })).toBe(false);
+  });
+
+  it('the D8 demo never lands on setup: its purpose is the filled example', () => {
+    expect(profileSetupNeeded({ demo: true, profileExists: true })).toBe(false);
+    // Belt and braces: even if the demo seed were somehow missing, the demo
+    // path must not ask a Safari user to type a household into storage the
+    // banner says is erasable — the demo seeds, it never asks.
+    expect(profileSetupNeeded({ demo: true, profileExists: false })).toBe(false);
   });
 });
 

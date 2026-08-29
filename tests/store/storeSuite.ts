@@ -847,7 +847,7 @@ export function storeSuiteCases(): StoreCase[] {
 
   // ----- seeding + init ----------------------------------------------------
 
-  c('init: seeds profile, starter reference, assumptions and runs/ — but no scenarios/', async (ctx) => {
+  c('init: seeds profile, assumptions and runs/ — but no scenarios/, no reference copy', async (ctx) => {
     const { existedBefore } = await ctx.stores.data.initDataDir();
     is(existedBefore, false, 'fresh folder');
     is(
@@ -855,7 +855,10 @@ export function storeSuiteCases(): StoreCase[] {
       await ctx.defaults.readText('profile.starter.json'),
       'profile seeded byte-for-byte from the starter',
     );
-    is(await ctx.files.exists('profile.starter.json'), true, 'pristine starter alongside');
+    // Zero-start (2026-08-29): the pristine reference copy no longer lands
+    // alongside — the starter's bytes live in the repo/bundle, and a copy in
+    // the data folder made the fiction look like a record.
+    is(await ctx.files.exists('profile.starter.json'), false, 'no pristine reference copy');
     for (const rel of [
       'assumptions/market.json',
       'assumptions/historical-returns.csv',
@@ -885,6 +888,53 @@ export function storeSuiteCases(): StoreCase[] {
     is(second.existedBefore, true, 'recognized as initialized');
     is((await ctx.stores.data.loadProfile()).expenses.livingMonthly, 12345, 'profile edit survives');
     is((await ctx.stores.plan.loadPlan()).events.length, p.events.length + 1, 'plan edit survives');
+  });
+
+  // ----- zero-start (2026-08-29) -------------------------------------------
+
+  c('init (zero-start): seedStarterProfile:false leaves the folder profile-less; reference data still seeds', async (ctx) => {
+    // The browser product path: an empty folder gains NO invented household —
+    // not profile.json, not the pristine starter reference — while the
+    // assumption files (reference data, not user data) and runs/ seed exactly
+    // as always. The giving-split pass and the backfill must both tolerate
+    // the absent profile (this init runs them).
+    const { existedBefore } = await ctx.stores.data.initDataDir({ seedStarterProfile: false });
+    is(existedBefore, false, 'fresh folder');
+    is(await ctx.files.exists('profile.json'), false, 'no fictional household seeded');
+    is(await ctx.files.exists('profile.starter.json'), false, 'the starter is not copied into user folders');
+    is(await ctx.files.exists('assumptions/market.json'), true, 'assumptions still seed');
+    is(await ctx.files.exists('assumptions/tax/federal-2026.json'), true, 'tax tables still seed');
+    is(await ctx.files.exists('runs'), true, 'runs/ cache dir exists');
+    // Idempotent, and still honest about existedBefore.
+    const second = await ctx.stores.data.initDataDir({ seedStarterProfile: false });
+    is(second.existedBefore, false, 'still no profile, still says so');
+  });
+
+  c('init (zero-start): a profile written after a zero-start init survives EVERY later init flavor', async (ctx) => {
+    // The setup step's write path, end to end at the store level: zero-start
+    // init, one minimal profile through the ordinary saveProfile (the same
+    // schema gate every write faces), then re-inits of BOTH flavors — the
+    // demo/legacy seeding one included — leave the user's household alone
+    // (copy-if-missing has always been the rule; this pins it for the new
+    // branch too).
+    await ctx.stores.data.initDataDir({ seedStarterProfile: false });
+    const minimal = JSON.parse(await ctx.defaults.readText('profile.starter.json')) as Profile;
+    minimal.people = [minimal.people[0]];
+    minimal.people[0].name = 'Riley';
+    minimal.filing = { status: 'single', state: 'nc' };
+    minimal.accounts = [];
+    minimal.income.salaries = { p1: 0 };
+    await ctx.stores.data.saveProfile(minimal);
+    const afterSeedingInit = await ctx.stores.data.initDataDir({ seedStarterProfile: true });
+    is(afterSeedingInit.existedBefore, true, 'recognized as initialized');
+    const loaded = await ctx.stores.data.loadProfile();
+    is(loaded.people.length, 1, 'the household stays the user’s own');
+    is(loaded.people[0].name, 'Riley', 'not overwritten by the starter');
+    eq(loaded.accounts, [], 'accounts stay empty until the user adds one');
+    // And the plan seeder works from the minimal household: one person, one
+    // retire event, one claim event — nothing referencing a p2 that is not there.
+    const seededPlan = await ctx.stores.plan.loadPlan();
+    ok(seededPlan.events.every((e) => !('person' in e) || e.person === 'p1'), 'plan names only real people');
   });
 
   // ----- baa-column backfill -----------------------------------------------

@@ -127,10 +127,16 @@ from `shared/`. Tax logic never leaks into the simulation loop.
 ## Data folder (`~/finance-planner-data/`, override `FPLAN_DATA_DIR`)
 
 Seeded on first boot from `data-defaults/` (copy-if-missing; user edits are never
-overwritten): `profile.json`, `profile.starter.json` (pristine reference), `assumptions/`
-(market.json, historical-returns.csv, tax/federal-2026.json, tax/{va,sc,nc}-2026.json,
-social-security.json, medicare-2026.json, aca-2026.json, rmd-table.json), and `runs/`
-(cache keyed by content hash).
+overwritten): `assumptions/` (market.json, historical-returns.csv,
+tax/federal-2026.json, tax/{va,sc,nc}-2026.json, social-security.json,
+medicare-2026.json, aca-2026.json, rmd-table.json) and `runs/` (cache keyed by
+content hash). Whether `profile.json` seeds from the fictional starter is the
+caller's declaration (zero-start, 2026-08-29 — `initDataDir({ seedStarterProfile })`
+in `src/store/dataStore.ts`): the legacy server and the browser demo fallback seed
+it; the browser product path leaves an empty folder profile-less and collects a
+real minimal household through the boot-gate setup step instead. The pristine
+`profile.starter.json` reference copy is no longer planted in any folder (existing
+copies are left alone).
 
 Two more files are created by the server rather than seeded, and a backup of the folder
 that omits them loses real history: `quotes.json` — the price cache the refresh route

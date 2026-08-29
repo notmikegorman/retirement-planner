@@ -137,6 +137,16 @@ export function DashboardPage({ navigate }: PageProps) {
               </tr>
             </thead>
             <tbody>
+              {/* Zero-start: an empty account list says so in words — a table
+                  of just "Home $0 / Net worth $0" reads like a measurement of
+                  a broke household rather than a profile not yet filled in. */}
+              {profile.accounts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    No accounts recorded yet — add them on the Profile tab.
+                  </td>
+                </tr>
+              ) : null}
               {profile.accounts.map((a) => (
                 <tr key={a.id}>
                   <td>

@@ -31,6 +31,7 @@ import type {
   SocialSecurityData,
 } from '../../shared/types';
 import { api, pollRun } from '../api';
+import { simulationReadiness } from '../firstRun';
 import {
   RESULTS_TAB_IDS,
   RESULTS_TAB_STORAGE_KEY,
@@ -328,6 +329,18 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
 
   // ---- the live run loop -------------------------------------------------
 
+  /**
+   * ZERO-START'S GATE (src/ui/firstRun.ts): with zero accounts there is
+   * nothing to simulate, so no run may start — not the live loop, not Run
+   * now, not a cached-run restore — and no simulated figure may render, not
+   * even one computed earlier this session against accounts since deleted.
+   * The results column gets the first-run state instead.
+   */
+  const firstRun = useMemo(
+    () => profile !== null && simulationReadiness(profile).state === 'no-accounts',
+    [profile],
+  );
+
   const runParams = useMemo(
     () => (profile && settings ? resolveRunParams(settings, profile.settings) : null),
     [profile, settings],
@@ -443,7 +456,7 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
   );
 
   const startRun = useCallback(async () => {
-    if (!draft || !profile || !runParams) return;
+    if (!draft || !profile || !runParams || firstRun) return;
     lastRunKey.current = runInputKey(scenarioForPlainRun(draft), runParams);
     const id = ++requestId.current;
     setRunning(true);
@@ -463,7 +476,7 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
         setProgress(0);
       }
     }
-  }, [draft, profile, runParams, restoreFinalRun, runPlan]);
+  }, [draft, profile, runParams, firstRun, restoreFinalRun, runPlan]);
 
   /**
    * RUN NOW: today's prices, then the plan under the conditions everything else
@@ -482,7 +495,7 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
    * the screen alive while knobs move. This is the deliberate, slow answer.
    */
   const startRunNow = useCallback(async () => {
-    if (!draft || !profile || !runParams) return;
+    if (!draft || !profile || !runParams || firstRun) return;
     /*
      * The INTERACTIVE key, not the final one. The live-loop effect compares
      * `lastRunKey` against `inputKey`, which is built from the interactive
@@ -522,7 +535,7 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
         }
       }
     }
-  }, [draft, profile, runParams, runPlan]);
+  }, [draft, profile, runParams, firstRun, runPlan]);
 
   /**
    * ONE debounce, both effects. A change to the plan re-runs the simulation and
@@ -662,7 +675,7 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
 
         <div className="wb-results">
           <LiveResults
-            result={result}
+            result={firstRun ? null : result}
             previous={previous}
             baseline={baseline}
             target={target}
@@ -679,6 +692,8 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
             runNow={runNow}
             tab={resultsTab}
             onSelectTab={selectResultsTab}
+            firstRun={firstRun}
+            onOpenAccounts={() => navigate('profile', 'accounts')}
           />
         </div>
       </div>

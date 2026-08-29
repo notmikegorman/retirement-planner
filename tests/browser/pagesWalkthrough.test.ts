@@ -10,15 +10,23 @@
  *   chooser cut) → OPFS seeded through the storage-choice seam (headless
  *   Chromium ships the picker API but cannot complete the native dialog;
  *   the seeded value is byte-identical to a pre-cut browser-private user's
- *   remembered choice, so this leg IS the never-strand proof) → the
- *   starter household appears → the quick run completes → drive-scale
- *   profile through the seam → Run now (fixture-fed quote refresh, then
- *   the final-quality run) → a net-worth snapshot with score AND spend
- *   attached → a reload that lands back in the same storage with the
- *   cached final run restored (and boot-sweeps planted .crswap orphans) →
- *   the Dashboard's D7 run-cache size → a deep link that reloads through
- *   the 404 trick (status 404, app rendered) → the D8 fallback asserted by
- *   feature-flagging showDirectoryPicker away in a fresh context.
+ *   remembered choice, so this leg IS the never-strand proof) →
+ *   ZERO-START: the setup step, not an invented household (abandon +
+ *   reload lands back on it with nothing written; the submitted form
+ *   writes the stranger's own minimal profile) → the GATED workbench (no
+ *   success percentage, no simulated figure anywhere in the results
+ *   column; Net Worth's snapshot button replaced by the honest note) →
+ *   the first account through the documented seam → the FIRST simulation,
+ *   its number carrying its conditions (the quick chip AND the zero-spend
+ *   caption) → drive-scale profile through the seam → Run now
+ *   (fixture-fed quote refresh, then the final-quality run) → a net-worth
+ *   snapshot with score AND spend attached → a reload that lands back in
+ *   the same storage with the cached final run restored (and boot-sweeps
+ *   planted .crswap orphans) → the Dashboard's D7 run-cache size → a deep
+ *   link that reloads through the 404 trick (status 404, app rendered) →
+ *   the D8 fallback asserted by feature-flagging showDirectoryPicker away
+ *   in a fresh context — the ONE place the fictional starter household
+ *   still seeds, asserted by name.
  *
  * WHY THIS LANE EXISTS: it is the only place the BASE PATH is executed.
  * Every other browser test serves at '/', where a forgotten stripBase or a
@@ -28,8 +36,10 @@
  * path reaches OPFS on a picker-capable browser (every other lane pre-seeds
  * the choice as a returning user via addInitScript; this one seeds the same
  * key mid-walkthrough, after the chooser assertions, for the same reason:
- * the native folder dialog is undrivable headless). It is also the place
- * that pins the lane discipline for the service
+ * the native folder dialog is undrivable headless) — and the only place the
+ * ZERO-START boot is executed end to end as a stranger would meet it (the
+ * other lanes seed explicit profiles and never see the setup step). It is
+ * also the place that pins the lane discipline for the service
  * worker: the walkthrough build does NOT set VITE_FPLAN_SW, so nothing
  * registers — asserted, so a future registration cannot quietly start
  * intercepting lane traffic.
@@ -70,7 +80,21 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
 
   const chooserHeading = () =>
     page.getByRole('heading', { name: 'Where should your data live?' });
+  const setupHeading = () => page.getByRole('heading', { name: 'Who is this plan for?' });
   const verdict = () => page.locator('.verdict').first();
+
+  /** Whether the OPFS data folder holds a profile.json — zero-start's fact. */
+  const opfsProfileExists = (): Promise<boolean> =>
+    page.evaluate(async () => {
+      const opfs = await navigator.storage.getDirectory();
+      try {
+        const root = await opfs.getDirectoryHandle('fplan-data');
+        await root.getFileHandle('profile.json');
+        return true;
+      } catch {
+        return false;
+      }
+    });
 
   /** Fixture quotes + off-origin blocking; NO storage pre-seed — that is the point. */
   async function wireContext(ctx: BrowserContext): Promise<void> {
@@ -145,31 +169,118 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     expect(chooserText).toContain('your data never leaves it');
   }, 120_000);
 
-  it('a remembered OPFS choice (pre-cut user, or the lane seam) still boots the starter household', async () => {
+  it('a remembered OPFS choice (pre-cut user, or the lane seam) boots ZERO-START: the setup step, not an invented household', async () => {
     // Headless Chromium cannot complete the native folder dialog, so the
     // lane cannot click through the one visible action. It boots OPFS the
     // way every other lane always has (Phase 7's returning-user pre-seed):
     // write the remembered choice and reload. The written value is
     // byte-identical to what the retired "Use browser-private storage"
-    // button stored, so this leg doubles as the never-strand proof — anyone
-    // who chose browser-private storage before the cut boots exactly like
-    // this, with no chooser and no demo banner (D8's banner is for
-    // browsers where OPFS was never a choice).
+    // button stored, so this leg doubles as the never-strand proof — and
+    // since zero-start, what a fresh boot lands on is the SETUP STEP: the
+    // fictional starter household no longer seeds anywhere but the D8 demo
+    // (the last leg asserts that half).
     await page.evaluate(() => localStorage.setItem('fplan-storage', 'opfs'));
     await page.reload();
-    await verdict().waitFor({ state: 'visible', timeout: 240_000 });
+    await setupHeading().waitFor({ state: 'visible', timeout: 240_000 });
     expect(await chooserHeading().count()).toBe(0);
     expect(await page.locator('.demo-banner').count()).toBe(0);
-    // The starter household seeded from bundled defaults: Alex and Jordan.
+    // The folder got its reference data and NOTHING resembling a household:
+    // the boot seeded assumptions, and profile.json does not exist.
+    expect(await opfsProfileExists()).toBe(false);
+  }, 300_000);
+
+  it('abandoning setup and reloading lands back on setup — nothing is written until submit', async () => {
+    // Type half an answer, walk away, come back: the setup step again, with
+    // the folder still profile-less. A half-written household surviving an
+    // abandoned form is exactly the bug this pins out.
+    await page.getByLabel('Your name').fill('Halfway');
+    await page.getByLabel('Your name').press('Tab');
+    await page.reload();
+    await setupHeading().waitFor({ state: 'visible', timeout: 240_000 });
+    expect(await opfsProfileExists()).toBe(false);
+  }, 300_000);
+
+  it('the submitted setup writes the stranger’s own minimal profile and lands on the GATED workbench', async () => {
+    // A single-person household, typed by the lane the way a stranger would
+    // type their own — nothing here comes from data-defaults.
+    await page.getByLabel('Your name').fill('Riley Kim');
+    await page.getByLabel('Your name').press('Tab');
+    await page.getByLabel('Birth year').fill('1980');
+    await page.getByLabel('Birth year').press('Tab');
+    await page.getByLabel('Birth month').selectOption('6');
+    await page.getByLabel('State').selectOption('nc');
+    await page.getByRole('button', { name: 'Start with this household' }).click();
+
+    // The app renders — on the first-run state, not on a simulation.
+    await page
+      .getByRole('heading', { name: 'Nothing to simulate yet' })
+      .waitFor({ state: 'visible', timeout: 240_000 });
+
+    // What the folder now holds is exactly what was typed: one person, the
+    // chosen state, EMPTY accounts, single filing (derived from one person).
     const profile = await page.evaluate(() =>
       (window as unknown as { __fplanApi: { getProfile(): Promise<Profile> } }).__fplanApi
         .getProfile(),
     );
-    expect(profile.people.map((p) => p.name)).toEqual(['Alex', 'Jordan']);
-    // The starter's own quick run, at the starter's own scale.
+    expect(profile.people.map((p) => p.name)).toEqual(['Riley Kim']);
+    expect(profile.people[0].birthYear).toBe(1980);
+    expect(profile.people[0].birthMonth).toBe(6);
+    expect(profile.filing).toEqual({ status: 'single', state: 'nc' });
+    expect(profile.accounts).toEqual([]);
+
+    // THE GATE, asserted on the whole results column: no verdict, no
+    // percentage, no simulated figure of any kind — only the honest state
+    // saying what is missing and where to add it.
+    expect(await verdict().count()).toBe(0);
+    const resultsText = await page.locator('.wb-results').innerText();
+    expect(resultsText).toContain('Add your accounts on the Profile tab');
+    expect(resultsText).not.toContain('%');
+    expect(await page.locator('.wb-metric-value').count()).toBe(0);
+  }, 300_000);
+
+  it('Net Worth degrades honestly too: no snapshot button, the reason in its place', async () => {
+    await page.getByRole('button', { name: 'Net Worth' }).click();
+    // Poll for the note first — the page shows "Loading…" until the profile
+    // answers, and the button assertion would pass vacuously against it.
+    await expect
+      .poll(async () => (await page.locator('body').innerText()).includes('there is nothing to record yet'), {
+        timeout: 60_000,
+      })
+      .toBe(true);
+    expect(await page.getByRole('button', { name: 'Take snapshot' }).count()).toBe(0);
+    await page.getByRole('button', { name: 'Workbench' }).click();
+  }, 120_000);
+
+  it('the FIRST account opens the gate: one simulation appears, its number carrying its conditions', async () => {
+    // get-mutate-put through the documented seam — the same shape the
+    // Accounts card's editor produces, added the way the owner scripts it.
+    await page.evaluate(async () => {
+      const api = (
+        window as unknown as {
+          __fplanApi: { getProfile(): Promise<Profile>; putProfile(p: Profile): Promise<unknown> };
+        }
+      ).__fplanApi;
+      const p = await api.getProfile();
+      p.accounts.push({
+        id: 'sav1',
+        name: 'Savings',
+        type: 'savings',
+        owner: 'p1',
+        balance: 50_000,
+        allocation: { stocks: 0, bonds: 0, bills: 1 },
+      } as Profile['accounts'][number]);
+      await api.putProfile(p);
+    });
+    await page.reload();
+    await verdict().waitFor({ state: 'visible', timeout: 240_000 });
+    // The number carries its run conditions (the chip)…
     expect((await page.locator('.wb-chip').first().innerText()).trim()).toBe(
       'Quick run · 1,000 paths',
     );
+    // …AND its zero-spend condition: nothing recorded is spent, so the score
+    // must say beside itself what kind of statement it is.
+    const resultsText = await page.locator('.wb-results').innerText();
+    expect(resultsText).toContain('Recorded spending is $0/month');
   }, 300_000);
 
   it('the household goes to drive scale through the documented seam', async () => {
@@ -316,8 +427,8 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     expect(cardText).toContain('(browser-private storage)');
     const runCache = /Run cache: (\d+) runs · ([\d.]+ (?:B|KB|MB))/.exec(cardText);
     expect(runCache).not.toBeNull();
-    // The session computed at least the starter quick, the drive quick and
-    // the drive final — a zero here would mean the metric measures nothing.
+    // The session computed at least the first-account quick, the drive quick
+    // and the drive final — a zero here would mean the metric measures nothing.
     expect(Number(runCache![1])).toBeGreaterThanOrEqual(3);
     expect(cardText).toMatch(/storage (persistent|best-effort)/);
     expect(cardText).toContain('Switch storage…');
@@ -384,6 +495,15 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     const banner = fbPage.locator('.demo-banner');
     expect(await banner.isVisible()).toBe(true);
     expect(await banner.innerText()).toContain('Demo storage.');
+    // THE ONE PLACE THE FICTIONAL HOUSEHOLD SURVIVES (zero-start): the demo's
+    // purpose is showing a filled example, so it seeds the starter — Alex and
+    // Jordan, by name, with the verdict above proving it simulates. No setup
+    // step here: the demo seeds, it never asks.
+    const demoProfile = await fbPage.evaluate(() =>
+      (window as unknown as { __fplanApi: { getProfile(): Promise<Profile> } }).__fplanApi
+        .getProfile(),
+    );
+    expect(demoProfile.people.map((p) => p.name)).toEqual(['Alex', 'Jordan']);
     await fallbackContext.close();
   }, 600_000);
 

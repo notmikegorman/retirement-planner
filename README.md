@@ -34,9 +34,12 @@ Pick any folder (the button uses the browser's folder picker). Your profile,
 plan, plan history, and net-worth ledger live there as plain files —
 `profile.json`, `plan.json`, `networth.json` — readable in any text editor,
 diffable, and **yours to back up: copy the folder, `git init` it, sync it**.
-Pick an empty folder to start fresh with an example household, or point it at
-a folder that already holds planner data (a copy of one from the old Node
-server works as-is — the file format never changed).
+Pick an empty folder to **start from zero**: the app asks for the few facts
+the tax and Social Security engine cannot run without (who, born when, which
+state) and everything you see from then on is your own data — no invented
+example household, and no number on screen before there is something real
+behind it. Or point it at a folder that already holds planner data (a copy of
+one from the old Node server works as-is — the file format never changed).
 
 The browser will ask permission to use the folder, and on later visits may
 ask again with a single **Reconnect** click. Installing the page as an app
@@ -138,12 +141,22 @@ number it prints is only as good as the profile behind it and the future
 resembling the past. Take decisions with a licensed professional who can see
 the whole picture.
 
-## The starter household is invented
+## You start from zero; only the demo shows an invented household
 
-A first boot on empty storage seeds a **fictional example household** —
-invented people, round invented balances. It exists to give the app something
-to run, not to describe anyone. Replace every value on the Profile page with
-your own, and read `ASSUMPTIONS.md` while you do.
+A first boot on an empty folder starts **from zero**: a one-page setup step
+collects who the plan is for and which state, and then everything the app
+shows is your own data. With no accounts entered yet, the Workbench shows
+what is missing and where to add it rather than a success percentage — a
+simulation of zero accounts would be a statement about a household that does
+not exist — and once accounts exist but recorded spending is still $0, the
+score says that beside itself (a plan that never spends cannot fail).
+
+The **fictional example household** — invented people, round invented
+balances (`data-defaults/profile.starter.json`) — survives in exactly two
+places, where a filled example is the point: the Safari/Firefox **demo
+storage** fallback, and the parked legacy Node server's first boot on an
+empty data folder. If you are looking at Alex and Jordan, you are looking at
+the example, not at anyone real. `ASSUMPTIONS.md` documents its every number.
 
 ---
 

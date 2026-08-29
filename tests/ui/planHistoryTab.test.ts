@@ -691,7 +691,11 @@ describe('the tab’s wiring (source scan)', () => {
     expect(card).not.toContain("'Score it again'");
     expect(card).not.toMatch(/>\s*Score it again\s*</);
     expect(card).toContain('scoringOffer(score)');
-    expect(card).toContain('{offer !== null && (');
+    // Zero-start added the accounts gate IN FRONT of the offer: with zero
+    // accounts no scoring button renders at all (a 0-account run would file a
+    // number that was never true of any household). The offer decision itself
+    // still lives in scoringOffer, exactly as before.
+    expect(card).toContain('{!scoringGated && offer !== null && (');
     // "scoring…" comes from the server's own memory, never from a stored flag:
     // a persisted one would survive a restart the run did not.
     expect(card).toContain('setScoringIds([...scoringRef.current.filter((x) => x !== id), id])');

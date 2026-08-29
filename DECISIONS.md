@@ -1605,3 +1605,54 @@ What did NOT change is everything underneath the offer:
 - **Switch storage still means what it says.** Dashboard → Switch storage
   returns to the chooser; on a picker browser that now reads as "pick a
   different folder," which is what the affordance was for.
+
+## Zero-start: a new user's first screen is their own data (2026-08-29)
+
+The owner, about to hand the URL to a friend: "I would rather it start from
+zero so that, from the beginning, everything they see is THEIR data." So an
+empty picked folder no longer seeds the fictional starter household. The boot
+gate grew a second stage (`profileSetupNeeded`, storageChoice.ts): after the
+folder grant and the backend boot, a folder holding no profile renders ONE
+setup page collecting only what the tax/SS engine cannot run without —
+person 1's name and birth month/year, an optional second person, the filing
+state. Filing status is derived (one files single, two file MFJ), the submit
+writes one minimal schema-valid profile through the ordinary store path
+(`shared/setupProfile.ts` → `api.putProfile`), and nothing is written until
+submit — abandon and reload lands back on setup.
+
+**Honest gates instead of fabricated numbers.** The predicate lives in
+`src/ui/firstRun.ts` and is two-tier by design:
+
+- **Zero accounts GATES.** Accounts are the substrate of the simulation;
+  with none, "94% of futures succeed" describes a household that does not
+  exist. The Workbench renders a first-run state (what is missing, where to
+  add it) and starts nothing — no live loop, no Run now, no cached-run
+  restore, and no figure computed earlier against since-deleted accounts.
+  Net Worth's snapshot button, the History tab's scoring offers, and the
+  Search page all degrade to the same honest words.
+- **Zero recorded spending ANNOTATES.** With accounts but a $0/mo budget the
+  score is a true statement about the inputs (a plan that never spends
+  cannot fail), and the house rule for true-but-conditional numbers is that
+  the number carries its condition — a standing caption beside the verdict,
+  not a withheld result. Gating it would also break the first feedback
+  moment: add one account, watch the first simulation appear, read what it
+  still assumes.
+
+**The fictional household survives only where a filled example is the
+point:** the D8 demo fallback (Safari/Firefox) seeds it exactly as before,
+and the parked legacy Node server keeps seeding it too — it has no setup
+step, and porting one to HTTP mode is not worth building for a parked
+service; the browser path is the product. Both are declarations at the call
+site now (`initDataDir({ seedStarterProfile })`, default true for those two
+callers, false on the browser product path). The pristine
+`profile.starter.json` reference copy stopped being planted in every folder
+along the way: the starter is no longer the seed of anyone's data, its bytes
+live in the repo, and a copy in the data folder made the fiction look like a
+record.
+
+Pinned end to end by the pages walkthrough (setup as a stranger → gated
+workbench with no percentage anywhere → first account through the seam → the
+first number carrying both its run chip and its zero-spend caption → the D8
+leg asserting Alex and Jordan still seed the demo), in node by
+`tests/ui/{setupProfile,firstRun,storageGate}.test.ts`, and at the store
+level by the zero-start cases in `tests/store/storeSuite.ts` (both drivers).

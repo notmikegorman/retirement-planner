@@ -69,7 +69,7 @@ import { createSearchManager } from '../../store/searchManager';
 import { randomHex } from '../../shared/random';
 import { createFsaFileStore } from '../io/fsaFileStore';
 import { sweepSwapArtifacts } from '../io/swapArtifacts';
-import { resolveStorageForBoot } from './storageChoice';
+import { resolveStorageForBoot, supportsFolderPicker } from './storageChoice';
 import type { Api } from '../api';
 import { bundledDefaults } from './bundledDefaults';
 import { createBrowserRunExecutor } from './browserRunExecutor';
@@ -211,7 +211,16 @@ export async function bootLocalBackend(): Promise<Api> {
 
   const files = createFsaFileStore(handle, storage.label);
   const stores: Stores = createStores({ files, defaults: await bundledDefaults() });
-  const init = await stores.data.initDataDir();
+  /*
+   * ZERO-START: only the D8 demo fallback still seeds the fictional starter
+   * household — its purpose is a filled example. Every other boot (the picked
+   * folder; OPFS reached through the lane seam or a pre-cut choice) leaves an
+   * empty folder profile-less, and main.tsx renders the setup step
+   * (profileSetupNeeded in storageChoice.ts) before the app. `demo` is the
+   * same fact resolveBootGate computes: OPFS on a browser with no picker.
+   */
+  const demo = storage.kind === 'opfs' && !supportsFolderPicker();
+  const init = await stores.data.initDataDir({ seedStarterProfile: demo });
   const services: Services = createServices(stores, createBrowserRunExecutor(), {
     // The beforeunload warning, armed exactly while any scoring is in flight
     // (scoringGuard.ts — the same discipline as the search guard).
@@ -295,6 +304,12 @@ export async function bootLocalBackend(): Promise<Api> {
       engineVersion: ENGINE_VERSION,
       dataDirInitialized: init.existedBefore,
       runCache: await measureRunCache(),
+      // Asked LIVE, not snapshotted at boot: the setup step's submit writes
+      // the profile through putProfile, and the very next meta() must say so
+      // or the boot flow would loop on a stale answer. Local mode only — the
+      // legacy server seeds a profile unconditionally, so its absence there
+      // is unrepresentable and the field stays optional (like runCache).
+      profileExists: await stores.data.pathExists('profile.json'),
     }),
 
     // ----- Profile ----------------------------------------------------------

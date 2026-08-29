@@ -30,7 +30,10 @@ describe('both backends heal orphaned intents at boot, before serving anything',
   });
 
   it('the local backend heals after initDataDir and before composing its api object', () => {
-    const init = localBackend.indexOf('initDataDir()');
+    // 'initDataDir(' rather than 'initDataDir()': zero-start made the call
+    // carry its seeding declaration ({ seedStarterProfile: demo }); the
+    // ordering pinned here is unchanged.
+    const init = localBackend.indexOf('initDataDir(');
     const heal = localBackend.indexOf('await services.scoringIntents.heal()');
     const firstMethod = localBackend.indexOf('meta: async ()');
     expect(init).toBeGreaterThan(-1);

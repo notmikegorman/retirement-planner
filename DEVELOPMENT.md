@@ -118,7 +118,12 @@ FPLAN_DATA_DIR=/tmp/fplan-scratch npm run dev
 ```
 
 An empty folder is seeded on first boot with the starter profile, the assumption
-files and everything else it needs. It works entirely offline.
+files and everything else it needs. It works entirely offline. (This is the
+**legacy server's** behavior, kept on purpose — it has no setup step to collect
+a real household with. The browser app zero-starts instead: an empty folder
+gets the first-run setup step and no invented household; only the D8 demo
+fallback still seeds the starter. See `initDataDir`'s `seedStarterProfile`
+option in `src/store/dataStore.ts`.)
 
 ### When you do want the dev checkout on the real folder
 

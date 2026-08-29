@@ -247,6 +247,32 @@ export function resolveBootGate(facts: {
   return { kind: 'choose', canPickFolder: facts.canPickFolder };
 }
 
+/**
+ * THE GATE'S SECOND STAGE (zero-start, 2026-08-29): between storage-ready and
+ * app-ready. It can only be asked AFTER the backend boots — "does the folder
+ * hold a profile" is a fact about the folder, and the folder is only readable
+ * once the writer guard holds it — so it is a separate pure rule rather than
+ * a fifth BootGateState member, applied by main.tsx right after
+ * ensureBackendReady():
+ *
+ *   demo (D8's no-picker fallback)  → never setup: the demo's whole purpose
+ *                                     is a filled example, and its boot seeds
+ *                                     the starter household exactly as before;
+ *   profile present                 → the app (a populated folder — picked or
+ *                                     OPFS — is untouched and just opens);
+ *   profile absent                  → the SETUP step: collect the few facts
+ *                                     the engine cannot run without, write
+ *                                     one minimal profile through the normal
+ *                                     store path, and only then render the
+ *                                     app. Nothing is written until submit,
+ *                                     so abandoning setup and reloading lands
+ *                                     back on setup.
+ */
+export function profileSetupNeeded(facts: { demo: boolean; profileExists: boolean }): boolean {
+  if (facts.demo) return false;
+  return !facts.profileExists;
+}
+
 /** Gather the facts and apply the rule. Browser-side wrapper for main.tsx. */
 export async function computeBootGate(): Promise<BootGateState> {
   const choice = readStorageChoice();

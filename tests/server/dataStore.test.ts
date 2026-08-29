@@ -59,17 +59,20 @@ describe('getDataDir', () => {
 });
 
 describe('initDataDir seeding', () => {
-  it('seeds profile, starter reference, assumptions, and runs/ — but no scenarios/', async () => {
+  it('seeds profile, assumptions, and runs/ — but no scenarios/, and no reference copy', async () => {
     const { dataDir, existedBefore } = await initDataDir();
     expect(dataDir).toBe(tmpDir);
     // Fresh temp dir had no profile.json -> not initialized before.
     expect(existedBefore).toBe(false);
 
-    // profile.starter.json -> profile.json, plus the pristine starter alongside.
+    // profile.starter.json -> profile.json. The pristine reference copy that
+    // used to land alongside is gone with zero-start (2026-08-29): the
+    // starter's bytes live in the repo, and a copy in the data folder made
+    // the fiction look like a record.
     const seededProfile = await fs.readFile(path.join(tmpDir, 'profile.json'), 'utf8');
     const starter = await fs.readFile(path.join(defaultsDir, 'profile.starter.json'), 'utf8');
     expect(seededProfile).toBe(starter);
-    expect(await exists(path.join(tmpDir, 'profile.starter.json'))).toBe(true);
+    expect(await exists(path.join(tmpDir, 'profile.starter.json'))).toBe(false);
 
     // Every default assumptions file lands, including the tax/ subtree + CSV.
     for (const rel of [

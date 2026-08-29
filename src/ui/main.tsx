@@ -3,12 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { api, backendMode, ensureBackendReady } from './api';
 import { maybeRegisterServiceWorker } from './pwa';
-import { DemoStorageBanner, FolderReconnect, StorageChooser } from './local/StorageGate';
+import { DemoStorageBanner, FolderReconnect, ProfileSetup, StorageChooser } from './local/StorageGate';
 import {
   clearStorageChoice,
   computeBootGate,
   forgetFolderHandle,
   loadFolderHandle,
+  profileSetupNeeded,
 } from './local/storageChoice';
 import './styles.css';
 
@@ -97,8 +98,12 @@ async function chooseOtherStorage(): Promise<void> {
  * first-visit choice, folder re-grant), then the backend (folder → writer
  * guard → seed/migrate) before the first component renders, so every page
  * mounts against a guarded, migrated folder — the same position initDataDir
- * holds behind the server's listen(). HTTP mode resolves immediately and
- * renders exactly as it always has.
+ * holds behind the server's listen(). Then the gate's SECOND stage
+ * (zero-start): a folder holding no profile gets the setup step before the
+ * app — the boot no longer invents a household to skip the question
+ * (profileSetupNeeded in storageChoice.ts carries the rule; the D8 demo
+ * seeds its example and never lands here). HTTP mode resolves immediately
+ * and renders exactly as it always has.
  */
 async function boot(): Promise<void> {
   let demoStorage = false;
@@ -122,6 +127,23 @@ async function boot(): Promise<void> {
     demoStorage = gate.kind === 'ready-opfs' && gate.demo;
     try {
       await ensureBackendReady();
+      // The second stage: storage is ready, the guard is held — does the
+      // folder hold a household? meta() answers LIVE, so the re-boot after
+      // the setup write falls straight through here.
+      const meta = await api.meta();
+      if (profileSetupNeeded({ demo: demoStorage, profileExists: meta.profileExists !== false })) {
+        render(
+          <ProfileSetup
+            onSubmit={async (profile) => {
+              // The ordinary store path: validated by the same schema as any
+              // other profile write, behind the writer guard already held.
+              await api.putProfile(profile);
+              await boot();
+            }}
+          />,
+        );
+        return;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // The guard refusal keeps its own page (its heading IS the diagnosis);

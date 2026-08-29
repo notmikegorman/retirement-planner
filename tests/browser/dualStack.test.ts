@@ -865,8 +865,9 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     const runFiles = Object.keys(nodeFolder).filter((f) => f.startsWith('runs/'));
     expect(runFiles).toHaveLength(6);
     for (const expected of [
+      // No profile.starter.json: zero-start removed the reference copy from
+      // every seeded folder (see initDataDir), so neither stack writes one.
       'profile.json',
-      'profile.starter.json',
       'plan.json',
       'plan-history.json',
       'networth.json',

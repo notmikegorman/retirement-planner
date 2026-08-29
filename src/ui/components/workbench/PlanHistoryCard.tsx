@@ -43,6 +43,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlanHistoryEntry, Profile, Scenario } from '../../../shared/types';
 import { ENGINE_VERSION } from '../../../shared/types';
 import { api } from '../../api';
+import { HISTORY_FIRST_RUN, simulationReadiness } from '../../firstRun';
 import { useToast } from '../../toast';
 import { InfoTip } from '../profile/fields';
 import {
@@ -252,6 +253,14 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
     now: new Date(),
   });
 
+  /**
+   * ZERO-START'S GATE (src/ui/firstRun.ts): with zero accounts, no scoring
+   * offer renders — pressing one would run a final-quality simulation of a
+   * household that does not exist and file the number as a record. Restore
+   * stays: copying a stored plan forward simulates nothing.
+   */
+  const scoringGated = simulationReadiness(profile).state === 'no-accounts';
+
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>
@@ -296,6 +305,7 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
           <HistoryRowView
             key={row.entry.id}
             row={row}
+            scoringGated={scoringGated}
             busy={busy === row.entry.id}
             confirming={confirming === row.entry.id}
             onAskRestore={() => {
@@ -310,6 +320,12 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
           />
         ))
       )}
+
+      {scoringGated && rows.length > 0 ? (
+        <div className="field-help" style={{ marginTop: 10 }}>
+          {HISTORY_FIRST_RUN}
+        </div>
+      ) : null}
 
       <div className="field-help" style={{ marginTop: 10 }}>
         One entry per day of editing, plus anything kept on purpose. Scoring a version runs it at
@@ -329,6 +345,7 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
 
 function HistoryRowView({
   row,
+  scoringGated,
   busy,
   confirming,
   restoreQuestion,
@@ -339,6 +356,8 @@ function HistoryRowView({
   onFinish,
 }: {
   row: HistoryRow;
+  /** Zero-start's gate: no scoring offer of any kind while accounts are empty. */
+  scoringGated: boolean;
   busy: boolean;
   confirming: boolean;
   /* Computed by the parent, which is the half of the app that holds the LIST —
@@ -408,15 +427,17 @@ function HistoryRowView({
               and the label, so "which rows get a button" is one testable
               function rather than a chain of ternaries in a view. A version
               that already carries a number gets no button at all. */}
-          {offer !== null && (
+          {!scoringGated && offer !== null && (
             <button disabled={busy} onClick={onScore}>
               {offer}
             </button>
           )}
           {/* Finish scoring — only behind a still-verifying write-ahead
               intent (finishOffer holds the rule and the argument for why this
-              is not the removed re-score button back). */}
-          {finishLabel !== null && (
+              is not the removed re-score button back). Gated with the score
+              button: an intent that still "verifies" against a profile whose
+              accounts have all been deleted would complete a 0-account run. */}
+          {!scoringGated && finishLabel !== null && (
             <button className="primary" disabled={busy} onClick={onFinish}>
               {finishLabel}
             </button>

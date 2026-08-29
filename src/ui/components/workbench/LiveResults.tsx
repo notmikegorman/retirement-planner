@@ -19,6 +19,12 @@
 import type { FanChart, Profile, RunResult, Scenario } from '../../../shared/types';
 import { deriveExpenseStreams } from '../../../shared/expenses';
 import { formatPct } from '../../../shared/util';
+import {
+  FIRST_RUN_BODY,
+  FIRST_RUN_HEADLINE,
+  ZERO_SPEND_CONDITION,
+  simulationReadiness,
+} from '../../firstRun';
 import { RESULTS_TAB_IDS, type ResultsTabId } from '../../nav';
 import { CashflowTable } from '../results/CashflowTable';
 import { CharitableLegacyCard } from '../results/CharitableLegacyCard';
@@ -83,6 +89,16 @@ export interface LiveResultsProps {
   /** Which view is on screen — the URL's second segment; see WorkbenchPage. */
   tab: ResultsTabId;
   onSelectTab: (id: ResultsTabId) => void;
+  /**
+   * ZERO-START'S GATE, decided by WorkbenchPage (simulationReadiness): with
+   * no accounts there is nothing to simulate, so `result` arrives null, no
+   * run is ever started, and the tabpanel renders the first-run state — what
+   * is missing and where to add it — instead of a waiting message that would
+   * never come true.
+   */
+  firstRun: boolean;
+  /** The first-run state's one action: the Profile tab's Accounts view. */
+  onOpenAccounts: () => void;
 }
 
 /**
@@ -171,7 +187,24 @@ export function LiveResults(props: LiveResultsProps) {
       )}
 
       <div role="tabpanel" id={`wb-panel-${tab}`} aria-labelledby={`wb-tab-${tab}`}>
-        {!result ? (
+        {props.firstRun ? (
+          /*
+           * The first-run state, on EVERY tab: each of these views is a view
+           * of a simulation, and there is deliberately none. No percentage,
+           * no median, no chart — a 0-account simulation is a fiction, and
+           * this card says so instead (src/ui/firstRun.ts has the predicate
+           * and the argument).
+           */
+          <div className="card">
+            <h2 style={{ marginTop: 0 }}>{FIRST_RUN_HEADLINE}</h2>
+            <p className="muted" style={{ marginTop: 6 }}>
+              {FIRST_RUN_BODY}
+            </p>
+            <button className="primary" onClick={props.onOpenAccounts}>
+              Add your accounts
+            </button>
+          </div>
+        ) : !result ? (
           <div className="card muted">
             {running
               ? 'Running the first simulation…'
@@ -278,6 +311,31 @@ function ResultsBody({
                 death event on the Events tab to get the household back.
               </div>
             )}
+            {/*
+              THE ZERO-SPEND CONDITION (zero-start's annotate half — see
+              src/ui/firstRun.ts): a household with accounts but $0/mo of
+              recorded spending scores near 100% because nothing is ever
+              spent. The number is a true statement about the inputs, so it
+              renders — but it renders WITH its condition, in the same slot
+              and voice as the survivor warning above, because a flattering
+              fantasy read as a verdict is exactly the misreading this app
+              exists to prevent.
+            */}
+            {(() => {
+              const readiness = simulationReadiness(profile);
+              // Both facts, deliberately: the PROFILE records no spending AND
+              // this run's effective spend (plan overrides included) is $0.
+              // A plan override that sets real spending lifts the condition;
+              // a what-if override down to $0 over a real budget is the
+              // user's own typed experiment, not this caption's case.
+              const zeroSpendRun =
+                readiness.state === 'ready' && readiness.zeroSpend && annualSpend === 0;
+              return zeroSpendRun ? (
+                <div className="lib-warning warn" style={{ marginTop: 0, marginBottom: 10 }}>
+                  {ZERO_SPEND_CONDITION}
+                </div>
+              ) : null;
+            })()}
             <div className={`verdict ${verdict.tone}`}>{verdict.headline}</div>
             {verdict.timing ? (
               <>
