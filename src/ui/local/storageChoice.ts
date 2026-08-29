@@ -3,11 +3,15 @@
  * remembers its answer.
  *
  * Shipped, the first local-mode visit must ask one question before anything
- * touches storage: a real folder on disk (the durable choice — the same
- * plain-JSON folder the Node server always kept, reached through
- * showDirectoryPicker) or browser-private storage (OPFS: zero prompts, good
- * for trying the app, honestly labelled as living inside the browser
- * profile). This module owns:
+ * touches storage. On a picker-capable browser the question has ONE visible
+ * answer — a real folder on disk (the same plain-JSON folder the Node server
+ * always kept, reached through showDirectoryPicker); on Safari/Firefox the
+ * only door is browser-private OPFS demo storage (D8). The OPFS card the
+ * chooser used to offer beside the folder was cut on 2026-08-29 after the
+ * owner's first real test-drive (DECISIONS.md, "The chooser loses its second
+ * answer") — the OFFER went away, the storage did not: a remembered 'opfs'
+ * choice from before the cut still boots, and the browser test lanes keep
+ * booting OPFS through the seam below. This module owns:
  *
  *   - the remembered CHOICE ('opfs' | 'folder'), in localStorage — the same
  *     shelf as the backend-mode memory, because both answer "how does this
@@ -33,6 +37,19 @@ import { randomHex } from '../../shared/random';
 
 export type StorageChoice = 'opfs' | 'folder';
 
+/**
+ * The remembered choice's localStorage key — and, deliberately, THE SEAM the
+ * browser test lanes boot OPFS through. Headless Chromium ships
+ * showDirectoryPicker (so the chooser shows only the folder action) but can
+ * never complete the native dialog, so every lane pre-seeds
+ * `localStorage['fplan-storage'] = 'opfs'` before boot — the Phase-7
+ * returning-user mechanism, and byte-identical to what the retired chooser
+ * button used to write, which is also why a real user who chose
+ * browser-private storage before the 2026-08-29 cut still boots. Test-only
+ * in spirit on picker-capable browsers: since the cut, no visible UI on such
+ * a browser writes 'opfs' (pinned by the pages-walkthrough lane); only D8's
+ * no-picker fallback button still does.
+ */
 export const STORAGE_CHOICE_KEY = 'fplan-storage';
 
 /** The OPFS directory the browser-private mode keeps the data folder in. */
@@ -199,7 +216,12 @@ export type BootGateState =
  *   choice null            → choose (the first-visit question)
  *   choice opfs            → ready; demo iff this browser has no picker,
  *                            because then OPFS was never a choice — it was
- *                            the only door, and the app must keep saying so
+ *                            the only door, and the app must keep saying so.
+ *                            On a picker browser a remembered 'opfs' predates
+ *                            the 2026-08-29 chooser cut or came through the
+ *                            lane seam (STORAGE_CHOICE_KEY) — either way it
+ *                            boots, un-nagged: the cut removed the offer,
+ *                            never the storage
  *   choice folder, handle gone (site data cleared)     → choose again
  *   choice folder, permission granted                  → ready
  *   choice folder, permission prompt/denied            → reconnect: the

@@ -11,8 +11,13 @@
  *     gesture, which the browser silently rejects — a boot that hangs;
  *   - the demo flag wrongly false would let a Safari session believe its
  *     edits are durable records (the exact lie D8's banner exists to
- *     prevent); wrongly true, it would nag a Chromium user who chose OPFS
- *     knowingly.
+ *     prevent); wrongly true, it would nag a Chromium user whose OPFS is a
+ *     knowing pre-cut choice (or a lane's seeded one) — see the stranded-
+ *     user case below;
+ *   - and since the 2026-08-29 chooser cut ("The chooser loses its second
+ *     answer", DECISIONS.md), a remembered 'opfs' answered 'choose' would
+ *     STRAND every user who picked browser-private storage while it was
+ *     offered — the cut removed the offer, never the storage.
  */
 import { describe, expect, it } from 'vitest';
 import { parseStorageChoice, resolveBootGate } from '../../src/ui/local/storageChoice';
@@ -50,7 +55,12 @@ describe('resolveBootGate', () => {
     expect(gate({ canPickFolder: false })).toEqual({ kind: 'choose', canPickFolder: false });
   });
 
-  it('a remembered OPFS choice boots straight in — no re-asking', () => {
+  it('a remembered OPFS choice boots straight in — the chooser cut must never strand one', () => {
+    // Nobody can make this choice through visible UI on a picker browser any
+    // more (the walkthrough lane pins that), but everyone who made it before
+    // the 2026-08-29 cut still carries 'opfs' in localStorage — and the
+    // browser lanes seed the same value through the STORAGE_CHOICE_KEY seam.
+    // Both must land here: ready, no re-asking, no demo nag.
     expect(gate({ choice: 'opfs' })).toEqual({ kind: 'ready-opfs', demo: false });
   });
 

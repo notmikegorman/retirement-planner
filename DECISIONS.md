@@ -1564,3 +1564,44 @@ recording:
   in-flight registry, `spendInterrupted` off the intent list) and the
   permanent sentence renders only when both are false, on the Net Worth
   spend tooltip and the History tab alike.
+
+## The chooser loses its second answer (2026-08-29)
+
+The owner's first real test-drive of the live page opened, as designed, on
+the storage chooser — and his first reaction was that the "Browser-private
+storage" card should not be there. He is right in the way only a first
+impression can be: on a browser that ships the folder picker, the page was
+asking one question and offering two answers, and the second answer's only
+honest selling point was "you don't have to answer the real question yet."
+So the card is gone. A picker-capable browser now sees exactly one storage
+action — pick a folder — and the walkthrough lane pins it structurally: one
+button on the chooser page, no "Browser-private" text, no visible UI path
+that writes the `opfs` choice.
+
+What did NOT change is everything underneath the offer:
+
+- **Safari/Firefox are untouched (D8).** No picker means the demo fallback
+  was never a second choice — it is those browsers' only door, warning
+  banner, demo-scoped boot, standing banner and all. The fallback card, its
+  wording, and its button are byte-for-byte what they were.
+- **Nobody is stranded.** Anyone who chose browser-private storage while it
+  was offered still carries `opfs` in localStorage, and the boot gate still
+  answers `ready-opfs` for it, demo-flag false, no re-asking — the cut
+  removed the OFFER, never the storage. Pinned in node
+  (`tests/ui/storageGate.test.ts`) and in a real browser (the walkthrough's
+  seeded-OPFS leg).
+- **The lanes keep OPFS alive through the seam that already existed.**
+  Headless Chromium ships `showDirectoryPicker` but cannot complete the
+  native dialog, so no lane can click through the one remaining action.
+  Every browser lane therefore boots OPFS the Phase-7 returning-user way:
+  pre-seed `localStorage['fplan-storage'] = 'opfs'` (documented at
+  `STORAGE_CHOICE_KEY` in storageChoice.ts). The walkthrough — previously
+  the one lane that clicked the visible OPFS button — now seeds the same
+  key after asserting the chooser, which is deliberate double duty: the
+  write is byte-identical to a pre-cut user's remembered choice, so the
+  test-lane mechanism and the never-strand proof are the same test. No
+  second mechanism was invented; the seam is test-only in spirit on picker
+  browsers because no visible UI writes that value any more.
+- **Switch storage still means what it says.** Dashboard → Switch storage
+  returns to the chooser; on a picker browser that now reads as "pick a
+  different folder," which is what the affordance was for.

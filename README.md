@@ -24,10 +24,11 @@ telemetry — and your data never leaves your computer.
 ## The first question the app asks: where should your data live?
 
 Everything the planner knows is stored as pretty-printed JSON files. On your
-first visit you choose where those files go, and the choice is the most
-important thing on this page:
+first visit the app asks once where those files should live — one question,
+and in a browser that ships the folder picker (Chrome, Edge, Brave) it has
+one answer:
 
-### A folder on this computer — the durable choice
+### A folder on this computer
 
 Pick any folder (the button uses the browser's folder picker). Your profile,
 plan, plan history, and net-worth ledger live there as plain files —
@@ -42,14 +43,19 @@ ask again with a single **Reconnect** click. Installing the page as an app
 (the install icon in Chrome's address bar — "Add to Dock" on a Mac) makes the
 grant stick so it stops asking.
 
-### Browser-private storage — the convenient choice
+Picked the wrong folder? **Dashboard → Switch storage** returns to the
+question so you can pick a different one; it never touches the folder or the
+files in it.
 
-No picker, no prompts: files live inside the browser profile itself. Good for
-trying the app in thirty seconds — but the files are invisible on disk,
-**Clear browsing data erases all of them**, and no ordinary backup ever sees
-them. The chooser says this to your face; believe it. You can switch to a
-real folder later (Dashboard → Switch storage), though the switch does not
-move data for you.
+### No folder picker? The demo fallback (Safari, Firefox)
+
+Browsers without the File System Access API cannot hold a durable folder
+connection, so they get the one thing they can honestly offer: the full app
+in browser-private demo storage, behind a standing banner that says so. The
+files live inside the browser profile itself, invisible on disk — good for
+trying the app in thirty seconds, but **Clear browsing data erases all of
+them**, and no ordinary backup ever sees them. For real, file-backed use,
+open the page in Chrome, Edge, or Brave.
 
 ### What's in the folder
 

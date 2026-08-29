@@ -8,10 +8,19 @@
  *
  * The WORDS carry the design. Every claim on these screens is one the code
  * keeps: the folder option really is plain JSON files the owner can read
- * and back up; browser-private storage really does vanish with Clear
- * browsing data; simulations really do run on this machine only. The
- * chooser must persuade nobody — it exists so the durable choice and the
- * convenient choice are made knowingly.
+ * and back up; demo storage really does vanish with Clear browsing data;
+ * simulations really do run on this machine only.
+ *
+ * ONE QUESTION, ONE ANSWER (2026-08-29, DECISIONS.md "The chooser loses its
+ * second answer"): on a picker-capable browser the chooser offers exactly
+ * one storage action — pick a folder. The browser-private (OPFS) card the
+ * owner was greeted with on his first real test-drive is gone; no visible
+ * UI on such a browser writes the 'opfs' choice any more (the walkthrough
+ * lane pins this). OPFS itself stays fully alive underneath: the no-picker
+ * fallback below is Safari/Firefox's only door (D8, unchanged), and a
+ * remembered 'opfs' choice — anyone who picked browser-private storage
+ * while it was offered, or a test lane seeding the choice — still boots
+ * straight in (storageChoice.ts owns that rule).
  */
 import { useState, type CSSProperties } from 'react';
 import {
@@ -61,7 +70,8 @@ export function StorageChooser({
     }
   }
 
-  function useBrowserStorage(): void {
+  /** D8's only door — rendered ONLY when this browser has no folder picker. */
+  function tryDemoStorage(): void {
     writeStorageChoice('opfs');
     requestPersistenceQuietly();
     onChosen();
@@ -76,12 +86,25 @@ export function StorageChooser({
       </p>
 
       {!canPickFolder ? (
-        <div className="warn-banner" role="status">
-          This browser can&apos;t hold a durable folder connection — the folder picker (the File
-          System Access API) ships in Chrome, Edge, and Brave. You can still explore the whole
-          app in browser-private demo storage below; for real, file-backed use, open this page
-          in one of those browsers.
-        </div>
+        <>
+          <div className="warn-banner" role="status">
+            This browser can&apos;t hold a durable folder connection — the folder picker (the
+            File System Access API) ships in Chrome, Edge, and Brave. You can still explore the
+            whole app in browser-private demo storage below; for real, file-backed use, open
+            this page in one of those browsers.
+          </div>
+          <div className="card">
+            <h2 style={{ marginTop: 0 }}>Browser-private demo storage</h2>
+            <p className="muted">
+              No picker and no prompts: the files live inside this browser profile, invisible on
+              disk. Good for trying the app — but Clear browsing data erases everything, and no
+              ordinary backup ever sees it.
+            </p>
+            <button className="primary" onClick={tryDemoStorage}>
+              Try it in demo storage
+            </button>
+          </div>
+        </>
       ) : (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>A folder on this computer</h2>
@@ -89,7 +112,7 @@ export function StorageChooser({
             Your profile, plan, and net-worth ledger live as plain JSON files in a folder you
             pick — readable, diffable, and yours to back up (copy it, git it, sync it). Pick an
             empty folder to start fresh with a starter household, or pick a folder that already
-            holds planner data to open it. This is the durable choice.
+            holds planner data to open it.
           </p>
           <button className="primary" onClick={() => void pickFolder()}>
             Pick a folder…
@@ -97,25 +120,12 @@ export function StorageChooser({
         </div>
       )}
 
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>
-          {canPickFolder ? 'Browser-private storage' : 'Browser-private demo storage'}
-        </h2>
-        <p className="muted">
-          No picker and no prompts: the files live inside this browser profile, invisible on
-          disk. Good for trying the app — but Clear browsing data erases everything, and no
-          ordinary backup ever sees it.
-          {canPickFolder ? ' You can switch to a real folder later (Dashboard → Switch storage).' : ''}
-        </p>
-        <button className={canPickFolder ? '' : 'primary'} onClick={useBrowserStorage}>
-          {canPickFolder ? 'Use browser-private storage' : 'Try it in demo storage'}
-        </button>
-      </div>
-
       {error !== null ? <div className="error-banner">Could not use that folder: {error}</div> : null}
 
       <p className="muted">
-        Either way: simulations run on this machine, and your data never leaves it.
+        {canPickFolder
+          ? 'Whichever folder you pick: simulations run on this machine, and your data never leaves it.'
+          : 'Either way: simulations run on this machine, and your data never leaves it.'}
       </p>
     </div>
   );

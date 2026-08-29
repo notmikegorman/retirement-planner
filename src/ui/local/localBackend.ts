@@ -15,11 +15,12 @@
  * guard's own message; main.tsx renders it instead of the app.
  *
  * THE FOLDER comes from the boot gate (Phase 7, storageChoice.ts): either
- * the PICKED real folder (showDirectoryPicker, the durable choice) or the
- * OPFS folder (browser-private storage — the explicit second choice, the
- * D8 demo fallback, and what every automated test drives, since a picker
- * cannot be scripted headlessly). Nothing here may care which one it was
- * handed (the driver's own rule, fsaFileStore.ts).
+ * the PICKED real folder (showDirectoryPicker — since the 2026-08-29
+ * chooser cut, the only visible answer on a picker browser) or the OPFS
+ * folder (browser-private storage — the D8 demo fallback, any choice
+ * remembered from before the cut, and what every automated test drives,
+ * since a picker cannot be scripted headlessly). Nothing here may care
+ * which one it was handed (the driver's own rule, fsaFileStore.ts).
  *
  * QUOTES GO THROUGH THE PHASE-6 PROXY, once one is configured. Browsers
  * cannot call Yahoo's endpoint directly (no CORS header, mandatory

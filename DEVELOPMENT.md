@@ -170,8 +170,10 @@ or bake a default with `VITE_FPLAN_BACKEND=local`. Since Phase 7 the DEPLOYED
 app (GitHub Pages, `npm run build:pages`) bakes local as its default; the
 REPO default for `npm run dev` / `npm start` stays HTTP, pinned by
 `tests/ui/backendMode.test.ts`. In local mode the first visit asks where data
-should live (`src/ui/local/storageChoice.ts` — a picked real folder, or
-browser-private OPFS), and quote refreshes flow through the Phase-6 proxy
+should live (`src/ui/local/storageChoice.ts` — a picked real folder; browsers
+without the picker fall back to browser-private OPFS demo storage, and a
+remembered OPFS choice from before the 2026-08-29 chooser cut still boots),
+and quote refreshes flow through the Phase-6 proxy
 once one is configured (`workers/quote-proxy/README.md`; per-symbol honest
 failures until then).
 
@@ -268,11 +270,15 @@ proxy handler mounted on a node adapter). Phase 7 added
 Pages bundle (base `/retirement-planner/`, local default, the 404 trick from
 `scripts/pagesExtras.ts`), serves it with GitHub Pages' own semantics
 (prefix + 404.html-with-status-404), and drives it as a brand-new user from
-the first-visit storage chooser through runs, a snapshot, a
-cached-final-run-restoring reload, a deep-link reload via the 404 trick, and
-the no-picker demo fallback. It is the only lane that executes the base path
-and the only one that sees the chooser (every other lane pre-seeds
-`fplan-storage=opfs` as a returning user); it also asserts the service
+the first-visit storage chooser (asserted single-action: since the
+2026-08-29 chooser cut, no visible UI reaches OPFS on a picker browser)
+through runs, a snapshot, a cached-final-run-restoring reload, a deep-link
+reload via the 404 trick, and the no-picker demo fallback. It is the only
+lane that executes the base path and the only one that sees the chooser
+(every lane, this one included, boots OPFS by pre-seeding
+`fplan-storage=opfs` — headless Chromium cannot complete the native folder
+dialog, and the seeded value doubles as a pre-cut browser-private user's
+remembered choice); it also asserts the service
 worker stays UNREGISTERED in the lane — registration is opt-in per build via
 `VITE_FPLAN_SW=1`, which only `build:pages` sets.
 The lane is deliberately not part of

@@ -6,7 +6,11 @@
  * own semantics (staticServer's basePath + pages404 emulation), and driven
  * as a brand-new user who just clicked the URL:
  *
- *   boot screen (THE question) → choose browser-private storage → the
+ *   boot screen (THE question, one visible action since the 2026-08-29
+ *   chooser cut) → OPFS seeded through the storage-choice seam (headless
+ *   Chromium ships the picker API but cannot complete the native dialog;
+ *   the seeded value is byte-identical to a pre-cut browser-private user's
+ *   remembered choice, so this leg IS the never-strand proof) → the
  *   starter household appears → the quick run completes → drive-scale
  *   profile through the seam → Run now (fixture-fed quote refresh, then
  *   the final-quality run) → a net-worth snapshot with score AND spend
@@ -20,8 +24,12 @@
  * Every other browser test serves at '/', where a forgotten stripBase or a
  * bare-rooted worker URL is invisible; here, any path assumption that
  * escapes the base 404s loudly. It is also the only place the FIRST-VISIT
- * chooser is driven (every other lane pre-seeds the choice as a returning
- * user), and the place that pins the lane discipline for the service
+ * chooser is rendered and asserted — including the pin that no visible UI
+ * path reaches OPFS on a picker-capable browser (every other lane pre-seeds
+ * the choice as a returning user via addInitScript; this one seeds the same
+ * key mid-walkthrough, after the chooser assertions, for the same reason:
+ * the native folder dialog is undrivable headless). It is also the place
+ * that pins the lane discipline for the service
  * worker: the walkthrough build does NOT set VITE_FPLAN_SW, so nothing
  * registers — asserted, so a future registration cannot quietly start
  * intercepting lane traffic.
@@ -118,22 +126,40 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     await staticServer?.close();
   });
 
-  it('a brand-new visit under the base asks THE question', async () => {
+  it('a brand-new visit under the base asks THE question — one action, no OPFS door', async () => {
     await page.goto(`${staticServer.origin}${BASE}/`);
     await chooserHeading().waitFor({ state: 'visible', timeout: 60_000 });
-    // Chromium ships the picker, so the durable option leads…
+    // Chromium ships the picker, so the folder action is THE answer…
     await expect
       .poll(() => page.getByRole('button', { name: 'Pick a folder…' }).isVisible())
       .toBe(true);
-    // …and the browser-private option is labelled with its honest cost.
+    // …and it is the ONLY action: the browser-private card was cut on
+    // 2026-08-29 (DECISIONS.md, "The chooser loses its second answer").
+    // Exactly one button on the page pins that no visible UI path reaches
+    // OPFS on a picker-capable browser — the seam in the next leg is the
+    // only way there, which is the whole point of the seam's documentation.
+    expect(await page.locator('button').count()).toBe(1);
     const chooserText = await page.locator('body').innerText();
-    expect(chooserText).toContain('Clear browsing data erases everything');
+    expect(chooserText).not.toContain('Browser-private');
     expect(chooserText).toContain('simulations run on this machine');
+    expect(chooserText).toContain('your data never leaves it');
   }, 120_000);
 
-  it('choosing browser-private storage boots the starter household and its quick run', async () => {
-    await page.getByRole('button', { name: 'Use browser-private storage' }).click();
+  it('a remembered OPFS choice (pre-cut user, or the lane seam) still boots the starter household', async () => {
+    // Headless Chromium cannot complete the native folder dialog, so the
+    // lane cannot click through the one visible action. It boots OPFS the
+    // way every other lane always has (Phase 7's returning-user pre-seed):
+    // write the remembered choice and reload. The written value is
+    // byte-identical to what the retired "Use browser-private storage"
+    // button stored, so this leg doubles as the never-strand proof — anyone
+    // who chose browser-private storage before the cut boots exactly like
+    // this, with no chooser and no demo banner (D8's banner is for
+    // browsers where OPFS was never a choice).
+    await page.evaluate(() => localStorage.setItem('fplan-storage', 'opfs'));
+    await page.reload();
     await verdict().waitFor({ state: 'visible', timeout: 240_000 });
+    expect(await chooserHeading().count()).toBe(0);
+    expect(await page.locator('.demo-banner').count()).toBe(0);
     // The starter household seeded from bundled defaults: Alex and Jordan.
     const profile = await page.evaluate(() =>
       (window as unknown as { __fplanApi: { getProfile(): Promise<Profile> } }).__fplanApi
@@ -347,6 +373,9 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     const chooserText = await fbPage.locator('body').innerText();
     expect(chooserText).toContain("This browser can't hold a durable folder connection");
     expect(chooserText).toContain('open this page in one of those browsers');
+    // The honest-cost sentence moved here with the card: on these browsers
+    // the demo door still says what it costs, exactly as before the cut.
+    expect(chooserText).toContain('Clear browsing data erases everything');
     expect(await fbPage.getByRole('button', { name: 'Pick a folder…' }).count()).toBe(0);
 
     await fbPage.getByRole('button', { name: 'Try it in demo storage' }).click();
