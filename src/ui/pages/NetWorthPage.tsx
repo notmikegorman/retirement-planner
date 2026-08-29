@@ -985,7 +985,14 @@ export function NetWorthPage(_props: PageProps) {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Total over time, piece by piece</h2>
         {bars.length === 0 ? (
-          <div className="muted">No snapshots yet — the first one is yours to take, above.</div>
+          /* Condition-aware: with the zero-start gate up, the card above holds
+             the no-accounts note INSTEAD of a Take-snapshot button, and "yours
+             to take, above" would point at a button that is not there. */
+          <div className="muted">
+            {snapshotGated
+              ? 'No snapshots yet — the first becomes possible once the profile has accounts.'
+              : 'No snapshots yet — the first one is yours to take, above.'}
+          </div>
         ) : (
           <>
             {/* Tall on purpose. The chart's content is the SLICES, and at 260px a

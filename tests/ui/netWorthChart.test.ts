@@ -469,6 +469,19 @@ describe('the chart type (source scan)', () => {
     expect(page).toContain('a record of what you saw, not a projection');
   });
 
+  it('the empty-chart caption is condition-aware under the zero-start gate', () => {
+    // With zero accounts the card above replaces the Take-snapshot button
+    // with the no-accounts note — so "yours to take, above" would point at a
+    // button that is not there. The caption switches on the same gate the
+    // button does.
+    expect(page).toContain(
+      'No snapshots yet — the first becomes possible once the profile has accounts.',
+    );
+    const caption = page.slice(page.indexOf('No snapshots yet — the first becomes possible'));
+    expect(page).toMatch(/\{snapshotGated\s*\n?\s*\? 'No snapshots yet — the first becomes/);
+    expect(caption).toBeTruthy();
+  });
+
   it('gives the stack room, and gridlines close enough to read a boundary against', () => {
     // Doubled from 260: the content of this chart is the SLICES, and $28k of
     // savings inside a $3.6M bar was under two pixels — present, correct and
