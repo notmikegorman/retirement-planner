@@ -168,8 +168,21 @@ behind the writer guard, no server anywhere. Opt in with `?backend=local` on
 any URL (remembered in localStorage so reloads keep the mode; `?backend=http`
 selects HTTP and forgets), or build with `VITE_FPLAN_BACKEND=local`. In local
 mode, quote refreshes fail per-symbol until Phase 6's proxy exists (the
-message says so), and the Search page says honestly that search hasn't been
-ported yet (Phase 5). The default flips to local at Phase 7, not before.
+message says so). The default flips to local at Phase 7, not before.
+
+**Search in local mode (browser-port Phase 5).** The Search page works
+identically on both backends: in local mode the shared executor
+(`src/store/search/`) runs inside a dedicated coordinator worker
+(`src/ui/workers/searchWorker.ts`) over a persistent Web Worker score pool —
+off the main thread, so a backgrounded tab's timer throttling cannot stall a
+twenty-minute search. All folder IO stays on the guarded main context (the
+coordinator proxies reads/writes back as messages), reports persist to
+`searches/<id>.json` and slim scores to `searches/scores/` exactly as the
+server writes them. The one honest difference is decision D5's default: the
+tab IS the process, so closing it mid-search loses that search's progress —
+a beforeunload warning is armed while one runs, a CANCELLED search still
+writes its partial report, and a killed one is forgotten on reopen rather
+than pretended alive.
 
 ## Checks
 
@@ -206,8 +219,14 @@ scripted session through it twice — once against a privately spawned Node
 server (ephemeral port, temp data dir, fixture-fed quotes via
 `FPLAN_QUOTE_FIXTURES_DIR`), once in local mode (`?backend=local`) over
 seeded OPFS — then byte-diffs the two data folders and the run cache under
-enumerated masks and compares the on-screen story verbatim. The lane is
-deliberately not part of
+enumerated masks and compares the on-screen story verbatim. Phase 5 extended
+the same file with the search legs: one small-but-real search driven through
+each stack's own seam must persist byte-equal reports (masks: searchId,
+createdAt, elapsedMs — ids and wall clock, nothing else) and identical
+slim-score trees including their runKey filenames, and a second oversized
+search cancelled mid-flight must leave the same truncated-partial-report
+shape verbatim, with the beforeunload guard observed arming and disarming.
+The lane is deliberately not part of
 `npm test`: it pays for a bundle build and a browser launch (~10s), and the
 fast loop must stay fast. Run it whenever you touch `src/engine`, `src/tax`,
 `src/shared`, `src/store`, `src/ui/io`, the workers, or anything
@@ -252,8 +271,11 @@ src/
   engine/    the simulation. Deterministic, no IO, no network.
   tax/       federal + VA/SC/NC, ACA, Medicare, Social Security
   shared/    types, schemas, and the helpers both halves use
-  server/    Fastify routes, the data-folder stores, run and search managers
-  ui/        React, one page, no router library
+  store/     the environment-neutral stores, services and search core
+             (both backends run THIS; node/browser wiring stays out of it)
+  server/    Fastify routes and the node faces over src/store
+  ui/        React, one page, no router library; ui/local + ui/io + ui/workers
+             are the browser backend (drivers, guard, sim/search workers)
 scripts/
   lib/       the parts with logic, in TypeScript so they can be tested
   *.sh       install, update, uninstall, service control

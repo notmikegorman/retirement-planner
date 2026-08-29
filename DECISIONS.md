@@ -1411,3 +1411,58 @@ recording:
 - **Interruption semantics are unchanged by design.** A killed tab leaves a
   scoreless row exactly as a killed server did; the write-ahead intent file
   and unload guard are Phase 6's work, deliberately not smuggled in early.
+
+## Search in the browser (browser-port Phase 5, 2026-08-29)
+
+The search system followed the Phase-4 extraction pattern to its end: the
+executor, the cached evaluator, the compiler/sampler/statistics and the
+search manager moved whole to `src/store/search/` + `src/store/searchManager.ts`
+(environment-neutral, pinned Node-free), with `src/server/search/*` reduced to
+node faces that keep every historical import path and test meaning. The pool
+became an interface with two implementations honouring one contract — the
+worker_threads pool byte-for-byte as it was, and a persistent Web Worker pool
+sized `min(8, max(2, hardwareConcurrency - 2))`, the node formula on the
+browser's honest core count. The decisions worth recording:
+
+- **The coordinator is a worker, and it owns its pool.** Browsers throttle
+  main-thread timers in hidden tabs; a twenty-minute search coordinated from
+  the page would crawl the moment the user tabbed away. The executor runs in
+  a dedicated coordinator worker (`src/ui/workers/searchWorker.ts`) which
+  spawns its own score workers — workers-in-workers is exactly what keeps
+  every computing and scheduling part of the search off the main thread.
+
+- **The write boundary is absolute: the coordinator performs no folder IO.**
+  Every readScore/writeScore/readCachedResult crosses back to the guarded
+  main context as a message and goes through the same composed stores as
+  every other write in local mode, so the single-writer discipline and the
+  serialized chains hold with zero new writers. The cost is a message
+  round-trip per cache probe — noise against a ~second of simulation per
+  evaluation; the alternative costs the invariant protecting irreplaceable
+  records.
+
+- **D5 stands at its default: no round-checkpointing.** A killed tab loses a
+  running search's progress, honestly: a beforeunload confirmation is armed
+  exactly while one is in flight (and observed arming/disarming in the
+  gate), a cancelled search still writes its truncated partial report, and a
+  killed one leaves no file and no registry entry — the reopened page's
+  bookmark 404s and is forgotten, the same sequence a restarted server
+  produces. Nothing pretends the search survived.
+
+- **The dual-stack gate grew the search legs and immediately caught a real
+  fork.** The persisted reports were byte-identical for 4,041 characters and
+  then one ULP apart inside a ci95: the ES spec lets engines approximate
+  Math.log/Math.exp, and node's V8 disagrees with Chromium's by one ULP on
+  some inputs. Fixed on the Phase-0 sha256 pattern — vendored fdlibm log/exp
+  (`src/store/search/ieee754.ts`, correctly-rounded arithmetic and integer
+  bit ops only, bit-identical on every engine) swapped into the statistics'
+  five transcendental call sites, faithfulness pinned by a 200k-case ULP
+  sweep. The ENGINE keeps native Math on purpose: its cross-environment
+  fidelity is proven directly by the parity gate, and swapping proven math
+  on suspicion would risk the numbers the gate pins.
+
+- **Cancellation crosses as a message, not a poll.** The manager's runner
+  seam hands back `{report, cancel()}`; under node cancel flips the same
+  closure boolean it always did, in the browser it posts into the
+  coordinator, whose event loop is idle between chunks while the pool
+  computes — so a cancel lands at the next chunk boundary in both worlds and
+  the truncated-report wording is shared code, compared verbatim by the gate.
