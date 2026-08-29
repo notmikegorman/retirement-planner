@@ -14,11 +14,13 @@
  *     classes the server maps to statuses, thrown with the same messages, so
  *     a component reading `err.message` sees identical text either way.
  *
- * SELECTION IS EXPLICIT, AT BOOT, and the default is HTTP until Phase 7 flips
- * it: `?backend=local` in the URL (remembered in localStorage so in-app
- * navigation and reloads stay in the chosen mode; `?backend=http` clears it),
- * or a build with VITE_FPLAN_BACKEND=local. resolveBackendMode below is the
- * whole rule, in one pure function.
+ * SELECTION IS EXPLICIT, AT BOOT: `?backend=local` in the URL (remembered in
+ * localStorage so in-app navigation and reloads stay in the chosen mode;
+ * `?backend=http` clears it), or a build with VITE_FPLAN_BACKEND=local.
+ * resolveBackendMode below is the whole rule, in one pure function. Phase 7
+ * split the DEFAULT by build: the Pages deploy (build:pages) bakes local;
+ * the repo's own builds — npm run dev, npm start, the parked legacy server —
+ * stay HTTP, pinned by tests/ui/backendMode.test.ts.
  *
  * The local implementation is a DYNAMIC import: an HTTP-mode session loads
  * not one byte of the engine/stores bundle, and today's served app behaves
@@ -269,8 +271,8 @@ const BACKEND_STORAGE_KEY = 'fplan-backend';
  *      do. `?backend=http` both selects and forgets, so it stays the
  *      one-query-parameter escape hatch the dual-boot exists for.
  *   2. Otherwise the remembered choice.
- *   3. Otherwise the build's default (VITE_FPLAN_BACKEND — Phase 7 will ship
- *      'local' here), else HTTP.
+ *   3. Otherwise the build's default (VITE_FPLAN_BACKEND — 'local' in the
+ *      shipped Pages build, unset in the repo's own builds), else HTTP.
  */
 export function resolveBackendMode(opts: {
   queryBackend: string | null;
