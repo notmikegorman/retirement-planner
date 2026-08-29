@@ -67,6 +67,7 @@ import {
   historyEmptyNote,
   historyRows,
   kindTag,
+  restoredWhat,
   restoreOutcome,
   restorePrompt,
   rowTitle,
@@ -260,7 +261,9 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
         filed: after.some((e) => !idsBefore.includes(e.id)),
       });
       onRestored(res.plan);
-      showToast(`Restored “${res.restoredFrom.label ?? 'an unnamed version'}”`);
+      // The toast names the entry the way every announcement does — the
+      // label, or the moment standing in as the name (restoredWhat's rule).
+      showToast(`Restored ${restoredWhat(res.restoredFrom)}`);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {

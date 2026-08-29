@@ -48,6 +48,7 @@ import {
   planVersionWarnings,
   readScore,
   relativeTime,
+  restoredWhat,
   rowTitle,
   scoringOffer,
   restoreOutcome,
@@ -425,6 +426,39 @@ describe('restoring asks first, and says afterwards what it actually did', () =>
     expect(text).toContain('Restored “Aug 18”');
     expect(text).toContain('it is the plan on screen now');
     expect(text).toContain('filed first, at the top of this list, so this restore is itself undoable');
+  });
+
+  it('names an unnamed restore by its moment — the dead phrase stays dead after the act', () => {
+    // The ledger killed "Unnamed version" everywhere a user reads, and the
+    // post-restore sentence and its toast are places a user reads: quoting
+    // “an unnamed version” as though it were a name is the same blank the
+    // row title stopped printing (restoredWhat's rule).
+    const restoredFrom = entry({ id: 'old' }); // unlabeled — the moment is the name
+    const after = [entry({ id: 'freshly-filed', takenAt: '2026-08-20T13:00:00.000Z' }), restoredFrom];
+    const text = restoreOutcome(restoredFrom, ['old'], after, NOW);
+    expect(text).toContain(`Restored the version taken ${historyMoment(restoredFrom.takenAt)}`);
+    expect(text.toLowerCase()).not.toContain('unnamed');
+    // And the helper itself, both ways: the label with its moment, or the
+    // moment standing in as the name.
+    expect(restoredWhat(entry({ label: 'Aug 18' }))).toBe(
+      `“Aug 18”, taken ${historyMoment(entry().takenAt)}`,
+    );
+    expect(restoredWhat(entry({ label: '   ' }))).toBe(
+      `the version taken ${historyMoment(entry().takenAt)}`,
+    );
+  });
+
+  it('names an unlabeled day-start point by its moment in the nothing-was-filed sentence', () => {
+    const restoredFrom = entry({ id: 'old', label: 'Aug 18' });
+    const todaysPoint = entry({ id: 'today', kind: 'day-start', takenAt: NOW.toISOString() });
+    const text = restoreOutcome(restoredFrom, ['old', 'today'], [todaysPoint, restoredFrom], NOW);
+    expect(text).toContain(`restore point (taken ${historyMoment(todaysPoint.takenAt)})`);
+    expect(text.toLowerCase()).not.toContain('unnamed');
+  });
+
+  it('the toast names the restore through the same rule (source scan)', () => {
+    expect(card).toContain('showToast(`Restored ${restoredWhat(res.restoredFrom)}`)');
+    expect(card).not.toContain('an unnamed version');
   });
 
   it('does NOT repeat the button’s promise when the day’s restore point already existed', () => {

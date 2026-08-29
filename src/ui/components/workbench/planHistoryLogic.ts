@@ -471,6 +471,20 @@ export function historyRows(
     });
 }
 
+/**
+ * What a restore announcement calls an entry — rowTitle's rule, for a raw
+ * entry: the owner's label (with the moment beside it, since the announcement
+ * stands apart from the list), or the moment standing in as the name. The
+ * ledger killed "Unnamed version" everywhere a user reads, and the
+ * post-restore sentence and its toast are places a user reads.
+ */
+export function restoredWhat(entry: Pick<PlanHistoryEntry, 'label' | 'takenAt'>): string {
+  const named = entry.label !== undefined && entry.label.trim() !== '';
+  return named
+    ? `“${entry.label}”, taken ${historyMoment(entry.takenAt)}`
+    : `the version taken ${historyMoment(entry.takenAt)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Grouping identical plans (the ledger redesign, 2026-08-29)
 // ---------------------------------------------------------------------------
@@ -673,9 +687,7 @@ export function restoreOutcome(
   after: readonly PlanHistoryEntry[],
   now: Date,
 ): string {
-  const restored = `Restored “${restoredFrom.label ?? 'an unnamed version'}”, taken ${historyMoment(
-    restoredFrom.takenAt,
-  )} — it is the plan on screen now.`;
+  const restored = `Restored ${restoredWhat(restoredFrom)} — it is the plan on screen now.`;
   const filed = after.find((e) => !idsBefore.includes(e.id));
   if (filed !== undefined) {
     return (
@@ -693,10 +705,14 @@ export function restoreOutcome(
     // saying so.
     return `${restored} Nothing new was filed — check the list before relying on an undo.`;
   }
+  // The point is named the same way every announcement names an entry —
+  // its label, or its moment; never a quoted placeholder (restoredWhat).
+  const pointName =
+    point.label !== undefined && point.label.trim() !== ''
+      ? `“${point.label}”, ${historyMoment(point.takenAt)}`
+      : `taken ${historyMoment(point.takenAt)}`;
   return (
-    `${restored} Nothing new was filed: today already had a restore point (“${
-      point.label ?? 'unnamed'
-    }”, ${historyMoment(point.takenAt)}), and that entry holds the plan as TODAY BEGAN — not the ` +
-    'plan that was on screen a moment ago.'
+    `${restored} Nothing new was filed: today already had a restore point (${pointName}), ` +
+    'and that entry holds the plan as TODAY BEGAN — not the plan that was on screen a moment ago.'
   );
 }
