@@ -254,6 +254,25 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
       300_000,
     )
   ).trim();
+  // The spend solve lands AFTER the success score (a dozen serialized runs on
+  // one worker), and a slow runner can walk through that window: CI once read
+  // the row between the two attaches and every later folder assertion
+  // inherited the miss. Wait for the terminal state through the seam itself.
+  await until(
+    () =>
+      page.evaluate(async () => {
+        const api = (
+          window as unknown as {
+            __fplanApi: { getNetWorth(): Promise<{ score?: { sustainableSpend?: number } }[]> };
+          }
+        ).__fplanApi;
+        const rows = await api.getNetWorth();
+        return rows.some((r) => r.score?.sustainableSpend !== undefined) ? 'done' : '';
+      }),
+    (t) => t === 'done',
+    'the snapshot’s sustainable-spend figure to attach',
+    300_000,
+  );
 
   // --- Score the day-start version, then the refusal, then restore it -------
   await page.getByRole('button', { name: 'Workbench' }).click();
@@ -266,8 +285,13 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   const historyScoreLine = (
     await until(
       () => scoreLine.innerText().catch(() => ''),
-      (t) => /%/.test(t) && !/scoring/.test(t),
-      'the history version’s score to attach',
+      // Terminal state only: the success score alone is an INTERMEDIATE render
+      // (the spend solve is still running behind it), and accepting it let a
+      // slow CI runner move on before the figure landed — permanently, since
+      // nothing re-scores a scored version. The spend phrase is the proof the
+      // whole attach finished.
+      (t) => /\/yr sustainable living spend/.test(t),
+      'the history version’s score AND spend figure to attach',
       300_000,
     )
   ).trim();
