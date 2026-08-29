@@ -16,3 +16,10 @@ plan-history.json
 networth.json
 quotes.json
 .writer.lock
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
