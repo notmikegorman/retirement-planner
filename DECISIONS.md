@@ -1659,3 +1659,41 @@ first number carrying both its run chip and its zero-spend caption → the D8
 leg asserting Alex and Jordan still seed the demo), in node by
 `tests/ui/{setupProfile,firstRun,storageGate}.test.ts`, and at the store
 level by the zero-start cases in `tests/store/storeSuite.ts` (both drivers).
+
+## The housing toggle keeps its configuration (2026-08-29)
+
+The owner lost a real point of probability today: "Turn off" on the Housing
+tab deleted the block (correctly — the engine's absent-means-unmodeled
+contract is untouchable, and no engine code changed), and re-enabling gave
+him a seeded blank form he refilled from memory, missing his real $1,850
+insurance quote. Absent, the engine estimated 0.22% of the price — $3,850
+on his house — and the plan quietly paid the difference every simulated
+year. The engine was right both times; the UI threw away his work.
+
+The fix is a UI-side stash (`src/ui/planBlockStash.ts`, the documented
+pattern; `housingStash.ts`, the one wired consumer): turning housing off
+still removes `housing` from the plan, but the removed block is stashed in
+localStorage KEYED PER DATA FOLDER — the same identity the writer guard
+already mints and scopes its Web Lock by (the picked folder's SavedFolder.id,
+OPFS's fixed id, the server dataDir in parked HTTP mode), so two plans in
+two folders never inherit each other's stash. Turning it back on restores,
+in order: the stash; failing that, the newest plan-history version whose
+plan carries a housing block (folder-resident, so it survives what
+localStorage does not); failing both, the seeded blank form — because then
+blank is the truth. Whichever source restores, a provenance line states
+where the values came from and when ("your housing configuration as it was
+when you turned it off — Aug 29, 5:42 PM — review before running" /
+"Restored from history: the housing configuration of the Aug 29 day-start
+version…"), and the OFF state says the button will restore BEFORE it is
+pressed. A restored number carries its condition, like every other
+conditional figure in the app.
+
+**Wired only for housing, by the owner's scoping.** The SEPP, insurance and
+tithe toggles delete their blocks the same way and are candidates for the
+same treatment — the pattern is three calls (stash on removal, read-or-fall-
+back on re-enable, provenance line) against `planBlockStash.ts`.
+
+Pinned in node by `tests/ui/planBlockStash.test.ts` (key shape, garbage
+tolerance, folder-identity rules) and the housing cases in
+`tests/ui/housingCard.test.ts` (stash-before-removal, the three-source
+order, the provenance wordings).

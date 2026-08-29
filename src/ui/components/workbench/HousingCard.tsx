@@ -30,15 +30,27 @@
  * drop would leave the Events tab listing a move that is not being simulated,
  * so the card says so and offers to delete the dead events.
  */
+import { useEffect, useState } from 'react';
 import type {
   Home,
   HousingFinancing,
   HousingPlan,
+  PlanHistoryEntry,
   PurchaseFundingTrace,
   RunResult,
   ScenarioEvent,
   YearMonth,
 } from '../../../shared/types';
+import { api } from '../../api';
+import { stashFolderKey, type StashedBlock } from '../../planBlockStash';
+import {
+  historyRestoredNote,
+  newestHousingVersion,
+  readHousingStash,
+  stashHousing,
+  stashOfferNote,
+  stashRestoredNote,
+} from './housingStash';
 import { clamp, formatPct, formatUSD, parseYearMonth } from '../../../shared/util';
 // The engine's own figures, not lookalikes: what is displayed here IS what is
 // modelled (see the module comment).
@@ -520,7 +532,61 @@ export interface HousingCardProps {
 
 export function HousingCard(props: HousingCardProps) {
   const { housing, events, home, marketDefaults, result, onChange, onChangeEvents } = props;
-  if (!housing) return <HousingOff {...props} />;
+  /**
+   * THE TOGGLE KEEPS ITS CONFIGURATION (2026-08-29; the pattern and its
+   * incident: src/ui/planBlockStash.ts). Turn off still REMOVES `housing`
+   * from the plan — the engine's absent-means-unmodeled contract is
+   * untouchable — but the removed block is stashed per data folder, and
+   * turning back on restores it (or, failing the stash, the newest history
+   * version that modelled the move), with a provenance line saying where the
+   * values came from and when. Only with neither source does the seeded
+   * blank form appear, because then blank is the truth.
+   */
+  const [folderKey, setFolderKey] = useState<string | null>(null);
+  const [restoredNote, setRestoredNote] = useState<string | null>(null);
+  const [turningOn, setTurningOn] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void stashFolderKey().then((key) => {
+      if (!cancelled) setFolderKey(key);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!housing) {
+    const stashed = folderKey === null ? null : readHousingStash(folderKey);
+    const turnOn = async (): Promise<void> => {
+      if (stashed !== null) {
+        setRestoredNote(stashRestoredNote(stashed.stashedAt));
+        onChange(stashed.value);
+        return;
+      }
+      // The folder-resident fallback: the newest filed version whose plan
+      // modelled the move. Asked only at the press — the OFF state must not
+      // poll the history to render a button.
+      setTurningOn(true);
+      let fallback: PlanHistoryEntry | null = null;
+      try {
+        fallback = newestHousingVersion(await api.planHistory());
+      } catch {
+        fallback = null; // an unreadable history must not block the form
+      } finally {
+        setTurningOn(false);
+      }
+      if (fallback !== null && fallback.plan.housing !== undefined) {
+        setRestoredNote(historyRestoredNote(fallback));
+        onChange(fallback.plan.housing);
+        return;
+      }
+      setRestoredNote(null);
+      onChange(seedHousingPlan(home, events, marketDefaults));
+    };
+    return (
+      <HousingOff {...props} stashed={stashed} turningOn={turningOn} onTurnOn={turnOn} />
+    );
+  }
 
   const plan = housing;
   const financing = plan.financing;
@@ -559,12 +625,27 @@ export function HousingCard(props: HousingCardProps) {
         </h2>
         <span className="spacer" />
         <button
-          onClick={() => onChange(undefined)}
+          onClick={() => {
+            // THE STASH WRITE, before the removal: the block leaves the plan
+            // (absent means unmodeled — the engine's contract), and the UI
+            // keeps what the owner typed so turning back on restores it.
+            if (folderKey !== null) stashHousing(folderKey, plan, new Date());
+            setRestoredNote(null);
+            onChange(undefined);
+          }}
           title="Stop modelling the move here and go back to hand-written events"
         >
           Turn off
         </button>
       </div>
+
+      {/* Where a restored form's values came from, and when — a restored
+          number carries its condition like any other conditional figure. */}
+      {restoredNote !== null && (
+        <div className="lib-warning warn" role="status" style={{ marginTop: 10 }}>
+          {restoredNote}
+        </div>
+      )}
 
       {stale.length > 0 && (
         <div className="error-banner" style={{ marginTop: 10 }}>
@@ -1249,8 +1330,26 @@ function Readout({ lines }: { lines: Array<{ label: string; value: string }> }) 
  * deliberately no half-form to fill in first — a partly-entered housing plan
  * that is not yet driving the simulation is exactly the ambiguity the plan
  * object exists to remove.
+ *
+ * When a STASH exists (the block a Turn off removed, in this folder), the
+ * button restores it and this state says so BEFORE the press — a button that
+ * silently produced last month's numbers would read as the form inventing
+ * them. The event-copy explanation renders only when the button will really
+ * copy events, i.e. when no stash stands in front of it.
  */
-function HousingOff({ events, home, marketDefaults, onChange }: HousingCardProps) {
+function HousingOff({
+  events,
+  stashed,
+  turningOn,
+  onTurnOn,
+}: HousingCardProps & {
+  /** The block Turn off removed, keyed to this folder — or null. */
+  stashed: StashedBlock<HousingPlan> | null;
+  /** True while the press is reading the plan history for the fallback. */
+  turningOn: boolean;
+  /** The parent's stash → history → seeded-blank decision (see HousingCard). */
+  onTurnOn: () => Promise<void>;
+}) {
   const stale = handWrittenHousingEvents(events);
   // "Buy whatever the sale fetches" has no equivalent in a housing plan, and
   // pinning it to a number is a real change in the risk being run — the one
@@ -1269,6 +1368,12 @@ function HousingOff({ events, home, marketDefaults, onChange }: HousingCardProps
         the purchase date, the insurance estimate and the mortgage payment all follow from that.
       </div>
 
+      {stashed !== null && (
+        <div className="field-help" style={{ marginTop: 10 }}>
+          {stashOfferNote(stashed.stashedAt)}
+        </div>
+      )}
+
       {stale.length > 0 ? (
         <>
           <div className="field-help" style={{ marginTop: 10 }}>
@@ -1277,11 +1382,16 @@ function HousingOff({ events, home, marketDefaults, onChange }: HousingCardProps
           </div>
           <Readout lines={stale.map(describeHousingEvent)} />
           <div className="field-help warn" style={{ marginTop: 6 }}>
-            {SUPERSEDE_TEXT} The button below copies those events into the housing plan first, so
-            you start from what you already have — but from then on the form is what the simulation
-            reads, and the events are dead weight worth deleting.
+            {SUPERSEDE_TEXT}{' '}
+            {stashed === null
+              ? 'The button below copies those events into the housing plan first, so you start ' +
+                'from what you already have — but from then on the form is what the simulation ' +
+                'reads, and the events are dead weight worth deleting.'
+              : 'The button below restores your stashed configuration rather than copying these ' +
+                'events — from then on the form is what the simulation reads, and the events are ' +
+                'dead weight worth deleting.'}
           </div>
-          {floatingPrice && (
+          {floatingPrice && stashed === null && (
             <div className="field-help warn" style={{ marginTop: 6 }}>
               One thing does not survive the copy. Your buy event is priced at “the sale proceeds”,
               which means buying whatever the old house happens to fetch; a housing plan states a
@@ -1301,11 +1411,8 @@ function HousingOff({ events, home, marketDefaults, onChange }: HousingCardProps
       )}
 
       <div className="row" style={{ marginTop: 12 }}>
-        <button
-          className="primary"
-          onClick={() => onChange(seedHousingPlan(home, events, marketDefaults))}
-        >
-          Model the move here
+        <button className="primary" disabled={turningOn} onClick={() => void onTurnOn()}>
+          {turningOn ? 'Looking for your last configuration…' : 'Model the move here'}
         </button>
       </div>
     </div>

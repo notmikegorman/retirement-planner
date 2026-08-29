@@ -11,6 +11,8 @@
  * price?" — the exact question the Widow tab's copy answers — would depend on
  * which copy of the plan you asked.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Home, HousingPlan, ScenarioEvent } from '../../src/shared/types';
 import { scenarioSchema } from '../../src/shared/schemas';
@@ -183,5 +185,71 @@ describe('withSurvivorDownsize', () => {
     const reparsed = scenarioSchema.parse(clearedScenario).housing!;
     expect('survivorDownsizeTo' in reparsed).toBe(false);
     expect('survivorDownsizeDelayMonths' in reparsed).toBe(false);
+  });
+});
+
+describe('the toggle keeps its configuration (source scan — the stash wiring)', () => {
+  /**
+   * The incident: Turn off deleted the block, re-enable seeded a blank, the
+   * owner refilled from memory and lost his $1,850 insurance quote to the
+   * $3,850 estimate. The stash rules live in planBlockStash/housingStash and
+   * are behaviour-tested there (tests/ui/planBlockStash.test.ts); what THIS
+   * scan holds is the card's wiring — the calls happening, in the order the
+   * design requires. A wrong order here (remove before stash) is a
+   * declaration, and reading it is what catches it.
+   */
+  const read = (rel: string): string =>
+    readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+  const card = read('../../src/ui/components/workbench/HousingCard.tsx');
+
+  it('Turn off stashes the block BEFORE removing it from the plan', () => {
+    const stashAt = card.indexOf('stashHousing(folderKey, plan, new Date())');
+    expect(stashAt).toBeGreaterThan(-1);
+    // The removal is the next thing the same handler does: within the
+    // handler's few lines, after the stash write, never before it.
+    const handler = card.slice(stashAt, stashAt + 300);
+    expect(handler).toContain('onChange(undefined)');
+    expect(card.slice(0, stashAt)).not.toContain('onChange(undefined)');
+  });
+
+  it('turning on tries the stash, then the newest history version, then the seeded blank', () => {
+    const turnOn = card.slice(card.indexOf('const turnOn'), card.indexOf('const plan = housing'));
+    const stash = turnOn.indexOf('onChange(stashed.value)');
+    const history = turnOn.indexOf('onChange(fallback.plan.housing)');
+    const seeded = turnOn.indexOf('onChange(seedHousingPlan(home, events, marketDefaults))');
+    expect(stash).toBeGreaterThan(-1);
+    expect(history).toBeGreaterThan(stash);
+    expect(seeded).toBeGreaterThan(history);
+    // The history fallback comes from the newest version that modelled the
+    // move, through the ordinary seam.
+    expect(turnOn).toContain('newestHousingVersion(await api.planHistory())');
+  });
+
+  it('each restored source sets its own provenance line, and the seeded blank sets none', () => {
+    expect(card).toContain('setRestoredNote(stashRestoredNote(stashed.stashedAt))');
+    expect(card).toContain('setRestoredNote(historyRestoredNote(fallback))');
+    const turnOn = card.slice(card.indexOf('const turnOn'), card.indexOf('const plan = housing'));
+    const clearAt = turnOn.indexOf('setRestoredNote(null)');
+    expect(clearAt).toBeGreaterThan(-1);
+    expect(clearAt).toBeLessThan(
+      turnOn.indexOf('onChange(seedHousingPlan(home, events, marketDefaults))'),
+    );
+    // And the line renders with role=status where the form shows it.
+    expect(card).toContain('{restoredNote !== null && (');
+  });
+
+  it('the OFF state says the button will restore BEFORE it is pressed', () => {
+    expect(card).toContain('stashOfferNote(stashed.stashedAt)');
+    // The event-copy prose only renders when the button will really copy
+    // events — a stash in front of it changes what the press does, and the
+    // words must change with it.
+    expect(card).toContain('restores your stashed configuration rather than copying');
+  });
+
+  it('the stash key is the folder identity, resolved once per mount', () => {
+    expect(card).toContain('stashFolderKey()');
+    expect(card).toContain('readHousingStash(folderKey)');
+    // No key, no stash — a null identity must never stash into a shared shelf.
+    expect(card).toContain('if (folderKey !== null) stashHousing(');
   });
 });
