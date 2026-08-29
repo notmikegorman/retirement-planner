@@ -1438,25 +1438,134 @@ dialog.modal::backdrop {
   padding-left: 10px;
 }
 
-.hist-score {
-  font-size: 13px;
-  margin-top: 4px;
+/*
+ * The head line is the DISCLOSURE: the whole title line opens the row's
+ * detail, so it has to read as pressable without growing chrome — a cursor
+ * and a hover tint, nothing boxed.
+ */
+.hist-head {
+  cursor: pointer;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  border-radius: var(--radius);
+}
+
+.hist-head:hover {
+  background: var(--bg);
+}
+
+.hist-caret {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* The two-word kind tag ("day start" / "kept"); the sentence is in the detail. */
+.hist-kind {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 /*
- * A history chip is a SENTENCE, not a tag.
- *
- * `.wb-chip` is nowrap because the results panel's chips are two words ("first
- * run") and wrapping one would look broken. These carry their own conditions —
- * "$64,200/yr sustainable living spend (2,000 paths)" is 48 characters — and
- * the History tab lives in the Inputs panel, which is 286px wide. Left nowrap,
- * the longest and newest of the three numbers ran off the edge of the panel and
- * was cut mid-word, which is the one chip a reader most needs whole: the
- * probability saturates, so the dollars are what tell two versions apart.
+ * The older-engine marker — small on the row, because the one shared notice
+ * above the first affected row carries the rule and the row detail carries
+ * the full sentence. Amber-tinted so it reads as the notice's own footnote.
+ */
+.hist-marker {
+  display: inline-block;
+  border: 1px solid var(--warn-soft-border);
+  background: var(--warn-soft-bg);
+  color: var(--warn);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Said once, above the first affected row — never repeated per entry. */
+.hist-notice {
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  margin: 6px 0;
+}
+
+.hist-scoreline {
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.hist-score {
+  font-size: 13px;
+}
+
+/*
+ * The ledger chip is a TAG ("94.2% success"), not the sentence it used to be:
+ * the sentence — the figure with its own path count and the run's conditions
+ * — moved into the expandable detail with everything else that made a row
+ * five lines tall. white-space stays normal as a guard: the panel is 286px
+ * wide, and a chip that outgrows it must wrap rather than be cut mid-word.
  */
 .hist-score .wb-chip {
   white-space: normal;
-  padding: 2px 10px;
+  padding: 1px 8px;
+  margin-top: 0;
+}
+
+/* Compact action buttons — the ledger's, not the app's default padding. */
+.hist-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.hist-actions button {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+/* "also filed Aug 21, Aug 20" — the group's other filings, named in passing. */
+.hist-also {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/*
+ * The expanded record: everything the compact row compressed away, held
+ * against the row by a quiet rule rather than boxed as a card-in-a-card.
+ */
+.hist-detail {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hist-detail-score {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hist-records {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hist-subrow {
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
 }
 
 /*

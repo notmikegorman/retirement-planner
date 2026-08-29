@@ -1,21 +1,31 @@
 /**
- * THE HISTORY TAB — every version of the plan there has been, newest first.
+ * THE HISTORY TAB — every version of the plan there has been, newest first,
+ * as a SCANNABLE LEDGER.
  *
- * It replaced a "Saved" tab the user called a hot mess, and the mess was
- * structural rather than cosmetic. That tab held a cabinet of named copies AND
- * a separately frozen "baseline plan", so it had to explain two things it had
- * no room to explain: which copy the workbench was showing, and which entirely
- * different plan the Net Worth page was scoring. The sentence he quoted back —
- * "The plan on screen is not this plan" — was the second concept failing at the
- * first concept's expense. Both are gone. There is one plan, this is its past,
- * and the only relationships left are "this is the one you are looking at" and
- * "press this to go back to it".
+ * It replaced a "Saved" tab the user called a hot mess, and then it earned a
+ * complaint of its own (2026-08-29): "this history tab is just walls and
+ * walls of text. I find it confusing and overwhelming." His screenshot showed
+ * the specific walls: five-line entries; the engine-version warning repeated
+ * VERBATIM as a full amber paragraph on every older entry; three entries
+ * simultaneously badged "the plan on screen" (genuinely identical plans —
+ * but three duplicate badges is the wall-of-text problem in miniature);
+ * "Unnamed version" standing where a name should be; and the never-scored
+ * explainer as standing prose on every unscored row.
  *
- * WHAT A ROW IS FOR: recognising a version worth returning to. That is the
- * owner's own stated purpose, and it is why the score and the median terminal
- * assets are on the row rather than behind a click — with the sustainable spend
- * beside them, because for this household success saturates and dollars are
- * what actually separate two versions.
+ * THE LEDGER RULE: one compact row per plan, everything else one click deep.
+ * A row is the facts that tell versions apart — when (the date IS the name
+ * when no label exists), why it exists (a two-word kind tag), what it scored
+ * (compact chips), and the buttons. The provenance (paths/seed/engine/
+ * scoredAt), the full never-scored and interrupted sentences, the restore-
+ * consequence warnings, and a group's individual filings all live in an
+ * expandable detail the row opens on click. COMPRESSION, NOT DELETION —
+ * every fact the old tab printed is still reachable, carrying its condition.
+ *
+ * IDENTICAL PLANS GROUP (planHistoryLogic.groupHistoryRows): filings whose
+ * planIdentityKey matches collapse into one visible row with a muted "also
+ * filed …" line; the badge therefore lands on at most one visible row, and
+ * the engine-version notice renders ONCE, above the first affected row, with
+ * a small marker on affected rows (engineNotice / engineNoticeIndex).
  *
  * WHY SCORING IS A BUTTON AND NOT AUTOMATIC. A version is filed mid-edit, on
  * the day's first change, and a final-quality run plus a dozen-run bisection
@@ -35,7 +45,9 @@
  *
  * NOTHING HERE EDITS AN ENTRY. Restoring COPIES a stored plan forward onto
  * plan.json; the entry stays where it is, which is what makes a restore of the
- * wrong version cost nothing.
+ * wrong version cost nothing. Grouped filings hold identical plans, so
+ * restoring any member writes the same bytes — but each filing keeps its own
+ * Restore (and its own scoring blank), because each is its own record.
  *
  * (Assembly and every sentence it prints: planHistoryLogic.ts.)
  */
@@ -47,12 +59,19 @@ import { HISTORY_FIRST_RUN, simulationReadiness } from '../../firstRun';
 import { useToast } from '../../toast';
 import { InfoTip } from '../profile/fields';
 import {
+  engineNotice,
+  engineNoticeIndex,
   finishOffer,
+  groupHasOlderEngine,
+  groupHistoryRows,
   historyEmptyNote,
   historyRows,
+  kindTag,
   restoreOutcome,
   restorePrompt,
+  rowTitle,
   scoringOffer,
+  type HistoryGroup,
   type HistoryRow,
 } from './planHistoryLogic';
 
@@ -103,6 +122,12 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  /**
+   * Which ledger rows are OPEN — by the face entry's id, several at once:
+   * comparing two versions' provenance is exactly what the detail is for,
+   * and closing one to open another would forbid the comparison.
+   */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   /**
    * What the last restore actually did, kept on screen rather than toasted
    * away. A toast is gone in 2.5 seconds and this sentence answers "wait —
@@ -252,6 +277,9 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
     accounts: profile.accounts,
     now: new Date(),
   });
+  const groups = groupHistoryRows(rows);
+  /** Where the ONE engine-version note goes; -1 renders none. */
+  const noticeAt = engineNoticeIndex(groups, ENGINE_VERSION);
 
   /**
    * ZERO-START'S GATE (src/ui/firstRun.ts): with zero accounts, no scoring
@@ -260,6 +288,19 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
    * stays: copying a stored plan forward simulates nothing.
    */
   const scoringGated = simulationReadiness(profile).state === 'no-accounts';
+
+  /* Computed by the parent, which is the half of the app that holds the LIST —
+     and whether today already has a restore point is a fact about the list,
+     not about any one row. */
+  const questionFor = (row: HistoryRow) => restorePrompt(row, entries ?? [], new Date());
+
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <div className="card">
@@ -270,9 +311,10 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
           text={
             'Every version of the plan there has been. The first time you change the plan on ' +
             'any day, the version that day began with is filed here — you never ask for a ' +
-            'restore point and cannot forget to. Restoring copies a stored version back onto ' +
-            'the plan; the entry itself is never consumed or changed, and neither is a score ' +
-            'once one is recorded on it.'
+            'restore point and cannot forget to. Click a row for its full record: when it was ' +
+            'filed, the conditions behind its numbers, and what restoring it would change. ' +
+            'Restoring copies a stored version back onto the plan; the entry itself is never ' +
+            'consumed or changed, and neither is a score once one is recorded on it.'
           }
         />
       </h2>
@@ -298,30 +340,38 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
 
       {entries === null && loadError === null ? (
         <div className="muted">Loading…</div>
-      ) : rows.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div className="muted">{historyEmptyNote()}</div>
       ) : (
-        rows.map((row) => (
-          <HistoryRowView
-            key={row.entry.id}
-            row={row}
-            scoringGated={scoringGated}
-            busy={busy === row.entry.id}
-            confirming={confirming === row.entry.id}
-            onAskRestore={() => {
-              setActionError(null);
-              setConfirming(row.entry.id);
-            }}
-            restoreQuestion={restorePrompt(row, entries ?? [], new Date())}
-            onCancelRestore={() => setConfirming(null)}
-            onRestore={() => void restore(row)}
-            onScore={() => void score(row.entry.id)}
-            onFinish={() => void finish(row.entry.id)}
-          />
+        groups.map((group, i) => (
+          <div key={group.primary.entry.id}>
+            {i === noticeAt && (
+              <div className="lib-warning warn hist-notice" role="note">
+                {engineNotice(ENGINE_VERSION)}
+              </div>
+            )}
+            <HistoryGroupView
+              group={group}
+              scoringGated={scoringGated}
+              expanded={expanded.has(group.primary.entry.id)}
+              onToggle={() => toggle(group.primary.entry.id)}
+              busyId={busy}
+              confirmingId={confirming}
+              questionFor={questionFor}
+              onAskRestore={(row) => {
+                setActionError(null);
+                setConfirming(row.entry.id);
+              }}
+              onCancelRestore={() => setConfirming(null)}
+              onRestore={(row) => void restore(row)}
+              onScore={(id) => void score(id)}
+              onFinish={(id) => void finish(id)}
+            />
+          </div>
         ))
       )}
 
-      {scoringGated && rows.length > 0 ? (
+      {scoringGated && groups.length > 0 ? (
         <div className="field-help" style={{ marginTop: 10 }}>
           {HISTORY_FIRST_RUN}
         </div>
@@ -340,121 +390,245 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
 }
 
 // ---------------------------------------------------------------------------
-// One version
+// One ledger row: a plan, however many times it was filed
 // ---------------------------------------------------------------------------
 
-function HistoryRowView({
-  row,
-  scoringGated,
-  busy,
-  confirming,
-  restoreQuestion,
-  onAskRestore,
-  onCancelRestore,
-  onRestore,
-  onScore,
-  onFinish,
-}: {
-  row: HistoryRow;
+interface RowCallbacks {
   /** Zero-start's gate: no scoring offer of any kind while accounts are empty. */
   scoringGated: boolean;
-  busy: boolean;
-  confirming: boolean;
-  /* Computed by the parent, which is the half of the app that holds the LIST —
-     and whether today already has a restore point is a fact about the list, not
-     about this row. */
-  restoreQuestion: string;
-  onAskRestore: () => void;
+  busyId: string | null;
+  confirmingId: string | null;
+  questionFor: (row: HistoryRow) => string;
+  onAskRestore: (row: HistoryRow) => void;
   onCancelRestore: () => void;
-  onRestore: () => void;
-  onScore: () => void;
-  onFinish: () => void;
-}) {
-  const { entry, score } = row;
-  const offer = scoringOffer(score);
-  const finishLabel = finishOffer(score);
+  onRestore: (row: HistoryRow) => void;
+  onScore: (id: string) => void;
+  onFinish: (id: string) => void;
+}
+
+function HistoryGroupView({
+  group,
+  expanded,
+  onToggle,
+  ...cb
+}: {
+  group: HistoryGroup;
+  expanded: boolean;
+  onToggle: () => void;
+} & RowCallbacks) {
+  const row = group.primary;
+  const olderEngine = groupHasOlderEngine(group, ENGINE_VERSION);
   return (
     <div className={row.isCurrent ? 'hist-row is-current' : 'hist-row'}>
-      <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
-        <strong className={row.named ? undefined : 'muted'}>{row.label}</strong>
-        {/* The match indicator. It is a statement about the plan on screen,
-            not a selection: more than one entry can hold the identical plan,
-            and each of them is equally "the one you are looking at". */}
+      {/* THE HEAD IS THE DISCLOSURE — the whole title line opens the detail,
+          because "click the row" is the redesign's contract. The action
+          buttons live OUTSIDE it (the score line below), so a real <button>
+          never nests inside this button-role line. */}
+      <div
+        className="row hist-head"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+      >
+        {/* The title: the owner's label, or the moment standing in as the
+            name — "Unnamed version" named nothing and is gone (rowTitle). */}
+        <strong>{rowTitle(row)}</strong>
+        <span className="hist-kind">{kindTag(row.entry.kind)}</span>
+        {/* The match indicator. Grouping is what makes "at most one visible
+            row" true structurally: identity decides the groups AND the match,
+            so the plan on screen matches at most one group. */}
         {row.isCurrent && <span className="badge">the plan on screen</span>}
+        {olderEngine && (
+          <span
+            className="hist-marker"
+            title="A score in this row was taken by an older engine — open the row for what that means."
+          >
+            older engine
+          </span>
+        )}
+        {row.named && (
+          <span className="muted" style={{ fontSize: 12 }} title={row.entry.takenAt}>
+            {row.moment}
+          </span>
+        )}
         <span className="spacer" />
-        <span className="muted" title={entry.takenAt}>
-          {row.moment}
-          {row.ago === null ? '' : ` · ${row.ago}`}
+        <span className="hist-caret" aria-hidden="true">
+          {expanded ? '▾' : '▸'}
         </span>
       </div>
-      {/* 12, like every other line of small print in the app — this one sat at
-          12.5 alone, a half-pixel out of step with the three below it. */}
-      <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-        {row.why}
+
+      <div className="row hist-scoreline">
+        <div className="hist-score">
+          <ScoreChips score={row.score} />
+        </div>
+        <span className="spacer" />
+        <RowActions row={row} {...cb} />
       </div>
 
-      <ScoreLine score={score} />
+      {group.alsoFiled !== null && <div className="muted hist-also">{group.alsoFiled}</div>}
 
-      {row.warnings.map((w) => (
-        <div key={w.code} className="lib-warning warn" style={{ marginTop: 6 }}>
-          {w.message}
-        </div>
-      ))}
+      {expanded && <RowDetail group={group} {...cb} />}
 
-      {/* THE CONFIRMATION IS THE ROW, not a modal. Restoring replaces what is
-          on screen, so the question has to be asked next to the version it is
-          about — a dialog in the middle of the window names a row the user
-          then has to go back and find. Same two-step idiom the destructive
-          buttons elsewhere in the app use. */}
-      {confirming ? (
-        <div className="hist-confirm" style={{ marginTop: 8 }}>
-          <div style={{ marginBottom: 6 }}>{restoreQuestion}</div>
-          <div className="row" style={{ gap: 6 }}>
-            <button className="primary" disabled={busy} onClick={onRestore}>
-              {busy ? 'Restoring…' : 'Restore it'}
-            </button>
-            <button disabled={busy} onClick={onCancelRestore}>
-              Keep the plan on screen
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="row" style={{ gap: 6, marginTop: 8 }}>
-          <button disabled={busy} onClick={onAskRestore}>
-            Restore
-          </button>
-          {/* Only where there is a blank to fill — scoringOffer holds the rule
-              and the label, so "which rows get a button" is one testable
-              function rather than a chain of ternaries in a view. A version
-              that already carries a number gets no button at all. */}
-          {!scoringGated && offer !== null && (
-            <button disabled={busy} onClick={onScore}>
-              {offer}
-            </button>
-          )}
-          {/* Finish scoring — only behind a still-verifying write-ahead
-              intent (finishOffer holds the rule and the argument for why this
-              is not the removed re-score button back). Gated with the score
-              button: an intent that still "verifies" against a profile whose
-              accounts have all been deleted would complete a 0-account run. */}
-          {!scoringGated && finishLabel !== null && (
-            <button className="primary" disabled={busy} onClick={onFinish}>
-              {finishLabel}
-            </button>
-          )}
-        </div>
-      )}
+      <RestoreConfirm row={row} {...cb} />
     </div>
   );
 }
 
 /**
- * The numbers, or the single honest reason there are none.
+ * The row's buttons — compact, and decided elsewhere: which rows get a
+ * scoring button is `scoringOffer`'s one testable rule, which get Finish is
+ * `finishOffer`'s, and this component only renders their answers. Rendered
+ * for the group's face AND for each filing inside the expansion, because
+ * every filing is its own record with its own blank to fill.
+ */
+function RowActions({
+  row,
+  scoringGated,
+  busyId,
+  onAskRestore,
+  onScore,
+  onFinish,
+}: { row: HistoryRow } & RowCallbacks) {
+  const { score } = row;
+  const busy = busyId === row.entry.id;
+  const offer = scoringOffer(score);
+  const finishLabel = finishOffer(score);
+  return (
+    <span className="hist-actions">
+      <button disabled={busy} onClick={() => onAskRestore(row)}>
+        Restore
+      </button>
+      {/* Only where there is a blank to fill — scoringOffer holds the rule
+          and the label. A version that already carries a number gets no
+          button at all. */}
+      {!scoringGated && offer !== null && (
+        <button disabled={busy} onClick={() => onScore(row.entry.id)}>
+          {offer}
+        </button>
+      )}
+      {/* Finish scoring — only behind a still-verifying write-ahead intent
+          (finishOffer holds the rule and the argument for why this is not the
+          removed re-score button back). Gated with the score button: an
+          intent that still "verifies" against a profile whose accounts have
+          all been deleted would complete a 0-account run. */}
+      {!scoringGated && finishLabel !== null && (
+        <button className="primary" disabled={busy} onClick={() => onFinish(row.entry.id)}>
+          {finishLabel}
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * THE CONFIRMATION IS THE ROW, not a modal. Restoring replaces what is on
+ * screen, so the question has to be asked next to the version it is about —
+ * a dialog in the middle of the window names a row the user then has to go
+ * back and find. Same two-step idiom the destructive buttons elsewhere use.
+ */
+function RestoreConfirm({
+  row,
+  busyId,
+  confirmingId,
+  questionFor,
+  onCancelRestore,
+  onRestore,
+}: { row: HistoryRow } & RowCallbacks) {
+  const confirming = confirmingId === row.entry.id;
+  const busy = busyId === row.entry.id;
+  if (!confirming) return null;
+  return (
+    <div className="hist-confirm" style={{ marginTop: 8 }}>
+      <div style={{ marginBottom: 6 }}>{questionFor(row)}</div>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="primary" disabled={busy} onClick={() => onRestore(row)}>
+          {busy ? 'Restoring…' : 'Restore it'}
+        </button>
+        <button disabled={busy} onClick={onCancelRestore}>
+          Keep the plan on screen
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The numbers at row width, and the full record one click deep
+// ---------------------------------------------------------------------------
+
+/**
+ * The compact reading: chips when scored, a short phrase otherwise. The FULL
+ * sentence for every state — why a blank is a blank, what an interruption
+ * means, the conditions behind each figure — lives in ScoreDetail, inside
+ * the expansion; this line only has to be recognisable.
  *
- * A version that has never been scored renders as words, never as a figure.
- * Printing 0% for "nobody has run this yet" would claim the plan fails in
- * every simulated future — the difference between unmeasured and catastrophic
- * is exactly what an optional `score` exists to keep.
+ * A version that has never been scored still renders as words, never as a
+ * figure. Printing 0% for "nobody has run this yet" would claim the plan
+ * fails in every simulated future — the difference between unmeasured and
+ * catastrophic is exactly what an optional `score` exists to keep.
+ */
+function ScoreChips({ score }: { score: HistoryRow['score'] }) {
+  if (score.state === 'scoring') {
+    return (
+      <span className="muted" role="status">
+        scoring…
+      </span>
+    );
+  }
+  if (score.state === 'interrupted') {
+    return (
+      <>
+        <span className="flag">interrupted</span>{' '}
+        <span className="muted">finishable — open the row for what happened</span>
+      </>
+    );
+  }
+  if (score.state === 'never') {
+    return <span className="muted">never scored</span>;
+  }
+  if (score.state === 'failed') {
+    return (
+      <>
+        <span className="flag">no score</span>{' '}
+        <span className="muted">the run failed — open the row for why</span>
+      </>
+    );
+  }
+  return (
+    <span className="chip-list">
+      <span className="wb-chip">
+        <strong>{score.success}</strong> success
+      </span>
+      {score.median !== null && (
+        <span className="wb-chip">
+          <strong>{score.median}</strong> median
+        </span>
+      )}
+      {score.spend !== null && (
+        <span className="wb-chip">
+          <strong>{score.spend}</strong> spend
+        </span>
+      )}
+      {/* THE LIVE BLANK, said live: the bisection is running right now. */}
+      {score.spend === null && score.spendSolving && (
+        <span className="muted" role="status">
+          solving spend…
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The full reading — every sentence the compact line compressed away, with
+ * each number's own conditions beside it (paths, seed, engine, the moment).
  *
  * THE TWO BLANKS ARE DIFFERENT BLANKS and read differently, because the offer
  * beside them is a different offer: "nobody has measured this" invites a first
@@ -462,29 +636,26 @@ function HistoryRowView({
  * the same one. Collapsing both into "no score" would hide a failure worth
  * reading — the reason names what broke.
  */
-function ScoreLine({ score }: { score: HistoryRow['score'] }) {
+function ScoreDetail({ score }: { score: HistoryRow['score'] }) {
   if (score.state === 'scoring') {
     return (
-      <div className="hist-score muted" role="status">
+      <div className="muted" role="status">
         scoring… (a final-quality run, then the spend solve — minutes, not seconds)
       </div>
     );
   }
   if (score.state === 'interrupted') {
     return (
-      <div className="hist-score">
-        <span className="flag">interrupted</span>{' '}
-        <span className="muted">
-          Scoring was cut short before anything landed — the app closed mid-run. Today&rsquo;s
-          inputs still produce exactly the run that was in flight, so Finish scoring completes
-          the same measurement: a blank being filled, not a number being rewritten.
-        </span>
+      <div className="muted">
+        Scoring was cut short before anything landed — the app closed mid-run. Today&rsquo;s
+        inputs still produce exactly the run that was in flight, so Finish scoring completes
+        the same measurement: a blank being filled, not a number being rewritten.
       </div>
     );
   }
   if (score.state === 'never') {
     return (
-      <div className="hist-score muted">
+      <div className="muted">
         Never scored — nobody has measured this version. Press Score it to find out what it was
         worth.
       </div>
@@ -492,47 +663,36 @@ function ScoreLine({ score }: { score: HistoryRow['score'] }) {
   }
   if (score.state === 'failed') {
     return (
-      <div className="hist-score">
-        <span className="flag">no score</span>{' '}
-        <span className="muted">
-          Scoring was attempted and failed, so nothing was measured: {score.reason} Press Try
-          scoring again.
-        </span>
+      <div className="muted">
+        Scoring was attempted and failed, so nothing was measured: {score.reason} Press Try
+        scoring again.
       </div>
     );
   }
   return (
-    <div className="hist-score">
-      <div className="chip-list">
-        <span className="wb-chip">
-          <strong>{score.success}</strong> chance of never running out
-        </span>
-        {score.median !== null && (
-          <span className="wb-chip">
-            <strong>{score.median}</strong> median terminal (real)
-          </span>
-        )}
-        {score.spend !== null && (
-          <span className="wb-chip">
-            <strong>{score.spend}</strong> sustainable living spend
-            {score.spendConditions === null ? '' : ` (${score.spendConditions})`}
-          </span>
-        )}
+    <div className="hist-detail-score">
+      <div>
+        {score.success} chance of never running out
+        {score.median !== null ? ` · ${score.median} median terminal (real)` : ''}
       </div>
+      {score.spend !== null && (
+        <div>
+          {score.spend} sustainable living spend
+          {score.spendConditions === null ? '' : ` (${score.spendConditions})`}
+        </div>
+      )}
       {/* ABSENT IS NOT ZERO, and the reason is worth the line: an over-funded
           plan clears the top of the solver's range, which is "more than this",
           not "this". */}
       {score.spend === null && score.spendMissing !== null && (
-        <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
-          No sustainable-spend figure: {score.spendMissing}
-        </div>
+        <div className="muted">No sustainable-spend figure: {score.spendMissing}</div>
       )}
       {/* THE LIVE BLANK: the bisection is running right now (the in-flight
-          registry says so). This used to fall through to the permanent
-          sentence below — the Phase-4 wording quirk — and claim finality
-          about a figure that was a dozen runs from landing. */}
+          registry says so). The permanent sentence below must not render
+          while this is true — it used to (the Phase-4 wording quirk) and
+          claimed finality about a figure a dozen runs from landing. */}
       {score.spend === null && score.spendMissing === null && score.spendSolving && (
-        <div className="muted" style={{ fontSize: 12, marginTop: 3 }} role="status">
+        <div className="muted" role="status">
           Solving the spend figure — the probability landed and its bisection is still
           running; the figure lands on this row when it finishes.
         </div>
@@ -541,7 +701,7 @@ function ScoreLine({ score }: { score: HistoryRow['score'] }) {
           write-ahead intent still verifies against today's inputs — so this
           one, uniquely, is completable (the Aug-20 shape, with its repair). */}
       {score.spend === null && score.spendMissing === null && score.spendInterrupted && (
-        <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+        <div className="muted">
           The spend solve was interrupted — the probability above stands (it was measured),
           and today&rsquo;s inputs still produce exactly the bisection that was cut short.
           Finish scoring completes it: the same measurement, filling the one blank the
@@ -558,24 +718,87 @@ function ScoreLine({ score }: { score: HistoryRow['score'] }) {
           IT DOES NOT NAME A CAUSE, and it used to. "Scored before that was
           measured" is true of the August rows and false of a row whose solve
           was interrupted — a server restart between the probability and the
-          bisection leaves exactly this shape, and "Baseline — frozen Aug 20"
-          became one on the afternoon this rule shipped. The entry stores no way
-          to tell the two apart, so the line states what it knows. (A row whose
+          bisection leaves exactly this shape. The entry stores no way to tell
+          the two apart, so the line states what it knows. (A row whose
           interruption IS known — a still-verifying intent — renders the
           completable sentence above instead of this one.) */}
       {score.spend === null &&
         score.spendMissing === null &&
         !score.spendSolving &&
         !score.spendInterrupted && (
-        <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+        <div className="muted">
           No sustainable-spend figure — none was solved alongside this score, and none can be
           added now: a figure solved today would belong to today, not to the day this score was
           taken.
         </div>
       )}
-      <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
-        {score.conditions}
+      <div className="muted">{score.conditions}</div>
+    </div>
+  );
+}
+
+/**
+ * The expandable record behind a ledger row: when it was filed and why, the
+ * full score reading with its conditions, the restore-consequence warnings
+ * (the older-engine sentence lives HERE now, once per affected record,
+ * instead of as a standing amber paragraph on every old row) — and, for a
+ * group, every other filing of the identical plan as its own sub-record with
+ * its own facts and its own buttons.
+ */
+function RowDetail({ group, ...cb }: { group: HistoryGroup } & RowCallbacks) {
+  const row = group.primary;
+  return (
+    <div className="hist-detail">
+      <div className="muted">
+        Filed {row.moment}
+        {row.ago === null ? '' : ` · ${row.ago}`} — {row.why}.
       </div>
+      <ScoreDetail score={row.score} />
+      {row.warnings.map((w) => (
+        <div key={w.code} className="lib-warning warn" style={{ marginTop: 6 }}>
+          {w.message}
+        </div>
+      ))}
+      {group.others.length > 0 && (
+        <div className="hist-records">
+          <div className="muted">
+            The identical plan, filed {group.others.length + 1} times — each filing is its own
+            record:
+          </div>
+          {group.others.map((o) => (
+            <SubRecord key={o.entry.id} row={o} {...cb} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One of a group's OTHER filings, whole: identical plan, distinct record —
+ * its own moment, its own score (or blank, with its own offer), its own
+ * warnings, its own Restore. Restoring any filing of a group writes the same
+ * plan bytes; scoring fills only THIS record's blank.
+ */
+function SubRecord({ row, ...cb }: { row: HistoryRow } & RowCallbacks) {
+  return (
+    <div className="hist-subrow">
+      <div className="row" style={{ gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <span title={row.entry.takenAt}>{rowTitle(row)}</span>
+        <span className="hist-kind">{kindTag(row.entry.kind)}</span>
+        <div className="hist-score">
+          <ScoreChips score={row.score} />
+        </div>
+        <span className="spacer" />
+        <RowActions row={row} {...cb} />
+      </div>
+      <ScoreDetail score={row.score} />
+      {row.warnings.map((w) => (
+        <div key={w.code} className="lib-warning warn" style={{ marginTop: 6 }}>
+          {w.message}
+        </div>
+      ))}
+      <RestoreConfirm row={row} {...cb} />
     </div>
   );
 }

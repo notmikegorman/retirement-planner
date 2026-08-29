@@ -34,15 +34,21 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Person, PlanHistoryEntry, PlanScore, Scenario } from '../../src/shared/types';
 import {
+  engineNotice,
+  engineNoticeIndex,
+  groupHasOlderEngine,
+  groupHistoryRows,
   historyEmptyNote,
   historyMoment,
   historyRows,
   finishOffer,
   kindLabel,
+  kindTag,
   localDayKey,
   planVersionWarnings,
   readScore,
   relativeTime,
+  rowTitle,
   scoringOffer,
   restoreOutcome,
   dayIsCovered,
@@ -574,24 +580,218 @@ describe('the warnings that survived the cabinet, re-worded for a restore', () =
   });
 });
 
-describe('a chip in a 286px panel is a sentence, not a tag (source scan)', () => {
-  it('lets a history chip WRAP, because the longest one does not fit', () => {
-    // `.wb-chip` is nowrap for the results panel, whose chips are two words
-    // ("first run"). These carry their own conditions —
-    // "$64,200/yr sustainable living spend (2,000 paths)" is 48 characters —
-    // and the History tab lives in the Inputs panel, which is 286px wide.
-    // Left nowrap, that chip ran off the edge of the panel and was cut
-    // mid-word: the one number of the three a reader most needs whole, since
-    // this household's success rate saturates and the dollars are what tell
-    // two versions apart.
+describe('the ledger chip is a tag, and the sentence is one click deep (source scan)', () => {
+  /**
+   * THE LEDGER REDESIGN (2026-08-29, "walls and walls of text"): the row chip
+   * compressed to figure-plus-word ("$64,200/yr spend"), and the sentence it
+   * used to be — the figure with its own path count, beside the run's full
+   * conditions — moved into the expandable detail. The rule this block
+   * enforces is the compression's other half: the full sentence must still
+   * EXIST, or the compression was a deletion.
+   */
+  it('keeps the wrap guard on the row chip — a 286px panel still cuts nothing mid-word', () => {
     expect(styles).toContain('.hist-score .wb-chip {');
     const rule = styles.slice(styles.indexOf('.hist-score .wb-chip {'));
     expect(rule.slice(0, rule.indexOf('}'))).toContain('white-space: normal');
   });
 
-  it('still builds that chip out of the figure AND its path count', () => {
+  it('the detail still builds the spend sentence out of the figure AND its path count', () => {
     expect(card).toContain('sustainable living spend');
     expect(card).toContain('${score.spendConditions}');
+    // And the success figure keeps its own full sentence there too.
+    expect(card).toContain('chance of never running out');
+  });
+
+  it('the row chip carries the figure with a word, never a naked number', () => {
+    expect(card).toContain('<strong>{score.success}</strong> success');
+    expect(card).toContain('<strong>{score.median}</strong> median');
+    expect(card).toContain('<strong>{score.spend}</strong> spend');
+  });
+
+  it('the conditions line renders in the detail, not as standing row prose', () => {
+    // Exactly one render site for score.conditions, inside ScoreDetail.
+    expect(card.match(/\{score\.conditions\}/g)).toHaveLength(1);
+    const detail = card.slice(card.indexOf('function ScoreDetail'));
+    expect(detail).toContain('{score.conditions}');
+  });
+});
+
+describe('identical plans collapse into one ledger row (the grouping)', () => {
+  const events: Scenario['events'] = [{ type: 'retire', person: 'p1', date: '2031-06' }];
+  const same = plan({ events });
+  const other = plan({ events: [{ type: 'retire', person: 'p1', date: '2032-06' }] });
+
+  it('groups by plan identity, keeping newest-first order by each group’s newest member', () => {
+    const rows = historyRows(
+      [
+        entry({ id: 'a', takenAt: '2026-08-21T09:00:00.000Z', plan: same }),
+        entry({ id: 'b', takenAt: '2026-08-20T09:00:00.000Z', plan: other }),
+        entry({ id: 'c', takenAt: '2026-08-19T09:00:00.000Z', plan: same }),
+      ],
+      rowOpts(),
+    );
+    const groups = groupHistoryRows(rows);
+    expect(groups.map((g) => g.primary.entry.id)).toEqual(['a', 'b']);
+    expect(groups[0].others.map((o) => o.entry.id)).toEqual(['c']);
+    expect(groups[1].others).toEqual([]);
+  });
+
+  it('faces the group with its newest SCORED filing — the recorded number must not hide', () => {
+    // The owner's real history: one unchanged plan filed Aug 18 with a score
+    // and again Aug 20 without one. Fronting the unscored Aug 20 filing would
+    // put the group's one recorded number behind a click.
+    const rows = historyRows(
+      [
+        entry({ id: 'newer-blank', takenAt: '2026-08-20T09:00:00.000Z', plan: same }),
+        entry({ id: 'older-scored', takenAt: '2026-08-18T09:00:00.000Z', plan: same, score: score() }),
+      ],
+      rowOpts(),
+    );
+    const [group] = groupHistoryRows(rows);
+    expect(group.primary.entry.id).toBe('older-scored');
+    expect(group.others.map((o) => o.entry.id)).toEqual(['newer-blank']);
+  });
+
+  it('names the other filings in a muted line, year only when it differs', () => {
+    const rows = historyRows(
+      [
+        entry({ id: 'a', takenAt: '2026-08-21T09:00:00.000Z', plan: same }),
+        entry({ id: 'b', takenAt: '2026-08-20T09:00:00.000Z', plan: same }),
+        entry({ id: 'c', takenAt: '2025-12-30T09:00:00.000Z', plan: same }),
+      ],
+      rowOpts(),
+    );
+    const [group] = groupHistoryRows(rows);
+    expect(group.alsoFiled).toBe('also filed Aug 20, Dec 30, 2025');
+    // A lone filing carries no line at all — nothing to name.
+    expect(groupHistoryRows(historyRows([entry()], rowOpts()))[0].alsoFiled).toBeNull();
+  });
+
+  it('a current plan matches at most one group — the badge cannot double', () => {
+    // Identity decides the groups AND the match, so this is structural: the
+    // three-badge screenshot cannot recur however many filings are identical.
+    const rows = historyRows(
+      [
+        entry({ id: 'a', takenAt: '2026-08-21T09:00:00.000Z', plan: same }),
+        entry({ id: 'b', takenAt: '2026-08-20T09:00:00.000Z', plan: same }),
+        entry({ id: 'c', takenAt: '2026-08-19T09:00:00.000Z', plan: other }),
+      ],
+      rowOpts({ currentPlan: same }),
+    );
+    const groups = groupHistoryRows(rows);
+    expect(groups.filter((g) => g.primary.isCurrent)).toHaveLength(1);
+    // Every filing of the matching group still knows it is current — the
+    // fact survives; only its duplicate badges went.
+    expect(groups[0].others.every((o) => o.isCurrent)).toBe(true);
+  });
+
+  it('the card renders one badge site, on the group face', () => {
+    expect(card.match(/the plan on screen<\/span>/g)).toHaveLength(1);
+    expect(card).toContain('{row.isCurrent && <span className="badge">the plan on screen</span>}');
+  });
+});
+
+describe('the row title and the kind tag (killing “Unnamed version”)', () => {
+  it('titles an unnamed row by its moment — the date IS the name', () => {
+    const [row] = historyRows([entry()], rowOpts());
+    expect(rowTitle(row)).toBe(row.moment);
+    expect(rowTitle(row)).toMatch(/^Aug 20, 2026, \d{1,2}:\d{2} (AM|PM)$/);
+  });
+
+  it('titles a named row by the owner’s own words', () => {
+    const [row] = historyRows([entry({ label: 'Before the trip' })], rowOpts());
+    expect(rowTitle(row)).toBe('Before the trip');
+  });
+
+  it('the phrase “Unnamed version” no longer renders anywhere on the card', () => {
+    // It was a sentence about a blank standing where a name should be; the
+    // moment names the row now. Comments are blanked the way the panel scan
+    // does: the card's header QUOTES the owner's screenshot to explain what
+    // the ledger replaced, and deleting the reasoning to satisfy the guard
+    // would be exactly backwards.
+    const cardCode = card
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(cardCode).not.toContain('Unnamed version');
+  });
+
+  it('the restore question names an unnamed row by its moment too', () => {
+    const [row] = historyRows([entry()], rowOpts());
+    const prompt = restorePrompt(row, [], NOW);
+    expect(prompt).toContain(`Restore the version taken ${row.moment}?`);
+    expect(prompt).not.toContain('Unnamed version');
+  });
+
+  it('tags the kind in two words on the row; the sentence lives in the detail', () => {
+    expect(kindTag('day-start')).toBe('day start');
+    expect(kindTag('kept')).toBe('kept');
+    expect(card).toContain('kindTag(row.entry.kind)');
+    // The full sentence still renders — in the detail's "Filed …" line.
+    expect(card).toContain('{row.why}');
+  });
+});
+
+describe('the engine-version notice renders once, above the first affected row', () => {
+  const events: Scenario['events'] = [{ type: 'retire', person: 'p1', date: '2031-06' }];
+  const newer = plan({ events });
+  const older = plan({ events: [{ type: 'retire', person: 'p1', date: '2032-06' }] });
+
+  it('finds the first group carrying any older-engine score', () => {
+    const rows = historyRows(
+      [
+        entry({ id: 'fresh', takenAt: '2026-08-21T09:00:00.000Z', plan: newer, score: score() }),
+        entry({
+          id: 'old',
+          takenAt: '2026-08-18T09:00:00.000Z',
+          plan: older,
+          score: score({ engineVersion: '1.19.0' }),
+        }),
+      ],
+      rowOpts(),
+    );
+    const groups = groupHistoryRows(rows);
+    expect(engineNoticeIndex(groups, ENGINE)).toBe(1);
+    expect(groupHasOlderEngine(groups[0], ENGINE)).toBe(false);
+    expect(groupHasOlderEngine(groups[1], ENGINE)).toBe(true);
+  });
+
+  it('marks a group whose ONLY old-engine score is inside the expansion', () => {
+    // The note's promise ("Restore re-reads any of them") covers the whole
+    // group, so a marker that only read the face would under-report.
+    const rows = historyRows(
+      [
+        entry({ id: 'face', takenAt: '2026-08-21T09:00:00.000Z', plan: newer, score: score() }),
+        entry({
+          id: 'buried',
+          takenAt: '2026-08-18T09:00:00.000Z',
+          plan: newer,
+          score: score({ engineVersion: '1.19.0' }),
+        }),
+      ],
+      rowOpts(),
+    );
+    const [group] = groupHistoryRows(rows);
+    expect(group.primary.entry.id).toBe('face');
+    expect(groupHasOlderEngine(group, ENGINE)).toBe(true);
+  });
+
+  it('renders nowhere when every score is the running engine’s — or when nothing is scored', () => {
+    const scored = groupHistoryRows(historyRows([entry({ score: score() })], rowOpts()));
+    expect(engineNoticeIndex(scored, ENGINE)).toBe(-1);
+    const blank = groupHistoryRows(historyRows([entry()], rowOpts()));
+    expect(engineNoticeIndex(blank, ENGINE)).toBe(-1);
+  });
+
+  it('is short, states the rule, and appears at ONE render site', () => {
+    const note = engineNotice(ENGINE);
+    expect(note).toContain('scored by an older engine');
+    expect(note).toContain('Recorded numbers stand as records');
+    expect(note).toContain('Restore re-reads any of them under the current engine');
+    expect(card.match(/engineNotice\(ENGINE_VERSION\)/g)).toHaveLength(1);
+    expect(card).toContain('{i === noticeAt && (');
+    // The FULL sentence stays per-record, in the detail — the warning list
+    // still renders planVersionWarnings verbatim, once per affected record.
+    expect(card).toContain('{row.warnings.map((w) => (');
   });
 });
 
@@ -651,9 +851,9 @@ describe('the tab’s wiring (source scan)', () => {
 
   it('never restores on the first press — the row asks first', () => {
     // The plain button only opens the question; the call itself lives inside
-    // the confirming branch.
-    expect(card).toContain('onClick={onAskRestore}');
-    expect(card).toContain('{confirming ? (');
+    // the confirm component, which renders nothing until the row is asking.
+    expect(card).toContain('onClick={() => onAskRestore(row)}');
+    expect(card).toContain('if (!confirming) return null;');
     // The list and the clock go in, because whether the undo it promises will
     // actually exist is a fact about the list (see restorePrompt).
     expect(card).toContain('restorePrompt(row, entries ?? [], new Date())');

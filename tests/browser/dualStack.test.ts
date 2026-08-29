@@ -570,19 +570,30 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
     .click();
   await page.getByRole('button', { name: 'Score it' }).click();
   const scoreLine = page.locator('.hist-score').first();
-  const historyScoreLine = (
+  const historyChips = (
     await until(
       () => scoreLine.innerText().catch(() => ''),
-      // Terminal state only: the success score alone is an INTERMEDIATE render
+      // Terminal state only: the success chip alone is an INTERMEDIATE render
       // (the spend solve is still running behind it), and accepting it let a
       // slow CI runner move on before the figure landed — permanently, since
-      // nothing re-scores a scored version. The spend phrase is the proof the
-      // whole attach finished.
-      (t) => /\/yr sustainable living spend/.test(t),
-      'the history version’s score AND spend figure to attach',
+      // nothing re-scores a scored version. The spend chip is the proof the
+      // whole attach finished. (The ledger redesign compressed the row to
+      // "$X/yr spend"; the full sentence moved into the row detail, read
+      // next.)
+      (t) => /\/yr spend/.test(t),
+      'the history version’s score AND spend chips to attach',
       300_000,
     )
   ).trim();
+  // The compressed row's other half: open the row and read the full record —
+  // the sentences with their own conditions. Compression, not deletion, is
+  // the redesign's contract, and this is where the gate holds it to that.
+  await page.locator('.hist-head').first().click();
+  const historyScoreDetail = (
+    await page.locator('.hist-detail-score').first().innerText()
+  ).trim();
+  const historyScoreLine = `${historyChips}\n${historyScoreDetail}`;
+  await page.locator('.hist-head').first().click();
 
   // The refusal the UI deliberately draws no button for, asserted through the
   // seam itself (window.__fplanApi — the same object on both backends).
@@ -931,9 +942,15 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     expect(nodeState.reloadComputedChip).toBe(true);
     expect(nodeState.reloadChip).toContain('Final quality');
     // The line carried real numbers before the scrub — the mask must never be
-    // what made the comparison pass.
+    // what made the comparison pass. Both halves of the ledger row are held:
+    // the compact chips (success + the spend figure that proves the attach
+    // finished) AND the expanded detail's full sentences with the run's own
+    // conditions — the redesign compressed the row, never the record.
+    expect(nodeState.historyScoreLine).toMatch(/% success/);
+    expect(nodeState.historyScoreLine).toMatch(/\/yr spend/);
     expect(nodeState.historyScoreLine).toMatch(/% chance of never running out/);
-    expect(nodeState.historyScoreLine).toMatch(/\/yr sustainable living spend/);
+    expect(nodeState.historyScoreLine).toMatch(/\/yr sustainable living spend \([\d,]+ paths\)/);
+    expect(nodeState.historyScoreLine).toMatch(/[\d,]+ paths, seed \d+, engine /);
   });
 
   it('threw no page error on either stack', () => {

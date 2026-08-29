@@ -111,6 +111,26 @@ export function kindLabel(kind: PlanHistoryEntry['kind']): string {
   return kind === 'day-start' ? 'the plan as that day began' : 'kept on purpose';
 }
 
+/**
+ * The same fact as `kindLabel`, at row width. The ledger redesign (2026-08-29,
+ * "walls and walls of text") put a two-word tag on the row and moved the full
+ * sentence into the expandable detail — the fact did not shrink, its standing
+ * copy did.
+ */
+export function kindTag(kind: PlanHistoryEntry['kind']): string {
+  return kind === 'day-start' ? 'day start' : 'kept';
+}
+
+/**
+ * What the row is CALLED. The owner's label when he gave one; otherwise the
+ * moment itself — "Aug 20, 2026, 10:23 AM" is a better name than "Unnamed
+ * version", which was a sentence about a blank where a fact could stand (his
+ * screenshot had it as a title, and it named nothing).
+ */
+export function rowTitle(row: Pick<HistoryRow, 'named' | 'label' | 'moment'>): string {
+  return row.named ? row.label : row.moment;
+}
+
 // ---------------------------------------------------------------------------
 // What it scored
 // ---------------------------------------------------------------------------
@@ -451,6 +471,135 @@ export function historyRows(
     });
 }
 
+// ---------------------------------------------------------------------------
+// Grouping identical plans (the ledger redesign, 2026-08-29)
+// ---------------------------------------------------------------------------
+
+/**
+ * One VISIBLE row of the ledger: a plan, however many times it was filed.
+ *
+ * `historyRows` deliberately does not de-duplicate — two entries holding the
+ * identical plan are two facts, and both survive here, in `others`. What the
+ * owner's screenshot showed is why the GROUPING exists on top: three entries
+ * of one unchanged plan rendered as three full rows, three identical badges,
+ * three identical warnings — the wall-of-text problem in miniature. One row
+ * now faces for the group, a muted "also filed …" line names the rest, and
+ * expanding the row reaches every individual record with its own facts and
+ * its own buttons. Compression, not deletion.
+ */
+export interface HistoryGroup {
+  /** The face of the group — see the primary rule below. */
+  primary: HistoryRow;
+  /** The group's other filings, newest first. Empty for a single filing. */
+  others: HistoryRow[];
+  /** "also filed Aug 21, Aug 20" — null when the group is a single filing. */
+  alsoFiled: string | null;
+}
+
+/**
+ * "Aug 21" — the also-filed line's date, with the year only when it differs
+ * from the face's own (a cross-year group must not read as one August).
+ */
+function alsoFiledDate(iso: string, primaryYear: number | null): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const withYear = primaryYear === null || at.getFullYear() !== primaryYear;
+  return at.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(withYear ? { year: 'numeric' } : {}),
+  });
+}
+
+/** The muted line under a group's face, naming its other filings. */
+export function alsoFiledLine(
+  others: readonly HistoryRow[],
+  primaryTakenAt: string,
+): string | null {
+  if (others.length === 0) return null;
+  const at = new Date(primaryTakenAt);
+  const primaryYear = Number.isNaN(at.getTime()) ? null : at.getFullYear();
+  return `also filed ${others.map((o) => alsoFiledDate(o.entry.takenAt, primaryYear)).join(', ')}`;
+}
+
+/**
+ * Collapse rows whose plans are IDENTICAL (planIdentityKey — the same
+ * comparison `isCurrent` is made by, so a group is current exactly when the
+ * plan on screen is, and "the plan on screen" badges at most one visible row
+ * without any further rule).
+ *
+ * THE FACE IS THE NEWEST SCORED FILING, else the newest filing. A ledger row
+ * exists to be recognised by, and a recorded score is what tells two versions
+ * apart — fronting an unscored Aug-20 filing over a scored Aug-18 one would
+ * hide the group's one recorded number behind a click. The face's chips are
+ * only ever the face's OWN entry's: two scored filings of one plan are two
+ * measurements of two days, and the collapsed row never mixes them — the
+ * second stays whole inside the expansion.
+ *
+ * Groups keep list order by their newest member (rows arrive newest-first, so
+ * first occurrence IS newest member), which keeps "the newest version is at
+ * the top" true of the visible ledger too.
+ */
+export function groupHistoryRows(rows: readonly HistoryRow[]): HistoryGroup[] {
+  const byKey = new Map<string, HistoryRow[]>();
+  const order: string[] = [];
+  for (const row of rows) {
+    const key = planIdentityKey(row.entry.plan);
+    const members = byKey.get(key);
+    if (members === undefined) {
+      byKey.set(key, [row]);
+      order.push(key);
+    } else {
+      members.push(row);
+    }
+  }
+  return order.map((key) => {
+    const members = byKey.get(key)!;
+    const primary = members.find((m) => m.score.state === 'scored') ?? members[0];
+    const others = members.filter((m) => m !== primary);
+    return { primary, others, alsoFiled: alsoFiledLine(others, primary.entry.takenAt) };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The engine-version notice — once, not per row
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a group carries any score taken by an older engine — the marker
+ * rule. ANY member counts, not just the face: the note's promise ("Restore
+ * re-reads any of them under the current engine") covers the whole group, and
+ * a group whose only old-engine measurement is inside the expansion still
+ * deserves its marker.
+ */
+export function groupHasOlderEngine(group: HistoryGroup, engineVersion: string): boolean {
+  return [group.primary, ...group.others].some(
+    (m) => m.entry.score !== undefined && m.entry.score.engineVersion !== engineVersion,
+  );
+}
+
+/**
+ * Where the ONE engine-version note renders: above the first affected group,
+ * or nowhere (-1). The owner's screenshot had the full amber paragraph
+ * repeated VERBATIM on every older entry; the redesign says it once, short,
+ * with a small marker on each affected row and the full sentence in the row
+ * detail (planVersionWarnings, unchanged).
+ */
+export function engineNoticeIndex(
+  groups: readonly HistoryGroup[],
+  engineVersion: string,
+): number {
+  return groups.findIndex((g) => groupHasOlderEngine(g, engineVersion));
+}
+
+/** The note itself — short, above the line, said once. */
+export function engineNotice(engineVersion: string): string {
+  return (
+    `Versions marked below were scored by an older engine than this app runs (${engineVersion}). ` +
+    'Recorded numbers stand as records; Restore re-reads any of them under the current engine.'
+  );
+}
+
 /** Nothing filed yet — said once, in the place the list would be. */
 export function historyEmptyNote(): string {
   return (
@@ -496,7 +645,11 @@ export function restorePrompt(
   entries: readonly PlanHistoryEntry[] = [],
   now: Date = new Date(),
 ): string {
-  const opening = `Restore “${row.label}”, taken ${row.moment}? It replaces the plan on screen, and the workbench re-runs against it.`;
+  // An unnamed row is NAMED BY ITS MOMENT (rowTitle's rule), so the question
+  // says "the version taken …" rather than quoting a fallback label — the
+  // ledger killed "Unnamed version" everywhere a user reads.
+  const what = row.named ? `“${row.label}”, taken ${row.moment}` : `the version taken ${row.moment}`;
+  const opening = `Restore ${what}? It replaces the plan on screen, and the workbench re-runs against it.`;
   return dayIsCovered(entries, now)
     ? `${opening} Today's restore point already exists and holds the plan as this morning began — so the plan on screen now will NOT be filed, and any change you have made today would have to be made again.`
     : `${opening} The plan being replaced is filed first, so this is undoable.`;
