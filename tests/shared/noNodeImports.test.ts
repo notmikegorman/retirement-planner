@@ -30,7 +30,19 @@ import { describe, expect, it } from 'vitest';
 // silently shim) the exact code that guards irreplaceable records. src/ui/io
 // is the browser driver + writer guard — browser-only by nature, but a Node
 // type leaking in would still drag @types/node into the bundle's compile.
-const PORTABLE_DIRS = ['src/engine', 'src/tax', 'src/shared', 'src/store', 'src/ui/io'] as const;
+// src/ui/workers (the sim + guard workers) and src/ui/local (the Phase-4
+// local backend) joined for the same reason: they ARE the browser runtime,
+// and a node: import there fails only at bundle time, which is exactly the
+// quiet-until-shipped failure this scan exists to make loud.
+const PORTABLE_DIRS = [
+  'src/engine',
+  'src/tax',
+  'src/shared',
+  'src/store',
+  'src/ui/io',
+  'src/ui/local',
+  'src/ui/workers',
+] as const;
 
 /** Bare builtin names ('fs', 'path') count the same as 'node:'-prefixed. */
 const BUILTINS = new Set(builtinModules);
