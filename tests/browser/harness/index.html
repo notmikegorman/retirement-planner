@@ -1,0 +1,16 @@
+<!doctype html>
+<!--
+  The browser half of the parity gate (see ../parity.test.ts). A blank page
+  whose only job is to run main.ts, which builds the parity fixtures, spawns
+  the sim worker, and exposes window.__parity for Playwright to drive. No
+  styles, no visible UI: anything rendered here would be tested by nobody.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>engine parity harness</title>
+  </head>
+  <body>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

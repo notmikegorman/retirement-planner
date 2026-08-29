@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
+import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -17,6 +18,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // The browser lane (Playwright + Chromium, vitest.browser.config.ts) is
+    // excluded so `npm test` stays the seconds-fast loop: those tests build a
+    // bundle and launch a browser, and belong behind `npm run test:browser`.
+    exclude: [...configDefaults.exclude, 'tests/browser/**'],
     testTimeout: 60000,
   },
 });
