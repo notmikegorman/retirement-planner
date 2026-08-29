@@ -16,24 +16,14 @@
  */
 import { parentPort, workerData } from 'node:worker_threads';
 import { runSimulation } from '../../engine/simulate';
-import type { Assumptions, Profile, RunMode, Scenario } from '../../shared/types';
-import { scoreFromResult, type SearchScore } from './scoreStore';
+import type { Assumptions, Profile } from '../../shared/types';
+import { scoreFromResult } from '../../store/search/scoreStore';
+import type { ScoreJob, ScoreWorkerMessage } from '../../store/search/workerProtocol';
 
-export interface ScoreJob {
-  /** Correlation id chosen by the pool. */
-  jobId: number;
-  /** The cache key this result belongs to, echoed back into the score. */
-  runKey: string;
-  scenario: Scenario;
-  mode: RunMode;
-  paths: number;
-  seed: number;
-}
-
-export type ScoreWorkerMessage =
-  | { type: 'ready' }
-  | { type: 'done'; jobId: number; score: SearchScore }
-  | { type: 'error'; jobId: number; error: string };
+// The protocol moved to src/store/search/workerProtocol.ts in Phase 5 (the
+// browser pool worker speaks it too); re-exported so the pool and every other
+// historical importer keeps this path.
+export type { ScoreJob, ScoreWorkerMessage } from '../../store/search/workerProtocol';
 
 interface WorkerInit {
   profile: Profile;
