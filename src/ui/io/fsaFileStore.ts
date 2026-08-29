@@ -60,6 +60,7 @@ import {
   type DirEntry,
   type FileStore,
 } from '../../shared/fileStore';
+import { isSwapArtifact } from './swapArtifacts';
 
 const isDomNotFound = (err: unknown): boolean =>
   err instanceof DOMException && err.name === 'NotFoundError';
@@ -171,6 +172,11 @@ export function createFsaFileStore(
       }
       const out: DirEntry[] = [];
       for await (const entry of dir.values()) {
+        // The platform's own write-staging debris (`*.crswap`) is never data:
+        // a killed tab can orphan one next to any record, and a listing that
+        // handed it to store code would read the driver's mechanism as the
+        // user's files (swapArtifacts.ts has the whole policy).
+        if (isSwapArtifact(entry.name)) continue;
         out.push({ name: entry.name, kind: entry.kind });
       }
       return out;

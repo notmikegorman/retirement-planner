@@ -91,9 +91,12 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
       return route.abort();
     });
     // The REAL pointing mechanism: the localStorage override, set the way the
-    // README's deploy-then-point step sets it (before the app boots).
+    // README's deploy-then-point step sets it (before the app boots). The
+    // storage choice rides along as a returning user's remembered answer, so
+    // Phase 7's boot gate doesn't stop this leg at the first-visit chooser.
     await context.addInitScript((proxyUrl: string) => {
       localStorage.setItem('fplan-quote-proxy', proxyUrl);
+      localStorage.setItem('fplan-storage', 'opfs');
     }, proxy.origin);
 
     page = await context.newPage();

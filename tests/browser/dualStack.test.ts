@@ -761,9 +761,17 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     await restrictContext(localContext, origin);
     // The injected quote fetcher — the seam Phase 6's proxy will fill. It
     // serves the same fixture bytes the node stack's FPLAN_QUOTE_FIXTURES_DIR
-    // serves, so the two stacks refresh identical quotes.
+    // serves, so the two stacks refresh identical quotes. The storage choice
+    // is pre-seeded as a RETURNING user's remembered answer (Phase 7's boot
+    // gate would otherwise ask where data should live); the first-visit
+    // chooser itself is the walkthrough gate's job, not this one's.
     await localContext.addInitScript(
       ({ fixture }: { fixture: string }) => {
+        try {
+          localStorage.setItem('fplan-storage', 'opfs');
+        } catch {
+          /* storage disabled: the gate will ask, and the drive will fail loudly */
+        }
         (window as unknown as Record<string, unknown>).__fplanLocalOptions = {
           quoteFetcher: async (url: string) => {
             if (!url.includes('/VTI?')) throw new Error(`no drive fixture for ${url}`);

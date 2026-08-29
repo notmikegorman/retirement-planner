@@ -73,6 +73,13 @@ export interface ServerMeta {
   dataDir: string;
   engineVersion: string;
   dataDirInitialized: boolean;
+  /**
+   * Local mode only (decision D7): the runs/ cache is unbounded — exactly
+   * what the Node server always did — so its cost is made VISIBLE instead:
+   * measured at ask time, shown on the Dashboard. The HTTP server omits it
+   * and the Dashboard simply doesn't draw the row.
+   */
+  runCache?: { files: number; bytes: number };
 }
 
 const httpApi = {

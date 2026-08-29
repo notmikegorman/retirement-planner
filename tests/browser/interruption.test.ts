@@ -102,6 +102,13 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
     // rewrites identical values and the runKey cannot move under the test.
     await context.addInitScript(
       ({ fixture }: { fixture: string }) => {
+        // A returning user's remembered storage choice (Phase 7's boot gate
+        // would otherwise stop each world at the first-visit chooser).
+        try {
+          localStorage.setItem('fplan-storage', 'opfs');
+        } catch {
+          /* storage disabled: the gate will ask, and the leg will fail loudly */
+        }
         (window as unknown as Record<string, unknown>).__fplanLocalOptions = {
           quoteFetcher: async (url: string) => {
             if (!url.includes('/VTI?')) throw new Error(`no fixture for ${url}`);

@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Profile } from '../../shared/types';
 import { deriveExpenseStreams } from '../../shared/expenses';
 import { formatPct, formatUSD } from '../../shared/util';
-import { api, type ServerMeta } from '../api';
+import { api, backendMode, type ServerMeta } from '../api';
+import { clearStorageChoice, forgetFolderHandle } from '../local/storageChoice';
 import type { PageProps } from '../nav';
 import { PlaceholderChip } from '../components/profile/fields';
 import {
@@ -32,11 +33,33 @@ function SettingRow(props: { label: string; children: ReactNode }) {
   );
 }
 
+/** "1.2 MB", "348 KB" — for the run-cache row; no i18n, matching formatUSD. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * The change-folder affordance (Phase-7 boot flow): forget the storage
+ * choice and the stored folder handle, then reload into the chooser. It
+ * deletes NOTHING — the folder and every file in it stay exactly where they
+ * are; the OPFS world likewise — which is why the button needs no confirm.
+ */
+async function switchStorage(): Promise<void> {
+  clearStorageChoice();
+  await forgetFolderHandle();
+  location.reload();
+}
+
 export function DashboardPage({ navigate }: PageProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [meta, setMeta] = useState<ServerMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** navigator.storage.persisted() — the quiet surface for the one-time
+      persistence request the boot flow made; null while unknown/N-A. */
+  const [persisted, setPersisted] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +77,9 @@ export function DashboardPage({ navigate }: PageProps) {
 
   useEffect(() => {
     void load();
+    if (backendMode === 'local' && typeof navigator.storage?.persisted === 'function') {
+      navigator.storage.persisted().then(setPersisted, () => setPersisted(null));
+    }
   }, [load]);
 
   if (loading) return <div className="muted">Loading…</div>;
@@ -231,10 +257,29 @@ export function DashboardPage({ navigate }: PageProps) {
             every change) are human-readable JSON in this folder. Back it up — <code>git init</code>{' '}
             works well.
           </p>
+          {meta.runCache !== undefined ? (
+            <p className="muted">
+              Run cache: {meta.runCache.files.toLocaleString('en-US')} runs ·{' '}
+              {formatBytes(meta.runCache.bytes)} — grows without bound; <code>runs/</code> is
+              deletable and costs only recomputation.
+            </p>
+          ) : null}
           <p className="muted">
             Engine v{meta.engineVersion}
             {meta.dataDirInitialized ? '' : ' · data folder not yet initialized'}
+            {persisted !== null
+              ? ` · storage ${persisted ? 'persistent' : 'best-effort'}`
+              : ''}
           </p>
+          {backendMode === 'local' ? (
+            <>
+              <button onClick={() => void switchStorage()}>Switch storage…</button>
+              <p className="muted" style={{ marginTop: 6 }}>
+                Your files stay where they are; you&apos;ll choose where data lives again on
+                reload.
+              </p>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

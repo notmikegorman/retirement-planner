@@ -14,10 +14,12 @@
  * that to files being written. A guard refusal rejects the boot with the
  * guard's own message; main.tsx renders it instead of the app.
  *
- * THE FOLDER is OPFS (navigator.storage.getDirectory()) in this phase — real
- * FileSystemDirectoryHandle storage, zero prompts, private to the origin. The
- * picked real folder arrives with Phase 7's PWA work; nothing here may care
- * which one it is handed (the driver's own rule, fsaFileStore.ts).
+ * THE FOLDER comes from the boot gate (Phase 7, storageChoice.ts): either
+ * the PICKED real folder (showDirectoryPicker, the durable choice) or the
+ * OPFS folder (browser-private storage — the explicit second choice, the
+ * D8 demo fallback, and what every automated test drives, since a picker
+ * cannot be scripted headlessly). Nothing here may care which one it was
+ * handed (the driver's own rule, fsaFileStore.ts).
  *
  * QUOTES GO THROUGH THE PHASE-6 PROXY, once one is configured. Browsers
  * cannot call Yahoo's endpoint directly (no CORS header, mandatory
@@ -65,6 +67,8 @@ import { createScoreStore } from '../../store/search/scoreStore';
 import { createSearchManager } from '../../store/searchManager';
 import { randomHex } from '../../shared/random';
 import { createFsaFileStore } from '../io/fsaFileStore';
+import { sweepSwapArtifacts } from '../io/swapArtifacts';
+import { resolveStorageForBoot } from './storageChoice';
 import type { Api } from '../api';
 import { bundledDefaults } from './bundledDefaults';
 import { createBrowserRunExecutor } from './browserRunExecutor';
@@ -77,12 +81,6 @@ import {
 } from './proxyQuoteFetcher';
 import { setScoringInFlight } from './scoringGuard';
 
-/** The OPFS directory the local backend keeps the data folder in. */
-const OPFS_FOLDER = 'fplan-data';
-
-/** Web-Lock scope: one folder, one writer, per browser profile. */
-const FOLDER_ID = `opfs:${OPFS_FOLDER}`;
-
 const CLIENT_ID_KEY = 'fplan-writer-client-id';
 
 /**
@@ -94,8 +92,13 @@ export interface LocalBackendOptions {
   quoteFetcher?: FetchLike;
 }
 
-/** Thrown when the writer guard refuses the folder; main.tsx renders it. */
+/**
+ * Thrown when the writer guard refuses the folder; main.tsx renders it.
+ * Recognised there BY NAME (never instanceof), because main.tsx must not
+ * statically import this lazily-loaded chunk just to identify an error.
+ */
 export class LocalBootRefusedError extends Error {
+  override readonly name = 'LocalBootRefusedError';
   constructor(
     public readonly reason: 'tab' | 'held' | 'sync-conflict',
     message: string,
@@ -172,15 +175,18 @@ export async function bootLocalBackend(): Promise<Api> {
       | LocalBackendOptions
       | undefined) ?? {};
 
-  const opfs = await navigator.storage.getDirectory();
-  const handle = await opfs.getDirectoryHandle(OPFS_FOLDER, { create: true });
+  // Which storage — the boot gate's approved answer (Phase 7): the picked
+  // real folder, or the OPFS folder the automated lane and the demo fallback
+  // drive. Everything below is identical either way — the driver's own rule.
+  const storage = await resolveStorageForBoot();
+  const handle = storage.handle;
 
   // The guard FIRST — before initDataDir can touch a byte. The heartbeat (and
   // the Web Lock) live in a dedicated worker so a backgrounded tab's throttled
   // timers cannot let the lease go stale under a live writer.
   const acquisition = await acquireGuardInWorker({
     handle,
-    folderId: FOLDER_ID,
+    folderId: storage.folderId,
     self: writerIdentity(),
     onLog: (message) => console.log(`[writer guard] ${message}`),
     onLeaseLost: () =>
@@ -191,7 +197,18 @@ export async function bootLocalBackend(): Promise<Api> {
   });
   if (!acquisition.ok) throw new LocalBootRefusedError(acquisition.reason, acquisition.message);
 
-  const files = createFsaFileStore(handle, '(browser data folder)');
+  // Orphaned `.crswap` staging files sweep NOW — guard held (so nothing can
+  // be mid-write), stores not yet reading (so nothing has listed the debris).
+  // swapArtifacts.ts carries the whole policy.
+  const sweptSwapFiles = await sweepSwapArtifacts(handle);
+  if (sweptSwapFiles.length > 0) {
+    console.log(
+      `[storage] swept ${sweptSwapFiles.length} orphaned .crswap staging file(s) ` +
+        `left by an interrupted write: ${sweptSwapFiles.join(', ')}`,
+    );
+  }
+
+  const files = createFsaFileStore(handle, storage.label);
   const stores: Stores = createStores({ files, defaults: await bundledDefaults() });
   const init = await stores.data.initDataDir();
   const services: Services = createServices(stores, createBrowserRunExecutor(), {
@@ -246,12 +263,37 @@ export async function bootLocalBackend(): Promise<Api> {
     return stores.quotes.refreshQuotes(batch, { fetchImpl: quoteFetcher });
   }
 
+  /**
+   * Decision D7, made visible: the runs/ cache stays UNBOUNDED (exactly what
+   * the Node server did — picked-folder writes are quota-exempt real disk),
+   * and in exchange its size is measured at every meta() ask and shown on
+   * the Dashboard. Measured straight off the handle (getFile().size — no
+   * bytes read) rather than through the FileStore seam, which deliberately
+   * has no stat call: this is a metric about the folder, not a record read.
+   */
+  async function measureRunCache(): Promise<{ files: number; bytes: number }> {
+    try {
+      const runsDir = await handle.getDirectoryHandle('runs');
+      let files = 0;
+      let bytes = 0;
+      for await (const entry of runsDir.values()) {
+        if (entry.kind !== 'file') continue;
+        files += 1;
+        bytes += (await (entry as FileSystemFileHandle).getFile()).size;
+      }
+      return { files, bytes };
+    } catch {
+      return { files: 0, bytes: 0 }; // no runs/ yet: an honest zero
+    }
+  }
+
   return {
     // ----- Meta -------------------------------------------------------------
     meta: async () => ({
       dataDir: init.dataDir,
       engineVersion: ENGINE_VERSION,
       dataDirInitialized: init.existedBefore,
+      runCache: await measureRunCache(),
     }),
 
     // ----- Profile ----------------------------------------------------------
