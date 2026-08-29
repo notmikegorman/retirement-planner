@@ -160,6 +160,17 @@ There is no build step for the server. `tsx` runs the TypeScript sources
 directly, in development and in production alike, which is why it is a runtime
 dependency rather than a dev one. Only the UI is bundled.
 
+**The dual-boot switch (browser-port Phase 4).** The app has two backends
+behind one client (`src/ui/api.ts`): the HTTP server above — still the
+default, byte-for-byte unchanged — and an in-browser LOCAL backend
+(`src/ui/local/`) that runs the same stores and scorers over an OPFS folder
+behind the writer guard, no server anywhere. Opt in with `?backend=local` on
+any URL (remembered in localStorage so reloads keep the mode; `?backend=http`
+selects HTTP and forgets), or build with `VITE_FPLAN_BACKEND=local`. In local
+mode, quote refreshes fail per-symbol until Phase 6's proxy exists (the
+message says so), and the Search page says honestly that search hasn't been
+ported yet (Phase 5). The default flips to local at Phase 7, not before.
+
 ## Checks
 
 ```bash
@@ -189,7 +200,14 @@ byte-identical folder trees on node and OPFS, and the Web Locks + lease
 writer guard refuses/takes over exactly as specified — with two real tabs of
 one browser profile. OPFS is the test double for the picked folder because it
 hands back the same `FileSystemDirectoryHandle` API without a picker, which
-headless Chromium cannot click. The lane is deliberately not part of
+headless Chromium cannot click. The third file (`dualStack.test.ts`, Phase 4)
+is the dual-stack gate: it builds the REAL app bundle and drives the same
+scripted session through it twice — once against a privately spawned Node
+server (ephemeral port, temp data dir, fixture-fed quotes via
+`FPLAN_QUOTE_FIXTURES_DIR`), once in local mode (`?backend=local`) over
+seeded OPFS — then byte-diffs the two data folders and the run cache under
+enumerated masks and compares the on-screen story verbatim. The lane is
+deliberately not part of
 `npm test`: it pays for a bundle build and a browser launch (~10s), and the
 fast loop must stay fast. Run it whenever you touch `src/engine`, `src/tax`,
 `src/shared`, `src/store`, `src/ui/io`, the workers, or anything

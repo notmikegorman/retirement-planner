@@ -1357,3 +1357,57 @@ answered.
 same reason. The quick run exists to keep the screen alive while knobs move, and
 the fix here costs it 3-4ms on the miss that follows every edit. The loop after
 an edit is exactly what it was.
+
+## One UI, two backends (browser-port Phase 4, 2026-08-29)
+
+The app's single client (`src/ui/api.ts`) became the backend seam: its surface
+is now the `Api` contract with two implementations — the HTTP client,
+unchanged and still the default, and a LOCAL backend whose 27 methods call the
+in-browser services directly. The environment-neutral halves of the run
+manager, the score runner and both scorers moved from `src/server` to
+`src/store` as factories (the same extraction pattern Phase 3 set for the
+stores); the node faces re-export one composed instance, so every existing
+import path and all ~300 server tests kept their meaning. The decisions worth
+recording:
+
+- **Selection is explicit and remembered.** `?backend=local` at boot, kept in
+  localStorage because the router rewrites URLs on navigation — without
+  memory, a reload from `/workbench` would silently fall back to HTTP
+  mid-session, which is the one thing a mode switch must never do.
+  `?backend=http` selects AND forgets, so the escape hatch stays one query
+  parameter. HTTP remains the shipped default until Phase 7.
+
+- **`src/ui` is the browser runtime's home, settling the plan doc's
+  `src/app`.** Phase 1 put the sim worker at `src/ui/workers`, Phase 3 put the
+  driver and guard at `src/ui/io`; Phase 4 followed with `src/ui/local` rather
+  than renaming two shipped directories to match a name on paper. The plan's
+  `src/app/*` should be read as `src/ui/*`.
+
+- **The lease heartbeat lives in a dedicated worker**
+  (`src/ui/workers/guardWorker.ts`), which also holds the Web Lock: browsers
+  throttle page timers in hidden tabs — to once a minute, then to nothing —
+  so a main-thread heartbeat would go stale under every backgrounded live
+  writer, and worker timers are exempt. The plan's end-state (one IO worker
+  owning all file access) is deferred to Phase 5/7: the guard is the piece
+  timer throttling can silently corrupt, the stores' serialized chains
+  already protect the single tab that owns the folder, and moving all IO now
+  would have rebuilt Phase 3's tested layer mid-phase for no additional
+  safety.
+
+- **One reusable sim worker, runs serialized** (`browserRunExecutor.ts`). The
+  browser worker was built for one-message-per-run reuse; serializing run
+  hand-offs keeps progress attribution structural instead of inferred. The
+  run manager reports 'queued' exactly as it always did, and the UI's
+  requestId guard already handles overlap.
+
+- **Quotes fail honestly until Phase 6.** The local backend's default fetcher
+  fails every symbol with a message naming the proxy as the missing piece —
+  per-symbol failure is data, the store's own rule — and the injection seam
+  (`globalThis.__fplanLocalOptions.quoteFetcher`) is what the dual-stack gate
+  fills with fixtures and Phase 6 fills with the proxy. Search is Phase 5 and
+  the Search page says so via a declared capability
+  (`api.searchAvailability`), never by sniffing the backend.
+
+- **Interruption semantics are unchanged by design.** A killed tab leaves a
+  scoreless row exactly as a killed server did; the write-ahead intent file
+  and unload guard are Phase 6's work, deliberately not smuggled in early.
