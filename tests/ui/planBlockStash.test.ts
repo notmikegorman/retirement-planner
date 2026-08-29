@@ -6,8 +6,8 @@
  * The incident under test, so the properties make sense: Housing's "Turn
  * off" removes the block (the engine's absent-means-unmodeled contract),
  * and re-enabling used to seed a fresh form. The owner refilled it from
- * memory, missed his real $1,850 insurance quote, and the engine estimated
- * $3,850 instead — a real point of probability lost to a number he had
+ * memory, missed an insurance quote that had been entered, and the engine's
+ * estimate stood in at roughly double — a point of probability lost to a number the user had
  * already typed once. The properties that prevent a recurrence:
  *
  *  1. The stash is keyed PER DATA FOLDER, by the identity the writer guard
@@ -52,8 +52,8 @@ const housing = (over: Partial<HousingPlan> = {}): HousingPlan => ({
   purchasePrice: 1_750_000,
   propertyTaxAnnual: 7500,
   // THE FIELD THE INCIDENT WAS ABOUT: a real quote whose absence means a
-  // $3,850 estimate. It must round-trip the stash exactly.
-  insuranceAnnual: 1850,
+  // price-based estimate. It must round-trip the stash exactly.
+  insuranceAnnual: 1725,
   financing: { type: 'cash' },
   ...over,
 });
@@ -69,7 +69,7 @@ describe('the shelf key is per folder, per block', () => {
     writeBlockStash('folder-one', 'housing', housing(), new Date('2026-08-29T17:42:00'), store);
     expect(readBlockStash('folder-two', 'housing', store)).toBeNull();
     expect(readBlockStash<HousingPlan>('folder-one', 'housing', store)?.value.insuranceAnnual).toBe(
-      1850,
+      1725,
     );
   });
 

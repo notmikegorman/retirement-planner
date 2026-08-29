@@ -1665,8 +1665,8 @@ level by the zero-start cases in `tests/store/storeSuite.ts` (both drivers).
 The owner lost a real point of probability today: "Turn off" on the Housing
 tab deleted the block (correctly — the engine's absent-means-unmodeled
 contract is untouchable, and no engine code changed), and re-enabling gave
-him a seeded blank form he refilled from memory, missing his real $1,850
-insurance quote. Absent, the engine estimated 0.22% of the price — $3,850
+a seeded blank form refilled from memory, missing an insurance quote that
+had been entered. Absent, the engine estimated 0.22% of the price — roughly double the quote
 on his house — and the plan quietly paid the difference every simulated
 year. The engine was right both times; the UI threw away his work.
 

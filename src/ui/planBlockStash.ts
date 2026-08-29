@@ -6,8 +6,8 @@
  * `plan.housing` — correctly, because the engine's contract is that absent
  * means unmodeled, and that contract is untouchable — and "Model the move
  * here" then seeded a fresh form. The owner refilled it from memory and
- * missed his real $1,850 insurance quote; absent, the engine estimated
- * $3,850 for his house, and the plan silently lost a real point of
+ * missed a real insurance quote that had been entered; absent, the engine's
+ * price-based estimate stood in at roughly double, and the plan silently lost a point of
  * probability to a number he had already typed once. The engine was right
  * both times. The UI threw away his work.
  *

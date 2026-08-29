@@ -191,8 +191,8 @@ describe('withSurvivorDownsize', () => {
 describe('the toggle keeps its configuration (source scan — the stash wiring)', () => {
   /**
    * The incident: Turn off deleted the block, re-enable seeded a blank, the
-   * owner refilled from memory and lost his $1,850 insurance quote to the
-   * $3,850 estimate. The stash rules live in planBlockStash/housingStash and
+   * user refilled from memory and lost an entered insurance quote to the
+   * price-based estimate at roughly double it. The stash rules live in planBlockStash/housingStash and
    * are behaviour-tested there (tests/ui/planBlockStash.test.ts); what THIS
    * scan holds is the card's wiring — the calls happening, in the order the
    * design requires. A wrong order here (remove before stash) is a
