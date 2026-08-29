@@ -952,6 +952,29 @@ describe('cancellation', () => {
     expect(progress.stage).not.toBe('done');
   });
 
+  it('overruns a cancel by at most one chunk — the chunking IS the latency bound', async () => {
+    // The executor submits evaluations in chunks of max(8, workers x 4) and
+    // checks the cancel flag between chunks; that chunk size exists for
+    // exactly this property (execute.ts: "chunked at 4x the pool so
+    // cancellation is responsive"). The loose < 200 bound above catches "never
+    // stopped" but would NOT catch a ballooned chunk that submits a whole
+    // screening round at once — a mutation that makes a mid-round cancel cost
+    // minutes at real path counts while every shape assertion stays green. So
+    // pin the overrun itself: with workers=2 the chunk is 8, the flag flips at
+    // evaluation 40, and everything after it must fit inside the one chunk
+    // already in flight (later batches check the flag before submitting).
+    world.cancelAfter = 40;
+    const { report } = await run({
+      base: basePlan(),
+      axes,
+      budget: budget({ enumerate: true, finalists: 3, workers: 2 }),
+    });
+
+    expect(report.truncated).toBe(true);
+    expect(world.calls.length).toBeGreaterThanOrEqual(40);
+    expect(world.calls.length).toBeLessThanOrEqual(40 + 8);
+  });
+
   it('cancels cleanly before anything at all has been measured', async () => {
     world.cancelAfter = 1;
     const { report } = await run({ base: basePlan(), axes, budget: budget() });
