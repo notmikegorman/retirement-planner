@@ -34,13 +34,31 @@ import { stableStringify } from '../../src/shared/util';
 import { runSimulation } from '../../src/engine/simulate';
 import { initDataDir, loadAssumptions, loadProfile } from '../../src/server/dataStore';
 
-/** Every file whose contents can change a number the engine reports. */
+/**
+ * Every file whose contents can change a number the engine reports — or what a
+ * cached number is KEYED by.
+ *
+ * The second clause is why src/shared/sha256.ts is in the set even though it
+ * lives outside src/engine: RunMeta.hashes, runKey, and every golden digest
+ * compute through that one vendored function. An edit there changes what every
+ * cache key MEANS while every file under src/engine stands still — and before
+ * this list was widened, exactly that gap was demonstrated: a mutated
+ * sha256.ts left this pin green while silently moving every runKey the app
+ * would ever compute. The identity tests (FIPS vectors, the 100k property
+ * test, this file's own RunMeta.hashes assertion) catch a hash that stops
+ * matching node:crypto; this pin is what forces even a "faithful" rewrite to
+ * be acknowledged with a version decision rather than slipping through.
+ */
 function engineSourceFiles(): string[] {
   const dir = fileURLToPath(new URL('../../src/engine', import.meta.url));
-  return readdirSync(dir)
+  const engine = readdirSync(dir)
     .filter((f) => f.endsWith('.ts'))
     .sort()
     .map((f) => `${dir}/${f}`);
+  // Appended after the sorted engine files so the formula is order-stable; its
+  // basename ('sha256.ts') goes into the hash like the others, so a rename
+  // counts as a change too.
+  return [...engine, fileURLToPath(new URL('../../src/shared/sha256.ts', import.meta.url))];
 }
 
 function engineSourceHash(): string {
@@ -54,10 +72,26 @@ function engineSourceHash(): string {
 }
 
 /**
- * The hash of src/engine as of the ENGINE_VERSION below it. BOTH lines move
- * together, always.
+ * The hash of the engine's integrity set (src/engine + src/shared/sha256.ts —
+ * see engineSourceFiles) as of the ENGINE_VERSION below it. BOTH lines move
+ * together whenever any file IN the set changes. The one exception is a change
+ * to the FORMULA itself (adding a file to the set): that moves the hash while
+ * every hashed byte stands still, so the hash re-pins alone and the entry
+ * below says so — bumping ENGINE_VERSION for it would invalidate every cached
+ * run to acknowledge a change no run can feel.
  */
 const PINNED = {
+  // 1.23.0 (hash re-pinned once WITHOUT a version bump): THE PIN LEARNS WHAT
+  // THE ENGINE DEPENDS ON. src/shared/sha256.ts joins the hashed set — the
+  // formula widened, no source file changed, so ENGINE_VERSION holds: this
+  // file's own rule is that the version moves when the engine's NUMBERS can,
+  // and a formula edit cannot move a number or a runKey. The widening exists
+  // because a verifier proved the gap: with the pin reading only src/engine,
+  // an edit to sha256.ts — the function every runKey, RunMeta.hash and golden
+  // digest computes through — left this test green. From here on, such an
+  // edit fails the pin and demands the same explicit version decision an
+  // engine edit does.
+  //
   // 1.23.0: ONE HASH EVERYWHERE — the engine's last Node import is gone.
   // simulate.ts's private `sha256Hex` (createHash from node:crypto) is
   // replaced by the vendored, dependency-free shared/sha256, the single
@@ -282,7 +316,7 @@ const PINNED = {
   // 1.13.0 was the tithe account's soft window; 1.12.0 per-policy
   // life-insurance dispositions; 1.11.0 the itemised budget.
   version: '1.23.0',
-  engineSourceSha256: '9ad278391b8be059980b11814245a69b40c5d32532f6d5320a70fe793dfdbff7',
+  engineSourceSha256: '355140c9524094cccfde62000d91b8d183fc121b95cae632ad58512c0bd0eb84',
 };
 
 describe('ENGINE_VERSION and the run cache', () => {
@@ -290,7 +324,8 @@ describe('ENGINE_VERSION and the run cache', () => {
     const actual = engineSourceHash();
     expect(
       actual,
-      'src/engine changed. Bump ENGINE_VERSION in src/shared/types.ts and set ' +
+      'The engine integrity set (src/engine, or src/shared/sha256.ts) changed. ' +
+        'Bump ENGINE_VERSION in src/shared/types.ts and set ' +
         `engineSourceSha256 in this file to:\n  ${actual}\n` +
         'Skipping the bump makes the run cache serve results from the previous engine.',
     ).toBe(PINNED.engineSourceSha256);

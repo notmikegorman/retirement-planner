@@ -171,11 +171,14 @@ npx vitest run tests/server/singleWriter.test.ts     # one file
 Run both before committing. The engine's golden digests will tell you
 immediately if a change moved a number, which is usually the question.
 
-**If you change anything under `src/engine`**, bump `ENGINE_VERSION` in
-`src/shared/types.ts` and re-pin `engineSourceSha256` in
-`tests/shared/engineVersion.test.ts` — the test says so itself, and a pure
+**If you change anything under `src/engine` — or `src/shared/sha256.ts`**,
+bump `ENGINE_VERSION` in `src/shared/types.ts` and re-pin `engineSourceSha256`
+in `tests/shared/engineVersion.test.ts` — the test says so itself, and a pure
 refactor still counts. The engine version is part of the run cache key, so
 getting this wrong means serving cached answers computed by different code.
+The sha256 module is in the pinned set because every cache key and digest is
+computed through it: editing it changes what every runKey *means* without
+touching a line of src/engine.
 
 Every test that touches the data folder points `FPLAN_DATA_DIR` at a fresh temp
 directory of its own, `tests/shared/engineVersion.test.ts` included — it seeds
