@@ -70,7 +70,9 @@ const page = read('../../src/ui/pages/WorkbenchPage.tsx');
 const panel = read('../../src/ui/components/workbench/ScenarioPanel.tsx');
 const results = read('../../src/ui/components/workbench/LiveResults.tsx');
 const logic = read('../../src/ui/components/workbench/workbenchLogic.ts');
-const scoreRunner = read('../../src/server/scoreRunner.ts');
+// The scoring logic moved to src/store in Phase 4 of the browser port (the
+// node path re-exports it); the pins follow the code, not the face.
+const scoreRunner = read('../../src/store/scoreRunner.ts');
 
 /**
  * The source with every comment removed — JSX blocks, TypeScript blocks, and
@@ -735,10 +737,12 @@ describe('a final run already on file is preferred over recomputing a quick one'
     const restore = src.slice(src.indexOf('const restoreFinalRun = useCallback'));
     expect(restore).toContain('api.lookupCachedRun(');
     expect(restore.slice(0, restore.indexOf('\n  }, ['))).not.toContain('api.startRun(');
-    // …and the route behind it reads a file and answers; it never spawns.
-    const manager = stripComments(read('../../src/server/runManager.ts'));
-    const lookup = manager.slice(manager.indexOf('export async function lookupCachedRun'));
-    expect(lookup.slice(0, lookup.indexOf('\n}'))).not.toContain('spawnWorker');
+    // …and the manager behind it reads a file and answers; it never hands the
+    // request to the executor. (The manager moved to src/store in Phase 4 of
+    // the browser port — the pin follows the code, not the node face.)
+    const manager = stripComments(read('../../src/store/runManager.ts'));
+    const lookup = manager.slice(manager.indexOf('async function lookupCachedRun'));
+    expect(lookup.slice(0, lookup.indexOf('\n  }'))).not.toContain('execute(');
   });
 
   it('asks about the whole input, not about the plan', () => {
@@ -753,7 +757,7 @@ describe('a final run already on file is preferred over recomputing a quick one'
     expect(stripComments(page)).toMatch(
       /api\.lookupCachedRun\(\{\s*scenario: scenarioForPlainRun\(plan\),\s*\.\.\.standIn,\s*\}\)/,
     );
-    const manager = stripComments(read('../../src/server/runManager.ts'));
+    const manager = stripComments(read('../../src/store/runManager.ts'));
     expect(manager).toContain('return readCachedResult(runKeyFor(await resolveRunInput(req)))');
     expect(manager).toContain(
       "stableStringify({ engineVersion: ENGINE_VERSION, input })",
