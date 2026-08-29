@@ -9,6 +9,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:ui": "vite",
     "build:ui": "vite build",
+    "build:pages": "FPLAN_BASE=/retirement-planner/ VITE_FPLAN_BACKEND=local VITE_FPLAN_SW=1 vite build && tsx scripts/pagesExtras.ts dist/ui",
     "test": "vitest run",
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "typecheck": "tsc --noEmit",

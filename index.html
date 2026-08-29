@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Finance Planner</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The PWA manifest (Phase 7): its own URLs (icons, start_url, scope)
+         are relative to the manifest file, so it is base-agnostic; this
+         link's absolute href is base-prefixed by Vite at build time, like
+         the favicon's. Installing is what upgrades the picked-folder
+         permission to auto-persist on Chromium. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2563eb" />
     <script>
       // Stamp the resolved theme on <html> BEFORE first paint so there is no
       // flash of the wrong theme. src/ui/theme.ts keeps data-theme in sync

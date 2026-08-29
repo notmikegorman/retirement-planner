@@ -1,4 +1,5 @@
 import { PAGES, useRoute, type Page } from './nav';
+import { useSwUpdate } from './pwa';
 import { ThemeContext, themeModeIcon, themeModeLabel, useThemeController } from './theme';
 import { ToastProvider } from './toast';
 import { WorkbenchPage } from './pages/WorkbenchPage';
@@ -32,6 +33,26 @@ const NAV_LABELS: Record<Page, string> = {
   networth: 'Net Worth',
   methodology: 'Methodology',
 };
+
+/**
+ * The service worker's update affordance (Phase 7): visible exactly while a
+ * new version is installed and waiting, gone otherwise. The reload is the
+ * ONLY way a live session moves to the new bundle — never a silent swap —
+ * and the beforeunload guards still warn if a scoring run or search is in
+ * flight when the button is pressed.
+ */
+function SwUpdateBar() {
+  const activate = useSwUpdate();
+  if (activate === null) return null;
+  return (
+    <div className="sw-update-bar" role="status">
+      <span>A new version of the planner is ready.</span>
+      <button className="primary" onClick={activate}>
+        Reload to update
+      </button>
+    </div>
+  );
+}
 
 export function App() {
   const { route, navigate, storedTabs } = useRoute();
@@ -88,6 +109,7 @@ export function App() {
             {page === 'networth' && <NetWorthPage {...props} />}
             {page === 'methodology' && <MethodologyPage {...props} />}
           </main>
+          <SwUpdateBar />
         </div>
       </ToastProvider>
     </ThemeContext.Provider>

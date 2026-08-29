@@ -1,0 +1,75 @@
+# THE PAGES DEPLOY (Phase 7): build the browser app with the Pages base and
+# the local backend as the shipped default, and publish dist/ui to GitHub
+# Pages at https://notmikegorman.github.io/retirement-planner (decision D6).
+#
+# TESTS GATE THE DEPLOY via workflow_run rather than a duplicated test job:
+# this workflow fires when ci.yml finishes on main and deploys only from a
+# SUCCESSFUL run's exact SHA. Chosen over `needs:` (which would mean moving
+# or copying the test job into this file) because ci.yml stays the one test
+# gate for pushes AND pull requests, the deploy rides the same green the
+# repo already trusts, and nothing runs twice on a 2-core budget. The cost —
+# workflow_run only fires for the default branch, and the deploy shows up as
+# its own run — is exactly the behaviour wanted here.
+#
+# THE FLIP (decision D6 / Phase 7): ON PAGES, local is the default backend —
+# VITE_FPLAN_BACKEND=local below is the one and only place that flips it.
+# The repo default for `npm run dev` / `npm start` stays HTTP (pinned by
+# tests/ui/backendMode.test.ts); the parked legacy server serves exactly the
+# app it always served.
+name: pages
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  # Manual redeploys (e.g. after enabling Pages on the repo) build main's
+  # HEAD; the workflow_run path pins the tested SHA.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, never cancelled mid-flight: a killed deploy can leave
+# the site half-old half-new, which is the exact staleness class the service
+# worker's versioned precache exists to prevent.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The SHA ci.yml proved, not whatever main moved to since.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Base path + backend default + SW opt-in + the 404/sw extras — the
+      # same recipe tests/browser/pagesWalkthrough.test.ts builds and drives.
+      - run: npm run build:pages
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/ui
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -575,6 +575,23 @@ th {
   text-align: center;
 }
 
+/* The service worker's reload-to-update offer: a small fixed card, present
+   exactly while a new version waits (App.tsx / src/ui/pwa.ts). */
+.sw-update-bar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  padding: 10px 14px;
+}
+
 .flag {
   display: inline-block;
   background: var(--warn-soft-bg);

@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { api, backendMode, ensureBackendReady } from './api';
+import { maybeRegisterServiceWorker } from './pwa';
 import { DemoStorageBanner, FolderReconnect, StorageChooser } from './local/StorageGate';
 import {
   clearStorageChoice,
@@ -26,6 +27,10 @@ declare global {
   }
 }
 window.__fplanApi = api;
+
+// The PWA service worker — a no-op in every build except the Pages deploy's
+// (VITE_FPLAN_SW=1); src/ui/pwa.ts carries the update discipline.
+maybeRegisterServiceWorker();
 
 const root = createRoot(document.getElementById('root')!);
 
