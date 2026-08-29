@@ -160,15 +160,50 @@ There is no build step for the server. `tsx` runs the TypeScript sources
 directly, in development and in production alike, which is why it is a runtime
 dependency rather than a dev one. Only the UI is bundled.
 
-**The dual-boot switch (browser-port Phase 4).** The app has two backends
-behind one client (`src/ui/api.ts`): the HTTP server above — still the
-default, byte-for-byte unchanged — and an in-browser LOCAL backend
-(`src/ui/local/`) that runs the same stores and scorers over an OPFS folder
-behind the writer guard, no server anywhere. Opt in with `?backend=local` on
-any URL (remembered in localStorage so reloads keep the mode; `?backend=http`
-selects HTTP and forgets), or build with `VITE_FPLAN_BACKEND=local`. In local
-mode, quote refreshes fail per-symbol until Phase 6's proxy exists (the
-message says so). The default flips to local at Phase 7, not before.
+**The dual-boot switch (browser-port Phase 4; shipped at Phase 7).** The app
+has two backends behind one client (`src/ui/api.ts`): the HTTP server above,
+and an in-browser LOCAL backend (`src/ui/local/`) that runs the same stores
+and scorers over a FileSystemDirectoryHandle folder behind the writer guard,
+no server anywhere. Switch with `?backend=local` / `?backend=http` on any URL
+(remembered in localStorage so reloads keep the mode; `http` also forgets),
+or bake a default with `VITE_FPLAN_BACKEND=local`. Since Phase 7 the DEPLOYED
+app (GitHub Pages, `npm run build:pages`) bakes local as its default; the
+REPO default for `npm run dev` / `npm start` stays HTTP, pinned by
+`tests/ui/backendMode.test.ts`. In local mode the first visit asks where data
+should live (`src/ui/local/storageChoice.ts` — a picked real folder, or
+browser-private OPFS), and quote refreshes flow through the Phase-6 proxy
+once one is configured (`workers/quote-proxy/README.md`; per-symbol honest
+failures until then).
+
+**Scripting the app (`window.__fplanApi`).** The browser app deliberately
+exposes its whole backend seam on the page: `window.__fplanApi` is the same
+`Api` object every component calls — all 27 methods, either backend, same
+shapes and same thrown messages. It is the browser descendant of the curl-able
+localhost API: when the server's routes retire, "scriptable" becomes the
+DevTools console instead of `curl localhost:5599/api/...`. Documented surface,
+not an accident — the dual-stack and walkthrough gates drive it to assert
+refusals the UI draws no button for, and one-off data surgery
+(`await __fplanApi.getPlan()`, mutate, `putPlan`) is the intended use. Two
+things it will not save you from: it goes through the same validation and
+guards as every button (there is no privileged path), and in HTTP mode it is
+just the fetch client, so the legacy curl surface remains strictly more
+scriptable from outside the page.
+
+**The Pages deploy (Phase 7).** `npm run build:pages` produces the shipped
+artifact: `FPLAN_BASE=/retirement-planner/` (project sites serve under
+/<repo>/ — `vite.config.ts` reads the env var, `src/ui/nav.ts` strips and
+prepends it around every router read/write), `VITE_FPLAN_BACKEND=local`,
+`VITE_FPLAN_SW=1` (the only build that registers the service worker —
+`src/ui/pwa.ts` has the update discipline: precache, wait, and a visible
+"Reload to update" instead of ever swapping mid-session), then
+`scripts/pagesExtras.ts` writes `404.html` (the deep-link trick — Pages
+serves the app AS its error page, which boots the router on the deep path)
+and generates `sw.js` from the built files. `.github/workflows/pages.yml`
+runs exactly that recipe and deploys `dist/ui` — triggered by `workflow_run`
+when `ci.yml` finishes green on main, from that run's exact SHA, so the
+deploy always rides the same tests the repo already trusts and nothing runs
+twice. PWA icons are committed (`public/icon-*.png`); regenerate with
+`npx tsx scripts/generateIcons.ts` if the art ever changes.
 
 **Search in local mode (browser-port Phase 5).** The Search page works
 identically on both backends: in local mode the shared executor
@@ -226,6 +261,20 @@ createdAt, elapsedMs — ids and wall clock, nothing else) and identical
 slim-score trees including their runKey filenames, and a second oversized
 search cancelled mid-flight must leave the same truncated-partial-report
 shape verbatim, with the beforeunload guard observed arming and disarming.
+Phase 6 added `interruption.test.ts` (the killed-tab scoring matrix over the
+write-ahead intents) and `proxy.test.ts` (a real Refresh through the quote
+proxy handler mounted on a node adapter). Phase 7 added
+`pagesWalkthrough.test.ts` — the fresh-machine gate: it builds the BASED
+Pages bundle (base `/retirement-planner/`, local default, the 404 trick from
+`scripts/pagesExtras.ts`), serves it with GitHub Pages' own semantics
+(prefix + 404.html-with-status-404), and drives it as a brand-new user from
+the first-visit storage chooser through runs, a snapshot, a
+cached-final-run-restoring reload, a deep-link reload via the 404 trick, and
+the no-picker demo fallback. It is the only lane that executes the base path
+and the only one that sees the chooser (every other lane pre-seeds
+`fplan-storage=opfs` as a returning user); it also asserts the service
+worker stays UNREGISTERED in the lane — registration is opt-in per build via
+`VITE_FPLAN_SW=1`, which only `build:pages` sets.
 The lane is deliberately not part of
 `npm test`: it pays for a bundle build and a browser launch (~10s), and the
 fast loop must stay fast. Run it whenever you touch `src/engine`, `src/tax`,

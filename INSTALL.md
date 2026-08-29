@@ -1,12 +1,25 @@
 # Installing Finance Planner
 
+> **This is legacy mode.** The primary way to run the planner is the hosted
+> browser app — **<https://notmikegorman.github.io/retirement-planner>** —
+> which needs no install, no service, and no port: open the URL, pick a
+> folder, done ([README.md](README.md) explains the storage choices). The
+> Node service below keeps working exactly as it always has, on the same
+> data-folder format (a folder from either mode opens in the other), and
+> remains supported until the owner decides otherwise. Install it when you
+> specifically want a server — e.g. work that must outlive the browser tab,
+> or the `curl localhost:5599/api/...` scripting surface.
+
 Running it as a service that starts at boot, on Linux or macOS.
 
-Read the security section of [README.md](README.md#read-this-before-you-install-it)
-first. The short version, because it decides how you install: **the app has no
+Read the security section of
+[README.md](README.md#the-legacy-server-the-parked-node-service) first. The
+short version, because it decides how you install: **the server has no
 authentication of any kind.** Bind it to loopback and reach it over an SSH
-tunnel or a VPN, or put an authenticating reverse proxy in front of it. Nothing
-below assumes otherwise.
+tunnel or a VPN, or put an authenticating reverse proxy in front of it.
+Nothing below assumes otherwise. (Also: no request log, no `Host`-header
+validation — DNS rebinding is the realistic attack on a loopback bind, and a
+reverse proxy that checks `Host` is what closes it.)
 
 ---
 
@@ -17,7 +30,13 @@ below assumes otherwise.
   landed in 20.6.0. On 20.0–20.5 the server boots, serves the interface, reads
   and writes your data, and then fails every simulation. The installer checks.
 - **git**, if you want `update.sh` to be able to pull.
-- **More than one core.** See [README](README.md#what-it-needs).
+- **More than one core, genuinely.** Every simulation runs off the main
+  thread, and a parameter search runs a pool of `min(8, max(2, cores - 2))`
+  of them at once; on a single-core box the pool floor of two plus unqueued
+  interactive runs saturates the machine. Two cores is usable; four or more
+  is comfortable. In a container, `os.cpus()` reports the *host's* cores
+  rather than your quota, so a tightly-limited container will oversize its
+  pool and thrash.
 - **Do not run any of this as root.** `install.sh` refuses. Both service
   definitions it writes are per-user and need no privileges.
 
