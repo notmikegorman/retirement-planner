@@ -15,15 +15,18 @@
  *     results area says what is missing and where to add it instead.
  *
  *   - ZERO SPENDING DOES NOT GATE — IT IS SAID BESIDE THE NUMBER. A household
- *     with accounts and no recorded expenses simulates fine and scores near
- *     100%, which is a flattering fantasy — a plan that never spends cannot
- *     fail. But unlike the zero-account case the number is a true statement
- *     about the inputs as entered, and this app's rule for true-but-
- *     conditional numbers is that the number CARRIES its condition (the same
- *     rule as "Quick run · 1,000 paths" and the widow banner), not that it is
- *     withheld. Gating here would also break the first honest feedback moment
- *     a new user gets: add one account, watch the first simulation appear,
- *     read the caption telling you what it still assumes.
+ *     with accounts and no recorded expenses still simulates: its futures
+ *     spend only what the law charges anyway (taxes; Medicare premiums from
+ *     65), so the score is usually flattering — though those statutory
+ *     charges can still sink a small balance, so the caption must not claim
+ *     the plan cannot fail, and the verdict beside it may honestly say "No".
+ *     Unlike the zero-account case the number is a true statement about the
+ *     inputs as entered, and this app's rule for true-but-conditional numbers
+ *     is that the number CARRIES its condition (the same rule as "Quick run ·
+ *     1,000 paths" and the widow banner), not that it is withheld. Gating
+ *     here would also break the first honest feedback moment a new user
+ *     gets: add one account, watch the first simulation appear, read the
+ *     caption telling you what it still assumes.
  *
  * Both facts are read through deriveExpenseStreams so an itemised budget and
  * the scalar streams cannot disagree about what "no recorded spending" means.
@@ -68,10 +71,10 @@ export const FIRST_RUN_BODY =
 
 /** Beside the number, whenever it was computed against $0/mo of spending. */
 export const ZERO_SPEND_CONDITION =
-  'Recorded spending is $0/month, so no simulated future spends anything — and a ' +
-  'plan that never spends cannot fail. This number is a fact about the inputs as ' +
-  'entered, not about your retirement; record your expenses on the Profile tab ' +
-  'and it becomes one.';
+  'Recorded spending is $0/month, so the only dollars any simulated future spends ' +
+  'are the ones the law charges anyway — taxes, and Medicare premiums from 65. ' +
+  'This number is a fact about the inputs as entered, not about your retirement; ' +
+  'record your expenses on the Profile tab and it becomes one.';
 
 /** Net Worth's snapshot affordance, gated. */
 export const NET_WORTH_FIRST_RUN =

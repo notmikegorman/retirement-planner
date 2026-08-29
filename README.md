@@ -149,7 +149,9 @@ shows is your own data. With no accounts entered yet, the Workbench shows
 what is missing and where to add it rather than a success percentage — a
 simulation of zero accounts would be a statement about a household that does
 not exist — and once accounts exist but recorded spending is still $0, the
-score says that beside itself (a plan that never spends cannot fail).
+score says that beside itself: those futures spend only what the law charges
+anyway (taxes, and Medicare premiums from 65), so the number describes the
+inputs as entered, not your retirement.
 
 The **fictional example household** — invented people, round invented
 balances (`data-defaults/profile.starter.json`) — survives in exactly two

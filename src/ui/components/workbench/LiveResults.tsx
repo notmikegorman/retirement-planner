@@ -314,12 +314,14 @@ function ResultsBody({
             {/*
               THE ZERO-SPEND CONDITION (zero-start's annotate half — see
               src/ui/firstRun.ts): a household with accounts but $0/mo of
-              recorded spending scores near 100% because nothing is ever
-              spent. The number is a true statement about the inputs, so it
-              renders — but it renders WITH its condition, in the same slot
-              and voice as the survivor warning above, because a flattering
-              fantasy read as a verdict is exactly the misreading this app
-              exists to prevent.
+              recorded spending spends only what the law charges (taxes;
+              Medicare premiums from 65) — usually a flattering score, though
+              not always a passing one, since statutory charges can outlast a
+              small balance. The number is a true statement about the inputs,
+              so it renders — but it renders WITH its condition, in the same
+              slot and voice as the survivor warning above, because a
+              flattering fantasy read as a verdict is exactly the misreading
+              this app exists to prevent.
             */}
             {(() => {
               const readiness = simulationReadiness(profile);

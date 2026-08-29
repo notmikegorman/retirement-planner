@@ -1631,8 +1631,11 @@ submit — abandon and reload lands back on setup.
   Net Worth's snapshot button, the History tab's scoring offers, and the
   Search page all degrade to the same honest words.
 - **Zero recorded spending ANNOTATES.** With accounts but a $0/mo budget the
-  score is a true statement about the inputs (a plan that never spends
-  cannot fail), and the house rule for true-but-conditional numbers is that
+  score is a true statement about the inputs — its futures spend only what
+  the law charges anyway (taxes; Medicare premiums from 65), which usually
+  flatters, though those statutory charges can still sink a small balance,
+  so the caption states the condition without claiming the plan cannot
+  fail — and the house rule for true-but-conditional numbers is that
   the number carries its condition — a standing caption beside the verdict,
   not a withheld result. Gating it would also break the first feedback
   moment: add one account, watch the first simulation appear, read what it
