@@ -64,6 +64,12 @@ jobs:
       # Base path + backend default + SW opt-in + the 404/sw extras — the
       # same recipe tests/browser/pagesWalkthrough.test.ts builds and drives.
       - run: npm run build:pages
+        env:
+          # The owner's deployed quote proxy (workers/quote-proxy, D3). Baked
+          # here so the hosted app refreshes prices out of the box — the
+          # localStorage override remains the no-rebuild escape hatch, and a
+          # fork deploys its own Worker and changes this one line.
+          VITE_FPLAN_QUOTE_PROXY: https://fplan-quote-proxy.mike-f62.workers.dev
 
       - uses: actions/configure-pages@v5
 
