@@ -21,7 +21,6 @@
  * entry forward onto the plan and appends going forward, so a restore is itself
  * undoable and no entry is ever consumed, reordered or rewritten.
  */
-import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { sha256Hex } from '../shared/sha256';
 import type { PlanHistoryEntry, PlanScore, Scenario } from '../shared/types';
@@ -30,13 +29,13 @@ import { planHistoryFileSchema, parseOrThrow } from '../shared/schemas';
 import {
   NotFoundError,
   ValidationError,
-  getDataDir,
+  describeDataFile,
   readJsonFile,
   writeJsonPretty,
 } from './dataStore';
 
 function historyPath(): string {
-  return path.join(getDataDir(), 'plan-history.json');
+  return 'plan-history.json';
 }
 
 /**
@@ -108,7 +107,7 @@ async function readEntries(): Promise<PlanHistoryEntry[]> {
   }
   let parsed: PlanHistoryEntry[];
   try {
-    parsed = parseOrThrow(planHistoryFileSchema, raw, `plan history (${filePath})`);
+    parsed = parseOrThrow(planHistoryFileSchema, raw, `plan history (${describeDataFile(filePath)})`);
   } catch (err) {
     throw new ValidationError((err as Error).message);
   }

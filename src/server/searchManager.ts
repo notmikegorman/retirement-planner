@@ -16,12 +16,11 @@
  * save. The slim per-evaluation scores live beside them in searches/scores/
  * (see search/scoreStore.ts).
  */
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { SearchProgress, SearchReport, SearchRequest, SearchSummary } from '../shared/types';
 import { missingQuotesMessage } from '../shared/holdings';
-import { ValidationError, getDataDir, loadAssumptions, loadResolvedProfile, NotFoundError } from './dataStore';
+import { ValidationError, loadAssumptions, loadResolvedProfile, NotFoundError } from './dataStore';
+import { FileNotFoundError, dataFiles } from './fileStore';
 import { runSearch } from './search/execute';
 
 const SEARCH_ID_RE = /^[a-z0-9]{8,40}$/;
@@ -34,13 +33,9 @@ interface Entry {
 /** In-memory, keyed by searchId. Finished searches also live on disk. */
 const searches = new Map<string, Entry>();
 
-function searchesDir(): string {
-  return path.join(getDataDir(), 'searches');
-}
-
 function reportPath(searchId: string): string {
   if (!SEARCH_ID_RE.test(searchId)) throw new NotFoundError(`Unknown search "${searchId}"`);
-  return path.join(searchesDir(), `${searchId}.json`);
+  return `searches/${searchId}.json`;
 }
 
 function newSearchId(): string {
@@ -161,12 +156,8 @@ export function cancelSearch(searchId: string): boolean {
 
 async function persistReport(report: SearchReport): Promise<void> {
   try {
-    await fs.mkdir(searchesDir(), { recursive: true });
-    await fs.writeFile(
-      reportPath(report.searchId),
-      `${JSON.stringify(report, null, 2)}\n`,
-      'utf8',
-    );
+    await dataFiles.mkdir('searches');
+    await dataFiles.writeText(reportPath(report.searchId), `${JSON.stringify(report, null, 2)}\n`);
   } catch (err) {
     console.error(`Failed to persist search report ${report.searchId}:`, err);
   }
@@ -174,7 +165,7 @@ async function persistReport(report: SearchReport): Promise<void> {
 
 async function readReport(searchId: string): Promise<SearchReport | null> {
   try {
-    const text = await fs.readFile(reportPath(searchId), 'utf8');
+    const text = await dataFiles.readText(reportPath(searchId));
     return JSON.parse(text) as SearchReport;
   } catch {
     return null;
@@ -185,9 +176,9 @@ async function readReport(searchId: string): Promise<SearchReport | null> {
 export async function listSearches(): Promise<SearchSummary[]> {
   let names: string[];
   try {
-    names = await fs.readdir(searchesDir());
+    names = (await dataFiles.list('searches')).map((e) => e.name);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    if (err instanceof FileNotFoundError) return [];
     throw err;
   }
   const out: SearchSummary[] = [];

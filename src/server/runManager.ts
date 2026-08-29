@@ -7,8 +7,6 @@
  * (profile + assumptions + scenario + mode + paths + seed) on the same engine
  * version always map to the same run, which is what makes the disk cache safe.
  */
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { sha256Hex } from '../shared/sha256';
 import { ENGINE_VERSION } from '../shared/types';
@@ -23,7 +21,8 @@ import type {
 import { scenarioSchema, parseOrThrow } from '../shared/schemas';
 import { missingQuotesMessage } from '../shared/holdings';
 import { stableStringify } from '../shared/util';
-import { getDataDir, loadAssumptions, loadResolvedProfile, ValidationError } from './dataStore';
+import { loadAssumptions, loadResolvedProfile, ValidationError } from './dataStore';
+import { dataFiles } from './fileStore';
 import type { SimWorkerMessage } from './simWorker';
 
 /** In-memory progress per run, keyed by runId (= runKey). */
@@ -33,7 +32,7 @@ const RUN_MODES: readonly RunMode[] = ['deterministic', 'historical', 'montecarl
 const RUN_KEY_RE = /^[0-9a-f]{64}$/;
 
 function runFilePath(runKey: string): string {
-  return path.join(getDataDir(), 'runs', `${runKey}.json`);
+  return `runs/${runKey}.json`;
 }
 
 /**
@@ -58,7 +57,7 @@ export function runKeyFor(input: SimulationInput): string {
 /** A cached full RunResult, or null on a miss. */
 export async function readCachedResult(runKey: string): Promise<RunResult | null> {
   try {
-    const text = await fs.readFile(runFilePath(runKey), 'utf8');
+    const text = await dataFiles.readText(runFilePath(runKey));
     return JSON.parse(text) as RunResult;
   } catch {
     // Missing or unreadable/corrupt cache entry -> treat as a miss and recompute.
@@ -243,11 +242,11 @@ async function finishRun(runId: string, runKey: string, result: RunResult): Prom
   result.meta.runKey = runKey;
 
   try {
-    await fs.mkdir(path.join(getDataDir(), 'runs'), { recursive: true });
-    await fs.writeFile(runFilePath(runKey), `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    await dataFiles.mkdir('runs');
+    await dataFiles.writeText(runFilePath(runKey), `${JSON.stringify(result, null, 2)}\n`);
   } catch (err) {
     // Cache write failure is not fatal — the result is still served from memory.
-    console.error(`Failed to write run cache ${runFilePath(runKey)}:`, err);
+    console.error(`Failed to write run cache ${dataFiles.describe(runFilePath(runKey))}:`, err);
   }
 
   runs.set(runId, { runId, status: 'done', progress: 1, result });

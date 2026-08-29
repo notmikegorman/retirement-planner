@@ -21,10 +21,10 @@
  * simulation, so the engine still does the same work. Nothing here makes a
  * search faster except the cache hits.
  */
-import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { RunResult } from '../../shared/types';
 import { getDataDir } from '../dataStore';
+import { dataFiles } from '../fileStore';
 
 /** The metrics the search and its report consume. Roughly 200 bytes of JSON. */
 export interface SearchScore {
@@ -43,13 +43,18 @@ export interface SearchScore {
 
 const RUN_KEY_RE = /^[0-9a-f]{64}$/;
 
+/**
+ * ABSOLUTE path of the score-cache directory, kept because callers outside
+ * the seam (tests, tooling) locate the cache with it. Store IO below speaks
+ * data-dir-relative paths like everything else behind the seam.
+ */
 export function scoresDir(): string {
   return path.join(getDataDir(), 'searches', 'scores');
 }
 
 function scoreFilePath(runKey: string): string {
   if (!RUN_KEY_RE.test(runKey)) throw new Error(`Invalid run key "${runKey}"`);
-  return path.join(scoresDir(), `${runKey}.json`);
+  return `searches/scores/${runKey}.json`;
 }
 
 /** Reduce a full RunResult to the slim record. */
@@ -71,7 +76,7 @@ export function scoreFromResult(runKey: string, result: RunResult): SearchScore 
 
 export async function readScore(runKey: string): Promise<SearchScore | null> {
   try {
-    const text = await fs.readFile(scoreFilePath(runKey), 'utf8');
+    const text = await dataFiles.readText(scoreFilePath(runKey));
     return JSON.parse(text) as SearchScore;
   } catch {
     // Missing, unreadable or corrupt -> a miss. A cache that throws is worse
@@ -82,11 +87,11 @@ export async function readScore(runKey: string): Promise<SearchScore | null> {
 
 export async function writeScore(score: SearchScore): Promise<void> {
   try {
-    await fs.mkdir(scoresDir(), { recursive: true });
+    await dataFiles.mkdir('searches/scores');
     // Not pretty-printed: these are machine records by the thousand, and the
     // 2-space convention exists so the user can read their data folder, not so a
     // cache can triple in size.
-    await fs.writeFile(scoreFilePath(score.runKey), JSON.stringify(score), 'utf8');
+    await dataFiles.writeText(scoreFilePath(score.runKey), JSON.stringify(score));
   } catch {
     // A cache write failure must never fail the search; the value is in memory.
   }

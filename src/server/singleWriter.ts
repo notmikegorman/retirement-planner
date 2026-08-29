@@ -55,9 +55,19 @@
  * seconds first. A genuine second copy is still running at the end of that
  * window; a restart is not.
  */
-import { existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeSync, closeSync } from 'node:fs';
+// THE ONE PERMITTED node:fs IMPORT OUTSIDE THE SEAM, and only these three
+// names (tests/server/fileStoreSeam.test.ts pins the exact list). They exist
+// for registerRelease alone: it runs inside process.on('exit') and signal
+// handlers, which cannot await, so an async release through the FileStore
+// seam would strand the lock file on every Ctrl-C and make every restart log
+// a stale-lock cleanup that should never have been needed. The ACQUISITION
+// path below has no such constraint and goes through the seam like every
+// other data-folder writer. Both halves retire together in Phase 3 of the
+// browser port, where Web Locks + a heartbeat lease replace this file.
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { FileExistsError, createNodeFileStore, type FileStore } from './fileStore';
 
 /** The data folder is already being written by a live process elsewhere. */
 export class DataDirLockedError extends Error {}
@@ -236,7 +246,11 @@ export async function acquireDataDirLock(opts: AcquireOptions): Promise<() => vo
   } = opts;
 
   const lockPath = lockPathFor(dataDir);
-  mkdirSync(dataDir, { recursive: true });
+  // The store is rooted at THIS call's dataDir (an explicit argument, not the
+  // env-resolved folder): the lock must land in the folder it was asked to
+  // guard even when a test points it somewhere getDataDir() has never heard of.
+  const store = createNodeFileStore(() => dataDir);
+  await store.mkdir('');
 
   const record: LockOwner = {
     pid,
@@ -249,29 +263,24 @@ export async function acquireDataDirLock(opts: AcquireOptions): Promise<() => vo
   const deadline = now() + waitMs;
 
   for (;;) {
-    let fd: number | undefined;
     try {
-      // 'wx' is O_CREAT | O_EXCL: it creates the file or fails, never truncates
-      // one somebody else is holding.
-      fd = openSync(lockPath, 'wx');
-      writeSync(fd, body);
-      closeSync(fd);
-      fd = undefined;
+      // createExclusive is 'wx' underneath: it creates the file or fails,
+      // never truncates one somebody else is holding.
+      await store.createExclusive(LOCK_FILENAME, body);
 
       // Read our own write back. Two processes can both find a stale lock, both
       // unlink it, and both create — the loser's create lands on the winner's
       // file. Verifying costs one read and turns that race into a retry.
-      const readBack = parseOwner(safeRead(lockPath) ?? '');
+      const readBack = parseOwner((await readLock(store)) ?? '');
       if (readBack?.pid === pid) {
         return registerRelease(lockPath, pid);
       }
       continue;
     } catch (err) {
-      if (fd !== undefined) closeSync(fd);
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      if (!(err instanceof FileExistsError)) throw err;
     }
 
-    const raw = safeRead(lockPath);
+    const raw = await readLock(store);
     // The file vanished between the failed create and this read — whoever held
     // it has just released it. Go straight back and take it.
     if (raw === null) continue;
@@ -282,7 +291,7 @@ export async function acquireDataDirLock(opts: AcquireOptions): Promise<() => vo
     if (status === 'stale') {
       onStaleLock?.(owner);
       try {
-        unlinkSync(lockPath);
+        await store.deleteFile(LOCK_FILENAME);
       } catch {
         // Somebody else cleared it first; the next create attempt settles it.
       }
@@ -293,6 +302,15 @@ export async function acquireDataDirLock(opts: AcquireOptions): Promise<() => vo
       throw new DataDirLockedError(describeConflict(owner, status, dataDir));
     }
     await sleep(pollMs);
+  }
+}
+
+/** The lock's text, or null on ANY failure — same posture as safeRead below. */
+async function readLock(store: FileStore): Promise<string | null> {
+  try {
+    return await store.readText(LOCK_FILENAME);
+  } catch {
+    return null;
   }
 }
 

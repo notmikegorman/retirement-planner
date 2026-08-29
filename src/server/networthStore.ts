@@ -18,7 +18,6 @@
  * ATTACHING A SCORE to a row that has none, which is the one edit a row invites
  * (see attachScore, and snapshotScorer.ts for why it arrives late).
  */
-import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { NetWorthSnapshot, SnapshotScore } from '../shared/types';
 import { missingQuotesMessage } from '../shared/holdings';
@@ -26,14 +25,14 @@ import { netWorthFileSchema, parseOrThrow } from '../shared/schemas';
 import {
   NotFoundError,
   ValidationError,
-  getDataDir,
+  describeDataFile,
   loadResolvedProfile,
   readJsonFile,
   writeJsonPretty,
 } from './dataStore';
 
 function networthPath(): string {
-  return path.join(getDataDir(), 'networth.json');
+  return 'networth.json';
 }
 
 /**
@@ -75,7 +74,7 @@ export async function listSnapshots(): Promise<NetWorthSnapshot[]> {
   }
   let parsed: NetWorthSnapshot[];
   try {
-    parsed = parseOrThrow(netWorthFileSchema, raw, `net worth ledger (${filePath})`);
+    parsed = parseOrThrow(netWorthFileSchema, raw, `net worth ledger (${describeDataFile(filePath)})`);
   } catch (err) {
     throw new ValidationError((err as Error).message);
   }

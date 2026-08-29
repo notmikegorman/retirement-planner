@@ -22,7 +22,6 @@
  * engine could run). It also is not editing — it runs once per folder, before
  * anything is served.
  */
-import path from 'node:path';
 import type { z } from 'zod';
 import type { PlanHistoryEntry, Person, Scenario } from '../shared/types';
 import { parseOrThrow, scenarioSchema } from '../shared/schemas';
@@ -35,7 +34,7 @@ import { defaultPlan, writePlan } from '../ui/components/scenarios/scenarioHelpe
 import {
   NotFoundError,
   ValidationError,
-  getDataDir,
+  describeDataFile,
   loadProfile,
   readJsonFile,
   writeJsonPretty,
@@ -51,7 +50,7 @@ import { getPlanHistoryEntry, recordDayStart } from './planHistoryStore';
 export const PLAN_NAME = 'Plan';
 
 function planPath(): string {
-  return path.join(getDataDir(), 'plan.json');
+  return 'plan.json';
 }
 
 /** parseOrThrow, rethrown as ValidationError so the server can map it to 400. */
@@ -111,7 +110,7 @@ async function readPlanFile(): Promise<Scenario | null> {
     if (err instanceof NotFoundError) return null;
     throw err;
   }
-  return validate(scenarioSchema, raw, `plan (${filePath})`);
+  return validate(scenarioSchema, raw, `plan (${describeDataFile(filePath)})`);
 }
 
 /**

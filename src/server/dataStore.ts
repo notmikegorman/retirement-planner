@@ -19,9 +19,12 @@
  * raw at boot: the file it is fixing is by definition in a shape the current
  * schema rejects, so it cannot go through the validating door — see the note
  * on planStore's header.
+ *
+ * ALL IO GOES THROUGH THE fileStore SEAM (fileStore.ts): this module names
+ * files by paths relative to the data dir and never imports node:fs, so the
+ * same store logic can run against the browser's directory-handle driver in
+ * Phase 3 without a second copy of any guard or migration.
  */
-import { promises as fs } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { z } from 'zod';
@@ -44,6 +47,19 @@ import type {
 import { parseOrThrow, profileSchema, quotesFileSchema, scenarioSchema } from '../shared/schemas';
 import { resolveAccounts, type HoldingsResolution } from '../shared/holdings';
 import { titheBundleToPair, type TitheAccountRule } from '../shared/giving';
+import {
+  FileNotFoundError,
+  createNodeFileStore,
+  dataFiles,
+  getDataDir,
+  parentDirOf,
+  type FileStore,
+} from './fileStore';
+
+// The one place the data folder's location is decided moved to fileStore.ts
+// (the driver needs it and must not depend on this module); re-exported here
+// so its many existing importers keep one import path.
+export { getDataDir } from './fileStore';
 
 /** Requested resource does not exist (server maps to HTTP 404). */
 export class NotFoundError extends Error {}
@@ -65,70 +81,88 @@ export class ConflictError extends Error {}
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultsDir = path.join(repoRoot, 'data-defaults');
 
-export function getDataDir(): string {
-  return process.env.FPLAN_DATA_DIR || path.join(os.homedir(), 'finance-planner-data');
-}
+/**
+ * The bundled defaults, read through the SAME FileStore contract as the data
+ * folder (a second instance rooted elsewhere, used read-only). That is not
+ * symmetry for its own sake: in the browser the defaults ship as bundled
+ * assets, so seeding must already speak an interface a non-fs source can
+ * implement — copy = readBytes here, writeBytes there.
+ */
+const defaultsFiles: FileStore = createNodeFileStore(() => defaultsDir);
 
 // ---------------------------------------------------------------------------
 // Low-level helpers
 // ---------------------------------------------------------------------------
 
-async function exists(p: string): Promise<boolean> {
-  try {
-    await fs.access(p);
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * The absolute name of a data-folder file, for error messages and logs. Every
+ * user-facing message that used to interpolate a path.join(getDataDir(), ...)
+ * now goes through this, so the messages stay byte-identical while the store
+ * calls themselves carry relative paths (the browser driver has no absolute
+ * paths to offer).
+ */
+export function describeDataFile(relPath: string): string {
+  return dataFiles.describe(relPath);
 }
 
-async function copyIfMissing(src: string, dest: string): Promise<void> {
-  if (await exists(dest)) return;
-  await fs.mkdir(path.dirname(dest), { recursive: true });
-  await fs.copyFile(src, dest);
+async function copyIfMissing(srcRel: string, destRel: string): Promise<void> {
+  if (await dataFiles.exists(destRel)) return;
+  await dataFiles.mkdir(parentDirOf(destRel));
+  await dataFiles.writeBytes(destRel, await defaultsFiles.readBytes(srcRel));
 }
 
 /** Recursively copy a directory tree, never overwriting existing dest files. */
-async function copyTreeIfMissing(srcDir: string, destDir: string): Promise<void> {
-  await fs.mkdir(destDir, { recursive: true });
-  const entries = await fs.readdir(srcDir, { withFileTypes: true });
+async function copyTreeIfMissing(srcRelDir: string, destRelDir: string): Promise<void> {
+  await dataFiles.mkdir(destRelDir);
+  const entries = await defaultsFiles.list(srcRelDir);
   for (const entry of entries) {
-    const src = path.join(srcDir, entry.name);
-    const dest = path.join(destDir, entry.name);
-    if (entry.isDirectory()) await copyTreeIfMissing(src, dest);
+    const src = `${srcRelDir}/${entry.name}`;
+    const dest = `${destRelDir}/${entry.name}`;
+    if (entry.kind === 'directory') await copyTreeIfMissing(src, dest);
     else await copyIfMissing(src, dest);
   }
 }
 
 /**
- * Does this path exist? Exported for scenarioStore/searchStore, which own
- * their own directories but must not re-derive fs conventions.
+ * Does this data-folder path exist? Relative to the data dir, like every
+ * store path since the seam. Kept exported so a future store owning its own
+ * directory does not re-derive fs conventions.
  */
-export async function pathExists(p: string): Promise<boolean> {
-  return exists(p);
+export async function pathExists(relPath: string): Promise<boolean> {
+  return dataFiles.exists(relPath);
 }
 
-/** Read + JSON.parse a file with helpful, file-path-bearing errors. */
-export async function readJsonFile(filePath: string): Promise<unknown> {
+/** readJsonFile against an arbitrary store (the defaults, in backfill). */
+async function readJsonFrom(store: FileStore, relPath: string): Promise<unknown> {
   let text: string;
   try {
-    text = await fs.readFile(filePath, 'utf8');
+    text = await store.readText(relPath);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new NotFoundError(`File not found: ${filePath}`);
+    if (err instanceof FileNotFoundError) {
+      throw new NotFoundError(`File not found: ${store.describe(relPath)}`);
     }
     throw err;
   }
   try {
     return JSON.parse(text) as unknown;
   } catch (err) {
-    throw new ValidationError(`Malformed JSON in ${filePath}: ${(err as Error).message}`);
+    throw new ValidationError(
+      `Malformed JSON in ${store.describe(relPath)}: ${(err as Error).message}`,
+    );
   }
 }
 
-export async function writeJsonPretty(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+/**
+ * Read + JSON.parse a data-folder file with helpful, file-path-bearing
+ * errors. `relPath` is relative to the data dir.
+ */
+export async function readJsonFile(relPath: string): Promise<unknown> {
+  return readJsonFrom(dataFiles, relPath);
+}
+
+export async function writeJsonPretty(relPath: string, value: unknown): Promise<void> {
+  await dataFiles.mkdir(parentDirOf(relPath));
+  await dataFiles.writeText(relPath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 /** parseOrThrow, rethrown as ValidationError so the server can map it to 400. */
@@ -151,9 +185,9 @@ function requireKeys(value: unknown, keys: readonly string[], label: string): vo
   }
 }
 
-async function loadDataFile<T>(filePath: string, keys: readonly string[], label: string): Promise<T> {
-  const raw = await readJsonFile(filePath);
-  requireKeys(raw, keys, `${label} (${filePath})`);
+async function loadDataFile<T>(relPath: string, keys: readonly string[], label: string): Promise<T> {
+  const raw = await readJsonFile(relPath);
+  requireKeys(raw, keys, `${label} (${describeDataFile(relPath)})`);
   return raw as T;
 }
 
@@ -168,22 +202,18 @@ async function loadDataFile<T>(filePath: string, keys: readonly string[], label:
  */
 export async function initDataDir(): Promise<{ dataDir: string; existedBefore: boolean }> {
   const dataDir = getDataDir();
-  const profilePath = path.join(dataDir, 'profile.json');
-  const existedBefore = await exists(profilePath);
+  const existedBefore = await dataFiles.exists('profile.json');
 
-  await fs.mkdir(dataDir, { recursive: true });
+  await dataFiles.mkdir('');
   // profile.starter.json -> profile.json (only when the user has no profile yet)
-  await copyIfMissing(path.join(defaultsDir, 'profile.starter.json'), profilePath);
+  await copyIfMissing('profile.starter.json', 'profile.json');
   // Also keep the pristine starter alongside, as a reference.
-  await copyIfMissing(
-    path.join(defaultsDir, 'profile.starter.json'),
-    path.join(dataDir, 'profile.starter.json'),
-  );
-  await copyTreeIfMissing(path.join(defaultsDir, 'assumptions'), path.join(dataDir, 'assumptions'));
+  await copyIfMissing('profile.starter.json', 'profile.starter.json');
+  await copyTreeIfMissing('assumptions', 'assumptions');
   // No scenarios/ seeding any more: there is one plan, and loadPlan() seeds it
   // on first read. An existing scenarios/ folder from an older data folder is
   // left exactly as the user left it — init neither reads nor writes it.
-  await fs.mkdir(path.join(dataDir, 'runs'), { recursive: true });
+  await dataFiles.mkdir('runs');
 
   // Seeding is copy-if-missing, so NEW keys added to repo-default assumption
   // files would never reach an already-seeded data folder. Backfill them.
@@ -231,12 +261,12 @@ function backfillMissingKeys(
   }
 }
 
-async function backfillDir(srcDir: string, destDir: string, changes: string[]): Promise<void> {
-  const entries = await fs.readdir(srcDir, { withFileTypes: true });
+async function backfillDir(srcRelDir: string, destRelDir: string, changes: string[]): Promise<void> {
+  const entries = await defaultsFiles.list(srcRelDir);
   for (const entry of entries) {
-    const src = path.join(srcDir, entry.name);
-    const dest = path.join(destDir, entry.name);
-    if (entry.isDirectory()) {
+    const src = `${srcRelDir}/${entry.name}`;
+    const dest = `${destRelDir}/${entry.name}`;
+    if (entry.kind === 'directory') {
       await backfillDir(src, dest, changes);
       continue;
     }
@@ -245,8 +275,8 @@ async function backfillDir(srcDir: string, destDir: string, changes: string[]): 
     // additive migration (the baa column) separately.
     if (!entry.name.endsWith('.json')) continue;
     // Absent user files are handled by copy-if-missing seeding, not backfill.
-    if (!(await exists(dest))) continue;
-    const defaults = await readJsonFile(src);
+    if (!(await dataFiles.exists(dest))) continue;
+    const defaults = await readJsonFrom(defaultsFiles, src);
     let user: unknown;
     try {
       user = await readJsonFile(dest);
@@ -260,7 +290,7 @@ async function backfillDir(srcDir: string, destDir: string, changes: string[]): 
     backfillMissingKeys(user, defaults, '', added);
     if (added.length > 0) {
       await writeJsonPretty(dest, user);
-      changes.push(`${dest}: added ${added.join(', ')}`);
+      changes.push(`${describeDataFile(dest)}: added ${added.join(', ')}`);
     }
   }
 }
@@ -286,8 +316,8 @@ async function backfillHistoricalBaaColumn(
   destCsv: string,
   changes: string[],
 ): Promise<void> {
-  if (!(await exists(destCsv))) return; // absent file = copy-if-missing's job
-  const userText = await fs.readFile(destCsv, 'utf8');
+  if (!(await dataFiles.exists(destCsv))) return; // absent file = copy-if-missing's job
+  const userText = await dataFiles.readText(destCsv);
   const isData = (l: string): boolean =>
     l.length > 0 && !l.startsWith('#') && !/^year\s*,/i.test(l);
   const userLines = userText.split(/\r?\n/);
@@ -297,7 +327,7 @@ async function backfillHistoricalBaaColumn(
   if (dataLines.length === 0 || !dataLines.every((l) => l.split(',').length === 5)) return;
 
   const baaByYear = new Map<string, string>();
-  for (const line of (await fs.readFile(srcCsv, 'utf8')).split(/\r?\n/)) {
+  for (const line of (await defaultsFiles.readText(srcCsv)).split(/\r?\n/)) {
     const t = line.trim();
     if (!isData(t)) continue;
     const parts = t.split(',').map((p) => p.trim());
@@ -319,8 +349,10 @@ async function backfillHistoricalBaaColumn(
     if (baa === undefined) return; // unknown year: hands off, fail loudly later
     out.push(`${raw},${baa}`);
   }
-  await fs.writeFile(destCsv, out.join('\n'));
-  changes.push(`${destCsv}: added baa column (${dataLines.length} rows joined by year)`);
+  await dataFiles.writeText(destCsv, out.join('\n'));
+  changes.push(
+    `${describeDataFile(destCsv)}: added baa column (${dataLines.length} rows joined by year)`,
+  );
 }
 
 /**
@@ -333,12 +365,11 @@ async function backfillHistoricalBaaColumn(
  */
 export async function backfillAssumptionDefaults(): Promise<string[]> {
   const changes: string[] = [];
-  const destRoot = path.join(getDataDir(), 'assumptions');
-  if (!(await exists(destRoot))) return changes;
-  await backfillDir(path.join(defaultsDir, 'assumptions'), destRoot, changes);
+  if (!(await dataFiles.exists('assumptions'))) return changes;
+  await backfillDir('assumptions', 'assumptions', changes);
   await backfillHistoricalBaaColumn(
-    path.join(defaultsDir, 'assumptions', 'historical-returns.csv'),
-    path.join(destRoot, 'historical-returns.csv'),
+    'assumptions/historical-returns.csv',
+    'assumptions/historical-returns.csv',
     changes,
   );
   return changes;
@@ -349,7 +380,7 @@ export async function backfillAssumptionDefaults(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 function profilePath(): string {
-  return path.join(getDataDir(), 'profile.json');
+  return 'profile.json';
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -559,8 +590,7 @@ export function migrateScenarioGivingInPlace(
  */
 export async function migrateGivingSplitFiles(): Promise<string[]> {
   const changes: string[] = [];
-  const dataDir = getDataDir();
-  const profileFile = path.join(dataDir, 'profile.json');
+  const profileFile = 'profile.json';
 
   let rawProfile: unknown = null;
   try {
@@ -574,12 +604,11 @@ export async function migrateGivingSplitFiles(): Promise<string[]> {
     isTitheBundle(rawProfile.expenses.retirementGiving);
 
   const files: string[] = [];
-  const planFile = path.join(dataDir, 'plan.json');
-  if (await exists(planFile)) files.push(planFile);
-  const scenarios = path.join(dataDir, 'scenarios');
-  if (await exists(scenarios)) {
-    for (const name of await fs.readdir(scenarios)) {
-      if (name.endsWith('.json')) files.push(path.join(scenarios, name));
+  const planFile = 'plan.json';
+  if (await dataFiles.exists(planFile)) files.push(planFile);
+  if (await dataFiles.exists('scenarios')) {
+    for (const entry of await dataFiles.list('scenarios')) {
+      if (entry.name.endsWith('.json')) files.push(`scenarios/${entry.name}`);
     }
   }
 
@@ -601,7 +630,7 @@ export async function migrateGivingSplitFiles(): Promise<string[]> {
     });
     if (changedHere.length > 0) {
       await writeJsonPretty(filePath, clone);
-      changes.push(`${filePath}: ${changedHere.join('; ')}`);
+      changes.push(`${describeDataFile(filePath)}: ${changedHere.join('; ')}`);
     }
   }
 
@@ -609,7 +638,7 @@ export async function migrateGivingSplitFiles(): Promise<string[]> {
     const { profile: migrated, changed } = migrateProfile(rawProfile);
     if (changed.length > 0) {
       await writeJsonPretty(profileFile, migrated);
-      changes.push(`${profileFile}: ${changed.join('; ')}`);
+      changes.push(`${describeDataFile(profileFile)}: ${changed.join('; ')}`);
     }
   }
 
@@ -622,9 +651,9 @@ export async function loadProfile(): Promise<Profile> {
   const { profile: migrated, changed } = migrateProfile(raw);
   if (changed.length > 0) {
     await writeJsonPretty(filePath, migrated);
-    console.log(`Migrated profile ${filePath}:\n  - ${changed.join('\n  - ')}`);
+    console.log(`Migrated profile ${describeDataFile(filePath)}:\n  - ${changed.join('\n  - ')}`);
   }
-  return validate(profileSchema, migrated, `profile (${filePath})`);
+  return validate(profileSchema, migrated, `profile (${describeDataFile(filePath)})`);
 }
 
 export async function saveProfile(profile: Profile): Promise<void> {
@@ -637,7 +666,7 @@ export async function saveProfile(profile: Profile): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function quotesPath(): string {
-  return path.join(getDataDir(), 'quotes.json');
+  return 'quotes.json';
 }
 
 /**
@@ -656,7 +685,7 @@ export async function loadQuotes(): Promise<QuotesFile> {
     if (err instanceof NotFoundError) return {};
     throw err;
   }
-  return validate(quotesFileSchema, raw, `quotes (${filePath})`);
+  return validate(quotesFileSchema, raw, `quotes (${describeDataFile(filePath)})`);
 }
 
 export async function saveQuotes(quotes: QuotesFile): Promise<void> {
@@ -755,19 +784,13 @@ const ACA_KEYS = [
 
 const RMD_KEYS = ['uniformLifetimeTable', 'rmdStartAge'] as const;
 
-function assumptionsDir(): string {
-  return path.join(getDataDir(), 'assumptions');
-}
-
 async function loadStateTax(state: StateCode): Promise<StateTaxData> {
-  const filePath = path.join(assumptionsDir(), 'tax', `${state}-2026.json`);
+  const filePath = `assumptions/tax/${state}-2026.json`;
   return loadDataFile<StateTaxData>(filePath, STATE_KEYS, `${state.toUpperCase()} state tax data`);
 }
 
 /** Load and assemble the full Assumptions bundle from the data folder. */
 export async function loadAssumptions(): Promise<Assumptions> {
-  const aDir = assumptionsDir();
-
   // Self-heal: user copies seeded before a repo default gained new keys would
   // otherwise fail the required-key checks below (additive, no-op when clean).
   const backfilled = await backfillAssumptionDefaults();
@@ -776,12 +799,12 @@ export async function loadAssumptions(): Promise<Assumptions> {
   }
 
   const market = await loadDataFile<MarketAssumptions>(
-    path.join(aDir, 'market.json'),
+    'assumptions/market.json',
     MARKET_KEYS,
     'market assumptions',
   );
   const federal = await loadDataFile<FederalTaxData>(
-    path.join(aDir, 'tax', 'federal-2026.json'),
+    'assumptions/tax/federal-2026.json',
     FEDERAL_KEYS,
     'federal tax data',
   );
@@ -791,29 +814,29 @@ export async function loadAssumptions(): Promise<Assumptions> {
     nc: await loadStateTax('nc'),
   };
   const socialSecurity = await loadDataFile<SocialSecurityData>(
-    path.join(aDir, 'social-security.json'),
+    'assumptions/social-security.json',
     SOCIAL_SECURITY_KEYS,
     'social security data',
   );
   const medicare = await loadDataFile<MedicareData>(
-    path.join(aDir, 'medicare-2026.json'),
+    'assumptions/medicare-2026.json',
     MEDICARE_KEYS,
     'medicare data',
   );
-  const aca = await loadDataFile<AcaData>(path.join(aDir, 'aca-2026.json'), ACA_KEYS, 'ACA data');
+  const aca = await loadDataFile<AcaData>('assumptions/aca-2026.json', ACA_KEYS, 'ACA data');
   const rmd = await loadDataFile<RmdTableData>(
-    path.join(aDir, 'rmd-table.json'),
+    'assumptions/rmd-table.json',
     RMD_KEYS,
     'RMD table data',
   );
 
-  const csvPath = path.join(aDir, 'historical-returns.csv');
+  const csvPath = 'assumptions/historical-returns.csv';
   let csvText: string;
   try {
-    csvText = await fs.readFile(csvPath, 'utf8');
+    csvText = await dataFiles.readText(csvPath);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new NotFoundError(`File not found: ${csvPath}`);
+    if (err instanceof FileNotFoundError) {
+      throw new NotFoundError(`File not found: ${describeDataFile(csvPath)}`);
     }
     throw err;
   }
@@ -824,7 +847,9 @@ export async function loadAssumptions(): Promise<Assumptions> {
   try {
     historical = loadHistoricalCsv(csvText);
   } catch (err) {
-    throw new ValidationError(`Invalid historical returns (${csvPath}): ${(err as Error).message}`);
+    throw new ValidationError(
+      `Invalid historical returns (${describeDataFile(csvPath)}): ${(err as Error).message}`,
+    );
   }
 
   return { market, historical, federal, states, socialSecurity, medicare, aca, rmd };
@@ -832,5 +857,5 @@ export async function loadAssumptions(): Promise<Assumptions> {
 
 export async function saveMarket(market: MarketAssumptions): Promise<void> {
   requireKeys(market, MARKET_KEYS, 'market assumptions');
-  await writeJsonPretty(path.join(assumptionsDir(), 'market.json'), market);
+  await writeJsonPretty('assumptions/market.json', market);
 }
