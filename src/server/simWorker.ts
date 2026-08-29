@@ -13,12 +13,13 @@
  */
 import { parentPort, workerData } from 'node:worker_threads';
 import { execute } from '../engine/index';
-import type { RunResult, SimulationInput } from '../shared/types';
+import type { SimulationInput } from '../shared/types';
+import type { SimWorkerMessage } from '../shared/simWorkerProtocol';
 
-export type SimWorkerMessage =
-  | { type: 'progress'; frac: number; message?: string }
-  | { type: 'done'; result: RunResult }
-  | { type: 'error'; error: string };
+// Re-exported so runManager keeps importing the protocol from the worker it
+// spawns; the definition lives in shared/simWorkerProtocol so the browser
+// worker speaks the SAME type rather than a copy (see that file's header).
+export type { SimWorkerMessage } from '../shared/simWorkerProtocol';
 
 function post(msg: SimWorkerMessage): void {
   parentPort?.postMessage(msg);
