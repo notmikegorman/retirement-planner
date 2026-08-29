@@ -32,7 +32,21 @@ export interface StaticServer {
   close(): Promise<void>;
 }
 
-export async function serveStatic(rootDir: string): Promise<StaticServer> {
+export interface StaticServerOptions {
+  /**
+   * Serve index.html for extensionless paths that match no file — the SPA
+   * fallback the Fastify server provides for the built UI. The dual-stack
+   * drive needs it because the app's router pushStates real paths
+   * (/workbench), and a reload there must boot the app, not 404. The harness
+   * pages don't ask for it, so their 404s stay honest.
+   */
+  spaFallback?: boolean;
+}
+
+export async function serveStatic(
+  rootDir: string,
+  opts: StaticServerOptions = {},
+): Promise<StaticServer> {
   const root = path.resolve(rootDir);
 
   const server: Server = createServer((req, res) => {
@@ -53,6 +67,15 @@ export async function serveStatic(rootDir: string): Promise<StaticServer> {
           })
           .end(body);
       } catch {
+        if (opts.spaFallback && path.extname(file) === '') {
+          try {
+            const index = await fs.readFile(path.join(root, 'index.html'));
+            res.writeHead(200, { 'content-type': MIME['.html'] }).end(index);
+            return;
+          } catch {
+            // No index.html either: fall through to the honest 404.
+          }
+        }
         res.writeHead(404).end();
       }
     })();
