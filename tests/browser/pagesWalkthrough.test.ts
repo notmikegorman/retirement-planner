@@ -86,18 +86,22 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
 
   beforeAll(async () => {
     // The EXACT pages build: same config file, the workflow's base and
-    // backend default, the workflow's extras. VITE_FPLAN_SW deliberately
-    // unset — the lane runs the app, never the service worker.
+    // backend default, the workflow's extras. The base goes in through
+    // FPLAN_BASE — the same door build:pages uses — so vite.config's
+    // env-driven `base:` line is executed here, not emulated: hardcode that
+    // line back to '/' and this lane 404s its own assets. VITE_FPLAN_SW
+    // deliberately unset — the lane runs the app, never the service worker.
     process.env.VITE_FPLAN_BACKEND = 'local';
+    process.env.FPLAN_BASE = `${BASE}/`;
     try {
       await build({
         configFile: path.join(repoRoot, 'vite.config.ts'),
-        base: `${BASE}/`,
         logLevel: 'warn',
         build: { outDir: distPages, emptyOutDir: true },
       });
     } finally {
       delete process.env.VITE_FPLAN_BACKEND;
+      delete process.env.FPLAN_BASE;
     }
     await writePagesExtras(distPages);
 
