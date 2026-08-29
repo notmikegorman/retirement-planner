@@ -162,10 +162,16 @@ describe('the switch keeps the guard discipline (source scans)', () => {
   });
 
   it('releases the guard gracefully before the reload, in that order', () => {
-    expect(control).toContain('releaseHeldGuard');
     const fn = control.slice(control.indexOf('async function releaseGuardAndReload'));
     const body = fn.slice(0, fn.indexOf('}\n\n'));
-    expect(body.indexOf('releaseHeldGuard()')).toBeLessThan(body.indexOf('location.reload()'));
+    // The CALL must exist (an index of -1 would order "before" anything and
+    // let a switch that skips the release pass vacuously), and it must come
+    // before the reload — release-then-reload is the whole handoff.
+    const releaseAt = body.indexOf('await releaseHeldGuard();');
+    const reloadAt = body.indexOf('location.reload()');
+    expect(releaseAt).toBeGreaterThan(-1);
+    expect(reloadAt).toBeGreaterThan(-1);
+    expect(releaseAt).toBeLessThan(reloadAt);
     // And the guard client documents the release-vs-heartbeat race rather
     // than pretending the release is atomic: the leftover outcome is the
     // killed-tab outcome, which staleness already recovers.
@@ -182,6 +188,23 @@ describe('the switch keeps the guard discipline (source scans)', () => {
     expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/local\/guardClient'/m);
     expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/local\/scoringGuard'/m);
     expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/local\/searchClient'/m);
+  });
+
+  it('a denied permission never costs the remembered list — the way home survives refusal', () => {
+    // The permission re-request may be refused; the component PROCEEDS (the
+    // boot gate's reconnect page owns that state) and nothing on the refusal
+    // path clears the list. And the storage layer's open path re-writes the
+    // WHOLE list with the opened entry upserted — never a truncation to the
+    // one entry being opened, which would wipe every other way home.
+    const storage = read('../../src/ui/local/storageChoice.ts');
+    const openFn = storage.slice(storage.indexOf('export async function openRememberedFolder'));
+    expect(openFn).toContain('upsertRememberedFolder(list,');
+    const saveFn = storage.slice(storage.indexOf('export async function saveFolderHandle'));
+    expect(saveFn).toContain('upsertRememberedFolder(list,');
+    // The refusal is caught and swallowed — proceeding, not wiping.
+    const denial = control.slice(control.indexOf('await folder.handle.requestPermission'));
+    expect(denial.slice(0, 300)).toContain('catch {');
+    expect(control).not.toContain('setFolders([])');
   });
 
   it('every pick funnels through saveFolderHandle — the one door that maintains the list', () => {
