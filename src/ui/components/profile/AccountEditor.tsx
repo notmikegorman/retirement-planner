@@ -221,7 +221,7 @@ function RothFundingEditor({
         // Key includes the values, not just the index: the number inputs keep
         // local text state, so removing a row must not leave the row below it
         // displaying the removed row's text.
-        <div className="row" key={`${ci}-${c.year}-${c.amount}`}>
+        <div className="row inlineRow" key={`${ci}-${c.year}-${c.amount}`}>
           <NumberField
             label="Conversion year"
             int
@@ -242,7 +242,7 @@ function RothFundingEditor({
           </FieldNote>
         </div>
       ))}
-      <div className="row">
+      <div className="row inlineRow">
         <button onClick={() => setBasis(addConversion(b, new Date().getFullYear()))}>
           + Add conversion
         </button>
@@ -337,7 +337,7 @@ function HoldingsEditor({
           // Key includes the values (the conversions-editor rule): these
           // fields keep local text state, so removing a row must not leave
           // the row below it displaying the removed row's text.
-          <div className="row" key={`${hi}-${h.symbol}-${h.quantity}-${h.assetClass}`}>
+          <div className="row inlineRow" key={`${hi}-${h.symbol}-${h.quantity}-${h.assetClass}`}>
             <SymbolField
               value={h.symbol}
               onCommit={(symbol) =>
@@ -396,7 +396,7 @@ function HoldingsEditor({
           </div>
         );
       })}
-      <div className="row">
+      <div className="row inlineRow">
         <NumberField
           label="Cash ($)"
           value={account.cash ?? 0}
@@ -422,7 +422,7 @@ function HoldingsEditor({
       </div>
       {/* The derived figures, each carrying its condition: stored prices, not
           live ones, and unpriced symbols named rather than silently $0. */}
-      <div className="row">
+      <div className="row inlineRow">
         <FieldNote className="muted">
           Balance {formatUSD(derived.balance, { cents: true })} · mix{' '}
           {formatDerivedMix(derived.allocation)} (stocks/bonds/bills) — derived from stored

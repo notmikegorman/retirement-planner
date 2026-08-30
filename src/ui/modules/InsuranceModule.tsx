@@ -18,13 +18,11 @@ import { api } from '../api';
 import type { PageProps } from '../nav';
 import { DiscardChangesPrompt } from '../dirtyFormBlocker';
 import {
-  CARD_TIP,
   ConvertToListOffer,
   LegacyPolicyFields,
   PolicyEditor,
   convertToPolicyList,
   defaultInsured,
-  policyListIntro,
 } from '../components/profile/InsuranceEditor';
 import {
   formatMonth,
@@ -32,8 +30,7 @@ import {
   policyTotals,
   workStopsMonth,
 } from '../components/profile/expensesLogic';
-import { InfoTip } from '../components/profile/fields';
-import { annualFromMonthly, personName } from '../components/profile/profileLogic';
+import { personName } from '../components/profile/profileLogic';
 import { readPlan } from '../components/scenarios/scenarioHelpers';
 import type { ScenarioEvent } from '../../shared/types';
 import { ConfirmModal } from './ConfirmModal';
@@ -273,13 +270,6 @@ export function InsuranceModule({ route, navigate }: PageProps) {
       />
       <div className="moduleBody">
         {saveErrorBanner}
-        <div className="muted" style={{ marginBottom: 10 }}>
-          {policyListIntro(workStops)}
-          {/* The double-counting warning must survive the list shape: a
-              premium named here and left inside living expenses is paid
-              twice, and this sentence is what prevents that. */}
-          <InfoTip label="life insurance" text={CARD_TIP} />
-        </div>
         <ManagedTable
           columns={[
             {
@@ -342,15 +332,6 @@ export function InsuranceModule({ route, navigate }: PageProps) {
                 </td>
                 <td className="col-text" />
                 <td className="deleteCell" />
-              </tr>
-              <tr>
-                <td colSpan={6} className="col-text managedTotalNote">
-                  {formatUSD(annualFromMonthly(totals.premiumMonthly))}/yr of premiums buying{' '}
-                  {formatUSD(totals.deathBenefit)} of cover, assuming every policy is still in
-                  force; the dates above are what decide whether it is on the day of a death. Only
-                  the Widow tab prices any of this — the household score sees the premiums and
-                  never the payout.
-                </td>
               </tr>
             </tfoot>
           }

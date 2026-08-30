@@ -16,6 +16,7 @@ import {
   setGuardrail,
 } from '../components/profile/profileLogic';
 import { DataFolderCard } from '../components/profile/DataFolderCard';
+import { themeModeLabel, useTheme, type ThemeMode } from '../theme';
 import { PRETAX_OPTIONS } from './formOptions';
 import { ProfileFormModule } from './ProfileFormModule';
 
@@ -48,9 +49,41 @@ const PRETAX_PREFERENCE_HELP =
   'Which pre-tax account to tap first. IRA first drains the traditional IRA before any other ' +
   'pre-tax money; proportional splits withdrawals across them by balance.';
 
+/**
+ * The theme, as just another setting (owner's relocation, 2026-08-30 — it
+ * used to be a sidebar toggle). OUTSIDE the view/edit form: it is a local
+ * preference applied on change, not a profile field with a Save.
+ */
+function AppearanceCard() {
+  const theme = useTheme();
+  return (
+    <div className="card">
+      <h2 style={{ marginTop: 0 }}>Appearance</h2>
+      <SelectField
+        label="Theme"
+        value={theme.mode}
+        options={(['system', 'light', 'dark'] as ThemeMode[]).map((mode) => ({
+          value: mode,
+          label: themeModeLabel(mode),
+        }))}
+        width={170}
+        onChange={(v) => theme.setMode(v as ThemeMode)}
+      />
+    </div>
+  );
+}
+
 export function SettingsModule() {
   return (
-    <ProfileFormModule title="Settings" after={<DataFolderCard />}>
+    <ProfileFormModule
+      title="Settings"
+      after={
+        <>
+          <AppearanceCard />
+          <DataFolderCard />
+        </>
+      }
+    >
       {(draft, doc) => {
         const settings = draft.settings;
         const spending = settings.spendingPolicy;
@@ -258,7 +291,7 @@ export function SettingsModule() {
                   Buckets are tapped in this order
                 </div>
                 {order.map((bucket, i) => (
-                  <div className="row" key={bucket} style={{ marginBottom: 4 }}>
+                  <div className="row inlineRow" key={bucket} style={{ marginBottom: 4 }}>
                     <span style={{ width: 170 }}>
                       {i + 1}. {BUCKET_LABELS[bucket]}
                     </span>

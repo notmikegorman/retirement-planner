@@ -137,10 +137,12 @@ describe('the remembered-folders list rules', () => {
 });
 
 describe('the switch keeps the guard discipline (source scans)', () => {
-  it('sits in the sidebar footer, beside the theme toggle', () => {
+  it('sits in the sidebar footer, below the Settings item', () => {
     expect(app).toContain('<FolderControl />');
     const footer = app.slice(app.indexOf('className="sideNavFooter"'));
-    expect(footer.indexOf('<FolderControl />')).toBeLessThan(footer.indexOf('theme-toggle'));
+    expect(footer.indexOf("navigate('settings')")).toBeLessThan(
+      footer.indexOf('<FolderControl />'),
+    );
   });
 
   it('refuses to switch while scoring or a search is in flight', () => {

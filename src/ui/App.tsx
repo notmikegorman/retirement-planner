@@ -1,6 +1,7 @@
+import { Fragment } from 'react';
 import { PAGES, useRoute, type Page } from './nav';
 import { useSwUpdate } from './pwa';
-import { ThemeContext, themeModeIcon, themeModeLabel, useThemeController } from './theme';
+import { ThemeContext, useThemeController } from './theme';
 import { ToastProvider } from './toast';
 import { FolderControl } from './components/topbar/FolderControl';
 import { MODULE_ICONS } from './modules/icons';
@@ -23,16 +24,20 @@ import { TithingModule } from './modules/TithingModule';
  * THE SHELL (the owner's layout, 2026-08-30, modeled on smplmark): a narrow
  * left panel for navigating between modules, and a wide right panel holding
  * the selected module — each module opening with a banner where its title,
- * breadcrumbs and actions live. The old Profile page's ten tabs are modules
- * now, beside Workbench and Net worth, and the sidebar lists them
- * ALPHABETIZED (nav.ts's PAGES carries the order — it is also the URL
- * vocabulary). '/' still opens the Workbench.
+ * breadcrumbs and actions live. Plan sits FIRST above a separator (nav.ts's
+ * PAGES carries the order — it is also the URL vocabulary), the rest run
+ * alphabetical, and Settings lives at the very bottom, in the footer beside
+ * the folder control. '/' still opens Plan.
  *
  * The labels live here as a Record over PAGES so a module added there
  * without a label (or a label without a module) fails to compile rather
- * than shipping a nameless sidebar item.
+ * than shipping a nameless sidebar item. 'workbench' is LABELLED Plan
+ * (owner's rename, 2026-08-30); the id stays 'workbench' because it is also
+ * the URL vocabulary and the storage-key namespace, and /plan would orphan
+ * every existing link for a word.
  */
 const NAV_LABELS: Record<Page, string> = {
+  workbench: 'Plan',
   accounts: 'Accounts',
   expenses: 'Expenses',
   health: 'Health',
@@ -45,17 +50,17 @@ const NAV_LABELS: Record<Page, string> = {
   search: 'Search',
   settings: 'Settings',
   tithing: 'Tithing',
-  workbench: 'Workbench',
 };
 
 /**
- * Pages that stay in the URL vocabulary but draw no sidebar item. Search is
- * parked here (owner's call, 2026-08-30): the whole module — page, server
- * machinery, /search paths — keeps working for whoever types the URL, but the
- * sidebar stops advertising it. Deleting it from this set is the entire
- * un-parking operation.
+ * Pages that stay in the URL vocabulary but draw no item in the MAIN sidebar
+ * list. Search is parked (owner's call, 2026-08-30): the whole module —
+ * page, server machinery, /search paths — keeps working for whoever types
+ * the URL, but the sidebar stops advertising it; deleting it from this set
+ * is the entire un-parking operation. Settings is not hidden at all — its
+ * item renders in the sidebar FOOTER, at the very bottom.
  */
-const NAV_HIDDEN: ReadonlySet<Page> = new Set(['search']);
+const NAV_HIDDEN: ReadonlySet<Page> = new Set(['search', 'settings']);
 
 /**
  * The service worker's update affordance (Phase 7): visible exactly while a
@@ -94,39 +99,43 @@ export function App() {
             <nav className="sideNavItems" aria-label="Modules">
               {PAGES.map((item) =>
                 NAV_HIDDEN.has(item) ? null : (
-                  <button
-                    key={item}
-                    className={page === item ? 'sideNavItem active' : 'sideNavItem'}
-                    aria-current={page === item ? 'page' : undefined}
-                    /*
-                      No tab argument: arriving from another module names none
-                      and lets that module's memory (or its table) choose, and
-                      clicking the module you are already on keeps the view
-                      you are reading — which makes the URL identical, which
-                      makes it a replace, not a push.
-                    */
-                    onClick={() => navigate(item)}
-                  >
-                    <span className="sideNavIcon">{MODULE_ICONS[item]}</span>
-                    {NAV_LABELS[item]}
-                  </button>
+                  <Fragment key={item}>
+                    <button
+                      className={page === item ? 'sideNavItem active' : 'sideNavItem'}
+                      aria-current={page === item ? 'page' : undefined}
+                      /*
+                        No tab argument: arriving from another module names
+                        none and lets that module's memory (or its table)
+                        choose, and clicking the module you are already on
+                        keeps the view you are reading — which makes the URL
+                        identical, which makes it a replace, not a push.
+                      */
+                      onClick={() => navigate(item)}
+                    >
+                      <span className="sideNavIcon">{MODULE_ICONS[item]}</span>
+                      {NAV_LABELS[item]}
+                    </button>
+                    {/* Plan stands alone above the working set. */}
+                    {item === 'workbench' ? (
+                      <div className="sideNavSep" aria-hidden="true" />
+                    ) : null}
+                  </Fragment>
                 ),
               )}
             </nav>
-            {/* Where the data on screen lives, and the door to anywhere else
-                it could (File > New / File > Open) — plus the theme control:
-                the shell's own facts, kept out of every module's banner. */}
+            {/* Settings at the very bottom (owner's placement), then where
+                the data on screen lives — File > New / File > Open. The
+                theme control that used to sit here is a Settings field now. */}
             <div className="sideNavFooter">
-              <FolderControl />
               <button
-                className="theme-toggle"
-                onClick={theme.cycleMode}
-                title={`Theme: ${themeModeLabel(theme.mode)} — click to change`}
-                aria-label={`Theme: ${themeModeLabel(theme.mode)}. Click to switch.`}
+                className={page === 'settings' ? 'sideNavItem active' : 'sideNavItem'}
+                aria-current={page === 'settings' ? 'page' : undefined}
+                onClick={() => navigate('settings')}
               >
-                <span aria-hidden="true">{themeModeIcon(theme.mode)}</span>
-                {themeModeLabel(theme.mode)}
+                <span className="sideNavIcon">{MODULE_ICONS.settings}</span>
+                {NAV_LABELS.settings}
               </button>
+              <FolderControl />
             </div>
           </aside>
           <main className="moduleMain">
@@ -135,13 +144,13 @@ export function App() {
               components whole (the Workbench deliberately so — the owner
               scoped it out of the module overhaul); the shell gives them the
               banner and the body wrapper the other modules render themselves.
-              The Workbench's two columns and the search report's wide
-              document both get the wider body.
+              Every body is full-bleed now, so the old wide/narrow split is
+              gone with the max-widths.
             */}
             {page === 'workbench' && (
               <>
-                <ModuleBanner title="Workbench" />
-                <div className="moduleBody wide">
+                <ModuleBanner title="Plan" />
+                <div className="moduleBody">
                   <WorkbenchPage {...props} />
                 </div>
               </>
@@ -149,7 +158,7 @@ export function App() {
             {page === 'search' && (
               <>
                 <ModuleBanner title="Search" />
-                <div className="moduleBody wide">
+                <div className="moduleBody">
                   <SearchPage {...props} />
                 </div>
               </>

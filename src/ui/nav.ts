@@ -38,18 +38,20 @@ import { useCallback, useEffect, useState } from 'react';
 // ---------------------------------------------------------------------------
 
 /**
- * THE MODULES, in sidebar order — which is ALPHABETICAL by label, the owner's
- * rule (2026-08-30): the old Profile page's ten tabs each became a module,
- * joined by Workbench and Net worth, and an alphabetized list beats a curated
- * one the moment there are twelve entries. '/' still opens the Workbench
- * (HOME below); the sidebar order is where things LIVE, not where you START.
+ * THE MODULES, in sidebar order: Plan (the page whose id stays 'workbench' —
+ * its URLs, storage keys and machinery all predate the label) FIRST, above a
+ * separator, then everything else ALPHABETICAL by label — the owner's rules,
+ * 2026-08-30. '/' opens Plan (HOME below).
  *
- * 'search' stays addressable but draws no sidebar item — App.tsx's NAV_HIDDEN
- * carries that rule. 'dashboard', 'methodology' and 'profile' are tombstones:
- * the first two resolve to HOME like any unknown path; '/profile/<tab>' paths
- * redirect to the module the tab became (parseRoute owns the mapping).
+ * 'search' stays addressable but draws no sidebar item, and 'settings' draws
+ * its item in the sidebar FOOTER — App.tsx's NAV_HIDDEN / footer rendering
+ * carry those rules. 'dashboard', 'methodology' and 'profile' are
+ * tombstones: the first two resolve to HOME like any unknown path;
+ * '/profile/<tab>' paths redirect to the module the tab became (parseRoute
+ * owns the mapping).
  */
 export const PAGES = [
+  'workbench',
   'accounts',
   'expenses',
   'health',
@@ -62,7 +64,6 @@ export const PAGES = [
   'search',
   'settings',
   'tithing',
-  'workbench',
 ] as const;
 
 export type Page = (typeof PAGES)[number];

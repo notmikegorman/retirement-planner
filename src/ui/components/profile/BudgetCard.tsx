@@ -313,7 +313,7 @@ function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: 
           investing on Investing. Seeding loses nothing: the three figures above become the first
           three rows.
         </p>
-        <div className="row">
+        <div className="row inlineRow">
           <button
             className="primary"
             onClick={() =>

@@ -37,7 +37,6 @@ import {
 } from './fields';
 import { annualFromMonthly } from './profileLogic';
 import {
-  formatMonth,
   makePolicy,
   policyTermNote,
   policyTotals,
@@ -132,22 +131,6 @@ const LEGACY_INSURED_HELP =
   'is unambiguous, and it is the death the plan is most exposed to. Name someone explicitly if ' +
   'the policy covers the other of you: only a death of the INSURED pays out, so getting this ' +
   'wrong makes the cover invisible in exactly the death you bought it for.';
-
-/**
- * The muted line under the table banner: units, and what the expiry notes
- * measure against. Shared so the module and the tests read one sentence.
- */
-export function policyListIntro(workStops: YearMonth | null): string {
-  return (
-    'Premiums are $/month in today\u2019s dollars; face amounts are NOMINAL dollars, because level ' +
-    'term does not inflate. ' +
-    (workStops === null
-      ? 'The plan does not say when work stops yet, so the expiry notes have nothing to ' +
-        'measure against \u2014 set a retirement date in the Workbench.'
-      : `Work stops ${formatMonth(workStops)} in the current plan, which is what each ` +
-        'policy\u2019s expiry is measured against.')
-  );
-}
 
 /** The first person drawing a salary — the life a term policy usually covers. */
 export function defaultInsured(profile: Profile): string {

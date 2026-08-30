@@ -85,38 +85,6 @@ export function accountsTotal(accounts: readonly Account[], quotes: QuotesFile):
 export const ACCOUNTS_TOTAL_LABEL = 'All accounts';
 
 /**
- * The sentence under the total: what it counts, and what the other total on
- * the Net Worth page counts that this one does not.
- *
- * THE DIFFERENCE IS THE HOME, AND ONLY THE HOME. Say what that page actually
- * does, not what a net-worth figure conventionally does: networthStore builds
- * a snapshot's total as `portfolio + input.homeValue` — there is no mortgage
- * term in it at all, whatever the profile's home carries. A
- * sentence promising a subtraction that never happens sends the reader to the
- * Net Worth page to look for it, which is the confusion this line exists to
- * end rather than start. If a mortgage ever enters that total, this sentence
- * and ACCOUNTS_TOTAL_TITLE below change with it.
- *
- * The unpriced clause is the same honesty the row flags carry — a total that
- * silently counted an unpriced VTI position as $0 would read as a real sum of
- * real accounts, and be short by the whole position.
- */
-export function accountsTotalNote(accounts: readonly Account[], quotes: QuotesFile): string {
-  const n = accounts.length;
-  const unpriced = [
-    ...new Set(accounts.flatMap((a) => accountMissingQuotes(a, quotes))),
-  ].sort();
-  const base =
-    `Sum of the ${n} ${n === 1 ? 'balance' : 'balances'} above — accounts only. ` +
-    'The Net Worth page adds your home value on top of this; that is the bigger total.';
-  if (unpriced.length === 0) return base;
-  return (
-    `${base} ${unpriced.join(', ')} ${unpriced.length === 1 ? 'has' : 'have'} no stored price ` +
-    'and counts as $0 in this sum — press Refresh prices.'
-  );
-}
-
-/**
  * The tooltip on the total. Says the same thing the note does, for the reader
  * who hovers the number rather than reading the line under it.
  */

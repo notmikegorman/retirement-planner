@@ -255,7 +255,7 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
       })
       .toBe(true);
     expect(await page.getByRole('button', { name: 'Take snapshot' }).count()).toBe(0);
-    await page.getByRole('button', { name: 'Workbench' }).click();
+    await page.getByRole('button', { name: 'Plan' }).click();
   }, 120_000);
 
   it('the FIRST account opens the gate: one simulation appears, its number carrying its conditions', async () => {
@@ -371,7 +371,7 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // Back to the workbench first: the reload must land where the cached-
     // final-run contract shows itself (the snapshot leg left us on Net
     // Worth, whose page has no verdict to wait for).
-    await page.getByRole('button', { name: 'Workbench' }).click();
+    await page.getByRole('button', { name: 'Plan' }).click();
     await verdict().waitFor({ state: 'visible', timeout: 240_000 });
 
     // Plant the orphans a killed mid-write tab would leave (Phase-3's known

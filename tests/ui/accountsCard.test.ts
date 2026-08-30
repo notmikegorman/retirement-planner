@@ -34,7 +34,6 @@ import {
   accountListBalance,
   accountMissingQuotes,
   accountsTotal,
-  accountsTotalNote,
   formatListBalance,
 } from '../../src/ui/components/profile/accountsLogic';
 
@@ -213,54 +212,16 @@ describe('accountsTotal — the column adds up to the number under it', () => {
 
 describe('the total says what it counts, so it cannot be read as net worth', () => {
   it('is not labelled "Total" or "Net worth"', () => {
-    // The Net Worth page's total is these accounts PLUS the home MINUS the
-    // mortgage. Two totals under one word, on two screens, is the whole bug.
+    // The Net Worth page's total is these accounts PLUS the home. Two totals
+    // under one word, on two screens of one app, is the whole bug. (The
+    // sentence that used to spell this out under the table retired as
+    // unnecessary commentary, 2026-08-30 — the label and the hover title
+    // carry the distinction now.)
     expect(ACCOUNTS_TOTAL_LABEL).toBe('All accounts');
     expect(ACCOUNTS_TOTAL_LABEL.toLowerCase()).not.toContain('net worth');
     expect(ACCOUNTS_TOTAL_LABEL).not.toBe('Total');
-  });
-
-  it('names what it leaves out, and where that other total lives', () => {
-    const note = accountsTotalNote(fiveAccounts(), QUOTES);
-    expect(note).toContain('accounts only');
-    expect(note).toContain('home');
-    expect(note).toContain('Net Worth page');
-    // The count is stated, so the reader can see the sum covers every row.
-    expect(note).toContain('5 balances');
     expect(ACCOUNTS_TOTAL_TITLE).toContain('not net worth');
-  });
-
-  it('describes the OTHER total the way that page actually computes it', () => {
-    // networthStore builds a snapshot as `total: portfolio + input.homeValue`.
-    // No mortgage is subtracted anywhere in it — and the user's home carries
-    // none either. Promising a subtraction that never happens sends the reader
-    // to the Net Worth page hunting for a term that is not there, which is the
-    // confusion this note exists to end. If that total ever grows a mortgage
-    // term, this test is the thing that says so out loud.
-    const note = accountsTotalNote(fiveAccounts(), QUOTES);
-    expect(note.toLowerCase()).not.toContain('mortgage');
     expect(ACCOUNTS_TOTAL_TITLE.toLowerCase()).not.toContain('mortgage');
-    expect(
-      readFileSync(
-        // The store logic moved to src/store in Phase 3 of the browser port;
-        // the pin follows the code that actually computes the total.
-        fileURLToPath(new URL('../../src/store/networthStore.ts', import.meta.url)),
-        'utf8',
-      ),
-    ).toContain('total: portfolio + input.homeValue');
-  });
-
-  it('says "1 balance" for one account rather than "1 balances"', () => {
-    expect(accountsTotalNote([manual('a', 'A', 1)], QUOTES)).toContain('1 balance above');
-  });
-
-  it('confesses when an unpriced symbol is counted as $0 inside it', () => {
-    const note = accountsTotalNote(fiveAccounts(), { VTI: QUOTES.VTI! });
-    expect(note).toContain('BND');
-    expect(note).toContain('$0');
-    expect(note).toContain('Refresh prices');
-    // Only when it is true: a fully priced set gets no such clause.
-    expect(accountsTotalNote(fiveAccounts(), QUOTES)).not.toContain('$0');
   });
 });
 
@@ -332,7 +293,6 @@ describe('the wiring (source scan)', () => {
     expect(accountsModule).toContain('{ACCOUNTS_TOTAL_LABEL}');
     expect(accountsModule).toMatch(/\{formatListBalance\(accountsTotal\(accounts, quotes\)\)\}/);
     expect(accountsModule).toContain('title={ACCOUNTS_TOTAL_TITLE}');
-    expect(accountsModule).toContain('{accountsTotalNote(accounts, quotes)}');
   });
 });
 

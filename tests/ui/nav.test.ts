@@ -54,13 +54,17 @@ const EVERY_ROUTE: Route[] = PAGES.flatMap((page) => [
 ]);
 
 describe('the vocabulary', () => {
-  it('covers the thirteen modules, in sidebar (alphabetical) order', () => {
-    // The owner's rule (2026-08-30): the old Profile page's ten tabs each
-    // became a module, joined by Workbench and Net worth, alphabetized.
-    // 'search' is still addressable but draws no sidebar item; App.tsx's
-    // NAV_HIDDEN carries that rule. 'dashboard', 'methodology' and 'profile'
-    // are tombstones, asserted with the unknown/legacy paths below.
+  it('covers the thirteen modules: Plan first, the rest alphabetical', () => {
+    // The owner's rules (2026-08-30): the old Profile page's ten tabs each
+    // became a module, joined by Plan (id 'workbench' — the label changed,
+    // the URL vocabulary did not) and Net worth. Plan sits FIRST, above the
+    // sidebar separator; everything after it is alphabetized. 'search' is
+    // still addressable but draws no sidebar item, and 'settings' renders in
+    // the sidebar footer; App.tsx carries both rules. 'dashboard',
+    // 'methodology' and 'profile' are tombstones, asserted with the
+    // unknown/legacy paths below.
     expect([...PAGES]).toEqual([
+      'workbench',
       'accounts',
       'expenses',
       'health',
@@ -73,10 +77,10 @@ describe('the vocabulary', () => {
       'search',
       'settings',
       'tithing',
-      'workbench',
     ]);
-    // Alphabetical is the rule, not a coincidence of the list above.
-    expect([...PAGES]).toEqual([...PAGES].sort());
+    // Alphabetical below Plan is the rule, not a coincidence of the list.
+    const rest = [...PAGES].slice(1);
+    expect(rest).toEqual([...rest].sort());
   });
 
   it('names the entity pages — the ones whose second segment is a record id', () => {

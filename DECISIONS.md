@@ -1834,3 +1834,40 @@ original has the same gap, documented in dirtyFormBlocker.tsx), a
 cancelled add leaves one inert Back press in history, and the edit-session
 machinery still has no DOM-level test — the node suites pin sources, the
 browser lanes drive flows.
+
+## The polish pass: quiet tables, stacked forms, Plan on top (2026-08-30, third pass)
+
+Owner feedback on the shell, applied:
+
+**Tables wear the smplmark look and run full width.** Uppercase, letter-
+spaced, muted column headers on their own band; roomy separated rows; the
+whole table in a rounded bordered wrap; and the module bodies lost their
+max-widths entirely — tables and forms stretch all the way across.
+
+**Unnecessary commentary is gone, as a principle.** The accounts table's
+"names are yours to choose…" intro, the "sum of the N balances above…"
+sentence under the total, the insurance table's units preamble and its
+totals footnote — all deleted. The owner's reasoning, recorded because it
+is the standard now: a label like "All accounts" over an obvious sum needs
+no explanation, and the explanation is NOT harmless — it makes the reader
+pause and suspect the thing is more complicated than it is. Copy that
+merely narrates what the screen already shows is a cost, not a courtesy.
+(What the words guarded lives on in quieter places: the total's hover
+title, the per-row unpriced flags, the field-level tips.)
+
+**Forms are one field per row.** The packed flex rows — seven money boxes
+across the Home card, the Health card's scattered labels — read as text
+placed randomly once labels and help wrapped at different heights. Module
+forms now stack: label, control, help, top-down, with a uniform width
+floor. Genuinely horizontal repeating groups (a holding's symbol × shares ×
+class, Roth conversion rows, the withdrawal order's ↑↓ buttons, the
+allocation weights) opt out via .inlineRow.
+
+**Plan on top; Settings at the bottom; theme inside Settings.** The
+Workbench is LABELLED Plan now (the id, URLs and storage keys stay
+'workbench' — /plan would orphan every link for a word) and sits first in
+the sidebar above a separator, with the working modules alphabetical below.
+Settings moved to the sidebar footer, where the theme toggle used to live —
+and the theme itself became an Appearance card inside Settings (applied on
+change, outside the view/edit form), so the footer is Settings + the folder
+control and nothing else.

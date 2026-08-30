@@ -68,7 +68,7 @@ export function ManagedTable<T>(props: {
 
   return (
     <>
-      <div className="table-scroll">
+      <div className="table-scroll managedTableWrap">
         <table className="managedTable">
           <thead>
             <tr>

@@ -502,7 +502,7 @@ export function AllocationEditor(props: {
     props.onChange({ ...props.mix, [key]: v ?? 0 });
   return (
     <div>
-      <div className="row">
+      <div className="row inlineRow">
         <FieldNote className="muted">Allocation</FieldNote>
         <NumberField label="Stocks" width={80} value={props.mix.stocks} onCommit={set('stocks')} />
         <NumberField label="Bonds" width={80} value={props.mix.bonds} onCommit={set('bonds')} />

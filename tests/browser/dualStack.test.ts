@@ -563,7 +563,7 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   );
 
   // --- Score the day-start version, then the refusal, then restore it -------
-  await page.getByRole('button', { name: 'Workbench' }).click();
+  await page.getByRole('button', { name: 'Plan' }).click();
   await page
     .getByRole('tablist', { name: 'Plan inputs' })
     .getByRole('tab', { name: 'History' })

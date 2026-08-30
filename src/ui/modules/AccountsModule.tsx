@@ -33,7 +33,6 @@ import {
   accountListBalance,
   accountMissingQuotes,
   accountsTotal,
-  accountsTotalNote,
   formatListBalance,
 } from '../components/profile/accountsLogic';
 import {
@@ -47,10 +46,6 @@ import { ConfirmModal } from './ConfirmModal';
 import { ManagedTable } from './ManagedTable';
 import { ModuleBanner } from './ModuleBanner';
 import { useProfileDoc } from './useProfileDoc';
-
-const TABLE_NOTE =
-  'Names are yours to choose; the id on each detail is the internal key that plan events ' +
-  '(72(t)) and the results tables reference, so it never changes on its own.';
 
 export function AccountsModule({ route, navigate }: PageProps) {
   const doc = useProfileDoc();
@@ -305,14 +300,9 @@ export function AccountsModule({ route, navigate }: PageProps) {
           <div className="error-banner">Save failed: {doc.saveError}</div>
         ) : null}
         {refreshNotes}
-        <div className="muted" style={{ marginBottom: 10 }}>
-          {TABLE_NOTE}
-        </div>
         {accounts.length === 0 ? (
           <div className="card">
-            <div className="muted">
-              No accounts yet — “+ Add account” starts one, and it opens here.
-            </div>
+            <div className="muted">No accounts yet.</div>
           </div>
         ) : (
           <ManagedTable
@@ -379,11 +369,6 @@ export function AccountsModule({ route, navigate }: PageProps) {
                     </strong>
                   </td>
                   <td className="deleteCell" />
-                </tr>
-                <tr>
-                  <td colSpan={5} className="col-text managedTotalNote">
-                    {accountsTotalNote(accounts, quotes)}
-                  </td>
                 </tr>
               </tfoot>
             }
