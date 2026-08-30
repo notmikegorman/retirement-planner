@@ -11,7 +11,6 @@ import { SearchPage } from './pages/SearchPage';
 import { NetWorthPage } from './pages/NetWorthPage';
 import { AccountsModule } from './modules/AccountsModule';
 import { ExpensesModule } from './modules/ExpensesModule';
-import { HealthModule } from './modules/HealthModule';
 import { HomeModule } from './modules/HomeModule';
 import { HouseholdModule } from './modules/HouseholdModule';
 import { IncomeModule } from './modules/IncomeModule';
@@ -40,7 +39,6 @@ const NAV_LABELS: Record<Page, string> = {
   workbench: 'Plan',
   accounts: 'Accounts',
   expenses: 'Expenses',
-  health: 'Health',
   home: 'Home',
   household: 'Household',
   income: 'Income',
@@ -167,7 +165,6 @@ export function App() {
             {page === 'networth' && <NetWorthPage {...props} />}
             {page === 'accounts' && <AccountsModule {...props} />}
             {page === 'expenses' && <ExpensesModule />}
-            {page === 'health' && <HealthModule />}
             {page === 'home' && <HomeModule />}
             {page === 'household' && <HouseholdModule />}
             {page === 'income' && <IncomeModule />}

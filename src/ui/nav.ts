@@ -45,16 +45,16 @@ import { useCallback, useEffect, useState } from 'react';
  *
  * 'search' stays addressable but draws no sidebar item, and 'settings' draws
  * its item in the sidebar FOOTER — App.tsx's NAV_HIDDEN / footer rendering
- * carry those rules. 'dashboard', 'methodology' and 'profile' are
+ * carry those rules. 'dashboard', 'methodology', 'profile' and 'health' are
  * tombstones: the first two resolve to HOME like any unknown path;
- * '/profile/<tab>' paths redirect to the module the tab became (parseRoute
- * owns the mapping).
+ * '/profile/<tab>' paths redirect to the module the tab became, and
+ * '/health' — a module until its fields moved onto the Settings page
+ * (2026-08-30) — redirects to Settings (parseRoute owns both mappings).
  */
 export const PAGES = [
   'workbench',
   'accounts',
   'expenses',
-  'health',
   'home',
   'household',
   'income',
@@ -147,7 +147,6 @@ export type NetWorthTabId = (typeof NETWORTH_TAB_IDS)[number];
 export const PAGE_TABS = {
   accounts: [],
   expenses: [],
-  health: [],
   home: [],
   household: [],
   income: [],
@@ -279,9 +278,18 @@ export function parseRoute(path: string): Route {
    * first. useRoute's canonical rewrite then cleans the address bar up.
    */
   if (segments[0] === 'profile') {
+    if (segments[1] === 'health') return { page: 'settings', tab: null };
     const legacy = PAGES.find((candidate) => candidate === segments[1]);
     return { page: legacy ?? 'household', tab: null };
   }
+
+  /*
+   * Health retired as a module in its own right (2026-08-30): its fields live
+   * on the Settings page's Health tab now, so the old links land there. (The
+   * tab itself is local state, like every form module's — the link names the
+   * page, not the hand position.)
+   */
+  if (segments[0] === 'health') return { page: 'settings', tab: null };
 
   const page = PAGES.find((candidate) => candidate === segments[0]);
   if (page === undefined) return HOME;
@@ -389,7 +397,6 @@ export function resolveTab<T extends string>(
 export const PAGE_TAB_STORAGE_KEY = {
   accounts: null,
   expenses: null,
-  health: null,
   home: null,
   household: null,
   income: null,

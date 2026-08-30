@@ -1909,3 +1909,64 @@ reports in a banner and does not retry until the next arrival. The manual
 button remains for a second snapshot or a changed home value. The one new
 invariant worth naming: api.takeNetWorthSnapshot now has exactly two call
 sites — the dialog's confirm and this effect — and the tests pin the count.
+
+## Tabs everywhere they earn their keep, and the file stops recording the scheduler (2026-08-30, fifth pass)
+
+The owner's fifth round, plus a root-caused flake that turned out to be a
+real store bug.
+
+**Four more modules grew tabs**, all through a new shared pair
+(modules/TabStrip.tsx + TabPanel) that Tithing's hand-rolled strip was
+refactored onto: Income = Current | After Retirement; Household = Filing |
+People; Home = Details | Mortgage; Settings = General | Spending |
+Withdrawals | Health | Advanced. Same rule as Tithing: the tab is LOCAL
+state, one draft, one Save across tabs. Settings' Advanced tab holds the
+two always-active cards (Appearance, Data folder), rendered through the
+module's `after` slot so they stay live in view mode; the fieldset renders
+nothing on that tab.
+
+**Health stopped being a module.** Its fields moved whole into
+HealthFields.tsx and render as Settings' Health tab; 'health' left PAGES
+(twelve modules now) and joined the tombstones — parseRoute sends /health
+and /profile/health to Settings.
+
+**Investing became the two numbers it is** — "While working ($/mo)" and
+"After the last paycheck ($/mo)" — instead of a lines table.
+InvestingFields (BudgetCard.tsx) binds the pair to the scalars before
+itemisation and to the budget's investing line after it (per line, in the
+rare budget holding several; committing into an itemised budget with no
+investing row creates the row with an explicit retired 0, because on a
+line absence means "same as now"). The add-row affordance is gone from
+this page on purpose: a second investing line was never a decision anyone
+made here.
+
+**The Expenses preamble became a first-visit modal.** The today's-dollars
+and inherited-blank rules left the page (they were the last preamble
+standing) and now show once, as a modal over the itemised table, with a
+default-ticked "Do not show this again" (fplan-expenses-intro-seen,
+browser-local like the remembered tabs, deliberately NOT cleared by File >
+New). ProfileFormModule's `after` learned to take a render function for
+exactly this: the modal needs the draft (itemised or not) but must live
+outside the disabled fieldset or its own button would be switched off in
+view mode.
+
+**The account detail dropped its `id:` line** — the id is the URL segment,
+so the address bar already shows it to anyone who needs it for a
+hand-written plan event.
+
+**The store bug: the file's bytes recorded write scheduling.** The
+dual-stack gate forked on networth.json under CPU load — same rows, same
+values, different KEY ORDER per stack. Root cause: reads normalize key
+order (zod rebuilds objects in schema-declaration order), so every
+read-modify-write re-serialized older rows into schema shape, while the
+session's LAST spend-attach kept its appended-at-the-end keys. With two
+rows scoring concurrently (the auto-snapshot made that the normal case),
+which attach lands last is a scheduling race — and the two backends
+disagreed. Fix: networthStore.writeLedger and planHistoryStore.writeHistory
+now write THROUGH the schema, so the bytes are always the shape the schema
+reads; behavioral pins in snapshotScore.test.ts and
+planVersionScore.test.ts assert the spend pair lands in schema position.
+The lesson worth keeping: when a byte-equality gate flakes only under
+load, reproduce under load (a looping node-suite made it 1-in-3) and read
+the full artifacts — the 90-char diff excerpt supported three wrong
+theories before the dumped files settled it in one glance.

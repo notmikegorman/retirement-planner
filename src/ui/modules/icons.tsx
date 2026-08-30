@@ -38,11 +38,6 @@ export const MODULE_ICONS: Record<Page, ReactNode> = {
       <path d="M9 8h6M9 12h6" />
     </Glyph>
   ),
-  health: (
-    <Glyph>
-      <path d="M12 21C7 16.5 3.5 13.4 3.5 9.6 3.5 7 5.5 5 8 5c1.7 0 3.2.9 4 2.3C12.8 5.9 14.3 5 16 5c2.5 0 4.5 2 4.5 4.6 0 3.8-3.5 6.9-8.5 11.4z" />
-    </Glyph>
-  ),
   home: (
     <Glyph>
       <path d="M3 11l9-7 9 7" />

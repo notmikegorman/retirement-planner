@@ -56,20 +56,20 @@ const EVERY_ROUTE: Route[] = PAGES.flatMap((page) => [
 ]);
 
 describe('the vocabulary', () => {
-  it('covers the thirteen modules: Plan first, the rest alphabetical', () => {
-    // The owner's rules (2026-08-30): the old Profile page's ten tabs each
+  it('covers the twelve modules: Plan first, the rest alphabetical', () => {
+    // The owner's rules (2026-08-30): the old Profile page's tabs each
     // became a module, joined by Plan (id 'workbench' — the label changed,
     // the URL vocabulary did not) and Net worth. Plan sits FIRST, above the
     // sidebar separator; everything after it is alphabetized. 'search' is
     // still addressable but draws no sidebar item, and 'settings' renders in
     // the sidebar footer; App.tsx carries both rules. 'dashboard',
-    // 'methodology' and 'profile' are tombstones, asserted with the
+    // 'methodology', 'profile' and 'health' (its fields moved onto the
+    // Settings page the same day) are tombstones, asserted with the
     // unknown/legacy paths below.
     expect([...PAGES]).toEqual([
       'workbench',
       'accounts',
       'expenses',
-      'health',
       'home',
       'household',
       'income',
@@ -193,6 +193,15 @@ describe('parseRoute', () => {
     expect(parseRoute('/profile/budget')).toEqual({ page: 'household', tab: null });
   });
 
+  it('maps the retired /health module onto Settings, where its fields moved', () => {
+    // Health stopped being a module 2026-08-30 — its fields live on the
+    // Settings page's Health tab now (a LOCAL tab, so the path names the
+    // page). Both the module-era and profile-era links resolve.
+    expect(parseRoute('/health')).toEqual({ page: 'settings', tab: null });
+    expect(parseRoute('/Health/')).toEqual({ page: 'settings', tab: null });
+    expect(parseRoute('/profile/health')).toEqual({ page: 'settings', tab: null });
+  });
+
   it('tolerates the ways a path gets typed, pasted, and mangled', () => {
     expect(parseRoute('/expenses/')).toEqual({ page: 'expenses', tab: null });
     expect(parseRoute('workbench/cashflow')).toEqual({ page: 'workbench', tab: 'cashflow' });
@@ -267,8 +276,8 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 13 pages + 7 results tabs + 4 search tabs + 4 net-worth tabs = 28.
-    expect(paths.length).toBe(28);
+    // 12 pages + 7 results tabs + 4 search tabs + 4 net-worth tabs = 27.
+    expect(paths.length).toBe(27);
   });
 });
 

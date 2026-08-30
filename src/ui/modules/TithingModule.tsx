@@ -6,9 +6,8 @@
  * visibly overrides OF these answers.
  *
  * The tab is LOCAL state, deliberately not in the URL: these are two halves of
- * one editing surface (both write the same draft, one Save commits both), and
- * the app's rule keeps "where your hands are" out of the address bar — the
- * same reasoning as the Workbench's input panel (ScenarioPanel.tsx).
+ * one editing surface (both write the same draft, one Save commits both) —
+ * TabStrip.tsx carries the rule.
  */
 import { useState } from 'react';
 import { deriveExpenseStreams } from '../../shared/expenses';
@@ -25,6 +24,7 @@ import {
   potHelp,
 } from '../components/workbench/workbenchLogic';
 import { ProfileFormModule } from './ProfileFormModule';
+import { TabPanel, TabStrip } from './TabStrip';
 
 const GIVING_RULE_HELP =
   'The household default. The plan can override it on the Plan page’s Tithing tab ' +
@@ -48,21 +48,13 @@ export function TithingModule() {
     <ProfileFormModule
       title="Tithing"
       tabs={
-        <nav className="modalTabBar" role="tablist" aria-label="Tithing views">
-          {TITHING_TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              id={`tithing-tab-${t.id}`}
-              aria-selected={tab === t.id}
-              aria-controls={`tithing-panel-${t.id}`}
-              className={tab === t.id ? 'modalTabBtn isActive' : 'modalTabBtn'}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
+        <TabStrip
+          idPrefix="tithing"
+          label="Tithing views"
+          tabs={TITHING_TABS}
+          active={tab}
+          onSelect={setTab}
+        />
       }
     >
       {(draft, doc) => {
@@ -76,11 +68,7 @@ export function TithingModule() {
         const givingMonthly = deriveExpenseStreams(draft.expenses).charitableMonthly;
         const itemised = (draft.expenses.lines ?? []).length > 0;
         return (
-          <div
-            role="tabpanel"
-            id={`tithing-panel-${tab}`}
-            aria-labelledby={`tithing-tab-${tab}`}
-          >
+          <TabPanel idPrefix="tithing" tab={tab}>
             {tab === 'working' &&
               (itemised ? (
                 <GivingLines expenses={draft.expenses} update={doc.update} />
@@ -165,7 +153,7 @@ export function TithingModule() {
                 </div>
               </div>
             )}
-          </div>
+          </TabPanel>
         );
       }}
     </ProfileFormModule>

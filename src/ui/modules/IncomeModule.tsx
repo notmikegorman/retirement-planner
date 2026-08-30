@@ -1,11 +1,15 @@
 /**
- * Income — salaries while working, the 401(k) flows they feed, and the
- * household's expected income after the last paycheck.
+ * Income — two tabs (the owner's split, 2026-08-30): CURRENT holds the
+ * salaries while working and the 401(k) flows they feed; AFTER RETIREMENT
+ * holds the household's expected income once the last paycheck stops. One
+ * editing surface — both tabs write the same draft, one Save commits both.
  */
+import { useState } from 'react';
 import { formatUSD } from '../../shared/util';
 import { CheckboxField, FieldNote, NumberField } from '../components/profile/fields';
 import { annualFromMonthly } from '../components/profile/profileLogic';
 import { ProfileFormModule } from './ProfileFormModule';
+import { TabPanel, TabStrip, type TabDef } from './TabStrip';
 
 const RETIREMENT_INCOME_HELP =
   'Recurring money you expect AFTER you stop working — part-time work, consulting, a rental, a ' +
@@ -21,88 +25,115 @@ const RETIREMENT_INCOME_TAXABLE_HELP =
   '— no payroll tax, and the Social Security earnings test is not modeled (this household claims ' +
   'at 67, its full retirement age, where that test never applies).';
 
+const INCOME_TABS: ReadonlyArray<TabDef<'current' | 'retirement'>> = [
+  { id: 'current', label: 'Current' },
+  { id: 'retirement', label: 'After Retirement' },
+];
+
+type IncomeTabId = (typeof INCOME_TABS)[number]['id'];
+
 export function IncomeModule() {
+  const [tab, setTab] = useState<IncomeTabId>('current');
+
   return (
-    <ProfileFormModule title="Income">
+    <ProfileFormModule
+      title="Income"
+      tabs={
+        <TabStrip
+          idPrefix="income"
+          label="Income views"
+          tabs={INCOME_TABS}
+          active={tab}
+          onSelect={setTab}
+        />
+      }
+    >
       {(draft, doc) => (
-        <div className="card">
-          <div className="row">
-            {draft.people.map((person) => (
-              <NumberField
-                key={person.id}
-                label={`${person.name} salary ($/yr)`}
-                value={draft.income.salaries[person.id] ?? 0}
-                width={170}
-                onCommit={(v) =>
-                  doc.update((p) => {
-                    p.income.salaries[person.id] = v ?? 0;
-                  })
-                }
-              />
-            ))}
-            <NumberField
-              label="401(k) employee contribution ($/yr)"
-              value={draft.income.contribution401k}
-              width={230}
-              help="Annual deferral while working — reduces taxable wages"
-              onCommit={(v) =>
-                doc.update((p) => {
-                  p.income.contribution401k = v ?? 0;
-                })
-              }
-            />
-            <NumberField
-              label="Employer match ($/yr)"
-              value={draft.income.employerMatch401k}
-              width={160}
-              help="Goes into the 401(k), not wages"
-              onCommit={(v) =>
-                doc.update((p) => {
-                  p.income.employerMatch401k = v ?? 0;
-                })
-              }
-            />
-          </div>
-          {/*
-            The retired side of income: the household's own baseline for what it
-            expects to bring in after the salaries stop. Absent means none, so
-            an empty box is left as an ABSENT field rather than a written 0 —
-            that is what keeps profile.json quiet about defaults it never chose.
-          */}
-          <h3>After you stop working</h3>
-          <div className="row">
-            <NumberField
-              label="Retirement income ($/mo)"
-              allowEmpty
-              placeholder="none"
-              value={draft.income.retirementMonthly}
-              width={190}
-              tip={RETIREMENT_INCOME_HELP}
-              onCommit={(v) =>
-                doc.update((p) => {
-                  if (v == null) delete p.income.retirementMonthly;
-                  else p.income.retirementMonthly = v;
-                })
-              }
-            />
-            <FieldNote className="muted">
-              = {formatUSD(annualFromMonthly(draft.income.retirementMonthly ?? 0))}/yr
-            </FieldNote>
-            <CheckboxField
-              label="Taxable as ordinary income"
-              checked={draft.income.retirementIncomeTaxable !== false}
-              tip={RETIREMENT_INCOME_TAXABLE_HELP}
-              onChange={(v) =>
-                doc.update((p) => {
-                  // true is what an absent field already means; writing it out
-                  // would only add noise.
-                  if (v) delete p.income.retirementIncomeTaxable;
-                  else p.income.retirementIncomeTaxable = false;
-                })
-              }
-            />
-          </div>
-        </div>
+        <TabPanel idPrefix="income" tab={tab}>
+          {tab === 'current' && (
+            <div className="card">
+              <div className="row">
+                {draft.people.map((person) => (
+                  <NumberField
+                    key={person.id}
+                    label={`${person.name} salary ($/yr)`}
+                    value={draft.income.salaries[person.id] ?? 0}
+                    width={170}
+                    onCommit={(v) =>
+                      doc.update((p) => {
+                        p.income.salaries[person.id] = v ?? 0;
+                      })
+                    }
+                  />
+                ))}
+                <NumberField
+                  label="401(k) employee contribution ($/yr)"
+                  value={draft.income.contribution401k}
+                  width={230}
+                  help="Annual deferral while working — reduces taxable wages"
+                  onCommit={(v) =>
+                    doc.update((p) => {
+                      p.income.contribution401k = v ?? 0;
+                    })
+                  }
+                />
+                <NumberField
+                  label="Employer match ($/yr)"
+                  value={draft.income.employerMatch401k}
+                  width={160}
+                  help="Goes into the 401(k), not wages"
+                  onCommit={(v) =>
+                    doc.update((p) => {
+                      p.income.employerMatch401k = v ?? 0;
+                    })
+                  }
+                />
+              </div>
+            </div>
+          )}
+          {tab === 'retirement' && (
+            <div className="card">
+              {/*
+                The household's own baseline for what it expects to bring in
+                after the salaries stop. Absent means none, so an empty box is
+                left as an ABSENT field rather than a written 0 — that is what
+                keeps profile.json quiet about defaults it never chose.
+              */}
+              <div className="row">
+                <NumberField
+                  label="Retirement income ($/mo)"
+                  allowEmpty
+                  placeholder="none"
+                  value={draft.income.retirementMonthly}
+                  width={190}
+                  tip={RETIREMENT_INCOME_HELP}
+                  onCommit={(v) =>
+                    doc.update((p) => {
+                      if (v == null) delete p.income.retirementMonthly;
+                      else p.income.retirementMonthly = v;
+                    })
+                  }
+                />
+                <FieldNote className="muted">
+                  = {formatUSD(annualFromMonthly(draft.income.retirementMonthly ?? 0))}/yr
+                </FieldNote>
+                <CheckboxField
+                  label="Taxable as ordinary income"
+                  checked={draft.income.retirementIncomeTaxable !== false}
+                  tip={RETIREMENT_INCOME_TAXABLE_HELP}
+                  onChange={(v) =>
+                    doc.update((p) => {
+                      // true is what an absent field already means; writing it
+                      // out would only add noise.
+                      if (v) delete p.income.retirementIncomeTaxable;
+                      else p.income.retirementIncomeTaxable = false;
+                    })
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </TabPanel>
       )}
     </ProfileFormModule>
   );

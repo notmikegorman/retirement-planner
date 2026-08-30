@@ -1,8 +1,10 @@
 /**
- * Household — who this plan is for: filing status, tax residency, and the
- * people with their Social Security inputs. One thing, so it shows that one
- * thing (view/edit form; the machinery is ProfileFormModule's).
+ * Household — two tabs (the owner's split, 2026-08-30): FILING holds the
+ * filing status and tax residency; PEOPLE holds the household's members with
+ * their Social Security inputs. One editing surface — both tabs write the
+ * same draft, one Save commits both.
  */
+import { useState } from 'react';
 import {
   CheckboxField,
   FieldNote,
@@ -16,6 +18,7 @@ import { isPlaceholder } from '../components/profile/profileLogic';
 import type { StateCode } from '../../shared/types';
 import { MONTH_OPTIONS, STATE_OPTIONS } from './formOptions';
 import { ProfileFormModule } from './ProfileFormModule';
+import { TabPanel, TabStrip, type TabDef } from './TabStrip';
 
 const PIA_WORKING_HELP =
   'From your SSA statement (its estimates assume you keep working at your current salary).';
@@ -25,14 +28,34 @@ const PIA_SHARED_NOTE =
   'Enter only the full-retirement-age figure — the app derives the age-62 through age-70 ' +
   'amounts itself, and blends these two numbers based on the plan’s retirement date.';
 
+const HOUSEHOLD_TABS: ReadonlyArray<TabDef<'filing' | 'people'>> = [
+  { id: 'filing', label: 'Filing' },
+  { id: 'people', label: 'People' },
+];
+
+type HouseholdTabId = (typeof HOUSEHOLD_TABS)[number]['id'];
+
 export function HouseholdModule() {
+  const [tab, setTab] = useState<HouseholdTabId>('filing');
+
   return (
-    <ProfileFormModule title="Household">
+    <ProfileFormModule
+      title="Household"
+      tabs={
+        <TabStrip
+          idPrefix="household"
+          label="Household views"
+          tabs={HOUSEHOLD_TABS}
+          active={tab}
+          onSelect={setTab}
+        />
+      }
+    >
       {(draft, doc) => (
-        <>
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Filing</h2>
-            <div className="row">
+        <TabPanel idPrefix="household" tab={tab}>
+          {tab === 'filing' && (
+            <div className="card">
+              <div className="row">
               <label className="field" style={{ width: 170 }}>
                 {/* Uses .field-label like every other field so the control lines up
                     with its neighbours (a bare text node skips the reserved height). */}
@@ -51,14 +74,15 @@ export function HouseholdModule() {
                   })
                 }
               />
+              </div>
             </div>
-          </div>
-
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>People</h2>
-            <div className="muted" style={{ marginBottom: 4 }}>
-              Adding or removing people: edit via profile.json (v1 models exactly this household).
-            </div>
+          )}
+          {tab === 'people' && (
+            <div className="card">
+              <div className="muted" style={{ marginBottom: 4 }}>
+                Adding or removing people: edit via profile.json (v1 models exactly this
+                household).
+              </div>
             {draft.people.map((person, i) => (
               <div
                 key={person.id}
@@ -158,8 +182,9 @@ export function HouseholdModule() {
                 />
               </div>
             ))}
-          </div>
-        </>
+            </div>
+          )}
+        </TabPanel>
       )}
     </ProfileFormModule>
   );

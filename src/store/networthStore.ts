@@ -106,6 +106,21 @@ export function createNetworthStore(data: DataStore): NetworthStore {
   }
 
   /**
+   * Every write goes out THROUGH THE SCHEMA, so the bytes on disk are the
+   * shape the schema reads — whatever order this session's attaches happened
+   * in. Zod rebuilds objects in declaration order, so the read side has
+   * always normalized key order; without the same step here, a row's score
+   * kept its appended-at-the-end spend fields exactly when its attach was
+   * the session's LAST write, and the file's bytes became a record of write
+   * scheduling. With two rows scoring concurrently (the ledger auto-snapshots
+   * on arrival, 2026-08-30), which attach lands last is a race — the
+   * dual-stack byte gate caught the two backends disagreeing about it.
+   */
+  async function writeLedger(all: NetWorthSnapshot[]): Promise<void> {
+    await data.writeJsonPretty(networthPath(), netWorthFileSchema.parse(all));
+  }
+
+  /**
    * All snapshots, oldest first. A missing file is an empty ledger; a
    * malformed one fails loudly with its filename, like every data file here.
    */
@@ -177,7 +192,7 @@ export function createNetworthStore(data: DataStore): NetworthStore {
       return serialized(async () => {
         const all = await listSnapshots();
         all.push(snapshot);
-        await data.writeJsonPretty(networthPath(), all);
+        await writeLedger(all);
         return snapshot;
       });
     },
@@ -187,7 +202,7 @@ export function createNetworthStore(data: DataStore): NetworthStore {
         const all = await listSnapshots();
         const next = all.filter((s) => s.id !== id);
         if (next.length === all.length) throw new NotFoundError(`Unknown snapshot "${id}"`);
-        await data.writeJsonPretty(networthPath(), next);
+        await writeLedger(next);
       });
     },
 
@@ -203,7 +218,7 @@ export function createNetworthStore(data: DataStore): NetworthStore {
         const { score: _score, scoreError: _error, ...row } = all[index];
         all[index] =
           'score' in outcome ? { ...row, score: outcome.score } : { ...row, scoreError: outcome.error };
-        await data.writeJsonPretty(networthPath(), all);
+        await writeLedger(all);
         return 'attached';
       });
     },
@@ -274,7 +289,7 @@ export function createNetworthStore(data: DataStore): NetworthStore {
                   sustainableSpendPaths: outcome.sustainableSpendPaths,
                 },
         };
-        await data.writeJsonPretty(networthPath(), all);
+        await writeLedger(all);
         return true;
       });
     },

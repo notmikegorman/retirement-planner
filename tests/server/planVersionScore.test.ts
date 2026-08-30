@@ -407,6 +407,22 @@ describe('a version scored before the spend was ever solved for', () => {
     ).toBe(false);
     expect((await getPlanHistoryEntry(entry.id)).score?.sustainableSpend).toBe(118_000);
   });
+
+  it('writes the file in the shape the schema reads, whatever attached last', async () => {
+    // Same rule as the net-worth ledger (see snapshotScore.test.ts): reads
+    // normalize key order via the schema, so without writeHistory doing the
+    // same, the last-attached spend pair sat appended after planHash and the
+    // file's bytes recorded write scheduling instead of content.
+    const entry = await keepPlan(OLD_PLAN, 'Bought in 2028');
+    await startVersionScoring(entry.id, fakeDeps());
+
+    const raw = await fs.readFile(path.join(tmpDir, 'plan-history.json'), 'utf8');
+    const spendAt = raw.indexOf('"sustainableSpend"');
+    const modeAt = raw.indexOf('"mode"');
+    expect(spendAt).toBeGreaterThan(-1);
+    expect(modeAt).toBeGreaterThan(-1);
+    expect(spendAt).toBeLessThan(modeAt);
+  });
 });
 
 describe('a version that is still a blank', () => {

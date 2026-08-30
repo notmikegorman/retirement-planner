@@ -433,6 +433,9 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // it. It sits OUTSIDE the module's view/edit form, so everything below is
     // visible without pressing Edit.
     await page.getByRole('button', { name: 'Settings' }).click();
+    // The data-folder card lives on the ADVANCED tab now (Settings grew tabs
+    // 2026-08-30), alongside Appearance — both outside the view/edit form.
+    await page.getByRole('tab', { name: 'Advanced' }).click();
     const card = page.locator('.card').filter({ hasText: 'Data folder' });
     await card.waitFor({ state: 'visible', timeout: 120_000 });
     // The card fills in after its meta() round trip; wait for the D7 row

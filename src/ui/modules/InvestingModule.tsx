@@ -1,15 +1,14 @@
 /**
- * Investing — the budget's transfer into the brokerage (InvestingCard owns
- * the content; the worksheet deviation note in ExpensesModule.tsx covers
- * why these lines stay an in-place grid).
+ * Investing — the budget's transfer into the brokerage, as the two numbers it
+ * is (InvestingFields owns the content and the scalar-vs-line binding).
  */
-import { InvestingCard } from '../components/profile/BudgetCard';
+import { InvestingFields } from '../components/profile/BudgetCard';
 import { ProfileFormModule } from './ProfileFormModule';
 
 export function InvestingModule() {
   return (
     <ProfileFormModule title="Investing">
-      {(draft, doc) => <InvestingCard expenses={draft.expenses} update={doc.update} />}
+      {(draft, doc) => <InvestingFields expenses={draft.expenses} update={doc.update} />}
     </ProfileFormModule>
   );
 }

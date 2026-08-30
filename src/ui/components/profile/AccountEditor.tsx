@@ -6,9 +6,9 @@
  * detail form it opens, shared between view mode (disabled fieldset) and
  * edit mode.
  *
- * The internal `id` stays visible but muted: events (start_72t) and the
- * results tables reference it, so it must be discoverable — but it is not the
- * name.
+ * The internal `id` is NOT shown (the owner's call, 2026-08-30): it is the
+ * URL segment, so anyone who needs it for a hand-written plan event can read
+ * it off the address bar.
  */
 import { useEffect, useState } from 'react';
 import type {
@@ -464,12 +464,7 @@ export function AccountEditor({
 
   return (
     <div className="acct-detail">
-      <div className="row">
-        <span className="muted" style={{ fontSize: 12 }}>
-          id: {account.id}
-        </span>
-        {isPlaceholder(account.notes) ? <PlaceholderChip /> : null}
-      </div>
+      {isPlaceholder(account.notes) ? <PlaceholderChip /> : null}
       <div className="row">
         <TextField
           label="Name"

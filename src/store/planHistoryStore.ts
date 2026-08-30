@@ -122,6 +122,19 @@ export function createPlanHistoryStore(data: DataStore): PlanHistoryStore {
   }
 
   /**
+   * Every write goes out THROUGH THE SCHEMA — same rule and same reason as
+   * networthStore.writeLedger: reads normalize key order (zod rebuilds
+   * objects in declaration order), so without this step an entry's score
+   * kept its appended-at-the-end spend fields exactly when its attach was
+   * the session's last write, and the file's bytes recorded write scheduling
+   * instead of content. Caught by the dual-stack byte gate on the ledger;
+   * fixed in both stores because this one attaches the same two-phase way.
+   */
+  async function writeHistory(all: PlanHistoryEntry[]): Promise<void> {
+    await data.writeJsonPretty(historyPath(), planHistoryFileSchema.parse(all));
+  }
+
+  /**
    * Every entry, OLDEST FIRST, as the file stores them. A missing file is an
    * empty history (a data folder that has never been edited has no past); a
    * file that exists but is malformed fails loudly with its filename, like
@@ -206,7 +219,7 @@ export function createPlanHistoryStore(data: DataStore): PlanHistoryStore {
         if (covered) return null;
         const entry = newEntry({ plan, kind: 'day-start', takenAt: now });
         all.push(entry);
-        await data.writeJsonPretty(historyPath(), all);
+        await writeHistory(all);
         return entry;
       });
     },
@@ -235,7 +248,7 @@ export function createPlanHistoryStore(data: DataStore): PlanHistoryStore {
       return serialized(async () => {
         const all = await readEntries();
         all.push(entry);
-        await data.writeJsonPretty(historyPath(), all);
+        await writeHistory(all);
         return entry;
       });
     },
@@ -275,7 +288,7 @@ export function createPlanHistoryStore(data: DataStore): PlanHistoryStore {
           'score' in outcome
             ? { ...entry, score: outcome.score }
             : { ...entry, scoreError: outcome.error };
-        await data.writeJsonPretty(historyPath(), all);
+        await writeHistory(all);
         return 'attached';
       });
     },
@@ -341,7 +354,7 @@ export function createPlanHistoryStore(data: DataStore): PlanHistoryStore {
                   sustainableSpendPaths: outcome.sustainableSpendPaths,
                 },
         };
-        await data.writeJsonPretty(historyPath(), all);
+        await writeHistory(all);
         return true;
       });
     },

@@ -66,10 +66,6 @@ type UpdateFn = (mutate: (p: Profile) => void) => void;
 
 // --- Help copy (see fields.tsx InfoTip: anything longer than a glance) ------
 
-const TODAYS_DOLLARS_NOTE =
-  'Every figure in this table is $/month in TODAY’S dollars — the plan inflates them itself, so ' +
-  'never type a future number.';
-
 const NOW_TIP =
   'What the line costs while a salary is still coming in. This is the only column that is always ' +
   'a number you type; the columns beside it inherit it until you say otherwise.';
@@ -656,13 +652,10 @@ function LivingCard({
 
   return (
     <div>
-      {/* No "Expenses" heading and no card: the banner names the module, and
-          the table stands on its own like the Accounts table. */}
+      {/* No "Expenses" heading, no card, no preamble: the banner names the
+          module, and the today's-dollars / inherited-cell rules moved to the
+          first-visit intro modal (ExpensesModule.tsx). */}
       <div className="row inlineRow">
-        <p className="muted" style={{ margin: 0 }}>
-          {TODAYS_DOLLARS_NOTE} A blank cell in the last three columns is INHERITED — it shows the
-          figure it inherits in grey italics, and typing over it makes the number yours.
-        </p>
         <span className="spacer" />
         <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'living')])}>
           + Add row
@@ -739,8 +732,14 @@ export function GivingLines({
   );
 }
 
-/** The Investing tab: the transfer into the brokerage, now and after work. */
-export function InvestingCard({
+/**
+ * The Investing page — the transfer into the brokerage as the two numbers it
+ * is (the owner's call, 2026-08-30: a form, not a table). Before itemisation
+ * the two scalars are the truth and are edited directly; after itemisation
+ * the budget's investing line carries the same pair, and these fields edit
+ * that line in place — one pair per line in the rare budget holding several.
+ */
+export function InvestingFields({
   expenses,
   update,
 }: {
@@ -749,49 +748,124 @@ export function InvestingCard({
 }) {
   const lines = expenses.lines ?? [];
   if (lines.length === 0) {
-    // Same reasoning as GivingLines: before itemisation the streams are the
-    // truth, and the first row added from here would quietly zero the rest.
     return (
       <div className="card">
-        <p className="muted" style={{ marginTop: 0 }}>
-          The budget is not itemised yet, so investing is still a stream — edit it on the Expenses
-          page, which is also where itemising starts. Once there are budget lines, the investing
-          ones live here.
-        </p>
+        <div className="row">
+          <NumberField
+            label="While working ($/mo)"
+            value={expenses.investingMonthly}
+            width={170}
+            tip={INVESTING_HELP}
+            onCommit={(v) =>
+              update((p) => {
+                p.expenses.investingMonthly = v ?? 0;
+              })
+            }
+          />
+          <NumberField
+            label="After the last paycheck ($/mo)"
+            allowEmpty
+            placeholder="0"
+            value={expenses.investingMonthlyRetired}
+            width={210}
+            tip={INVESTING_RETIRED_HELP}
+            onCommit={(v) =>
+              update((p) => {
+                if (v == null) delete p.expenses.investingMonthlyRetired;
+                else p.expenses.investingMonthlyRetired = v;
+              })
+            }
+          />
+        </div>
       </div>
     );
   }
-  const editLines = editLinesWith(update);
-  const streams = deriveExpenseStreams(expenses);
+  const investingLines = lines.filter((l) => l.category === 'investing');
+  if (investingLines.length === 0) {
+    // An itemised budget with no investing row: the first commit creates the
+    // row, with an EXPLICIT 0 in the other cell — on a line, an absent retired
+    // figure means "same as now" and would quietly carry the transfer thirty
+    // years into retirement.
+    const createWith = (mutate: (line: ExpenseLine) => void) =>
+      update((p) => {
+        const ls = p.expenses.lines ?? [];
+        const line = { ...makeExpenseLine(ls, 'investing'), label: 'Investing / savings' };
+        line.monthlyRetired = 0;
+        mutate(line);
+        p.expenses.lines = [...ls, line];
+      });
+    return (
+      <div className="card">
+        <div className="row">
+          <NumberField
+            label="While working ($/mo)"
+            value={0}
+            width={170}
+            tip={INVESTING_HELP}
+            onCommit={(v) =>
+              createWith((line) => {
+                line.monthlyNow = v ?? 0;
+              })
+            }
+          />
+          <NumberField
+            label="After the last paycheck ($/mo)"
+            value={0}
+            width={210}
+            tip={INVESTING_RETIRED_HELP}
+            onCommit={(v) =>
+              createWith((line) => {
+                line.monthlyRetired = v ?? 0;
+              })
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+  const editLine = (id: string, mutate: (line: ExpenseLine) => void) =>
+    update((p) => {
+      const line = (p.expenses.lines ?? []).find((l) => l.id === id);
+      if (line) mutate(line);
+    });
   return (
-    <div>
-      {/* No "Investing" heading and no card: the banner names the module. */}
-      <div className="row inlineRow">
-        <p className="muted" style={{ margin: 0 }}>
-          {TODAYS_DOLLARS_NOTE} A blank cell in the last column is INHERITED — it shows the Now
-          figure in grey italics, and typing over it (a 0 to stop, say) makes the number yours.
-        </p>
-        <span className="spacer" />
-        <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'investing')])}>
-          + Add row
-        </button>
-      </div>
-
-      <LinesTable
-        lines={lines}
-        category="investing"
-        nowTip={INVESTING_HELP}
-        retiredTip={INVESTING_RETIRED_TIP}
-        editLines={editLines}
-      />
-
-      {/* No survivor column here: no investing stream for a survivor exists in
-          the engine, so a cell would commit a number nothing consumes. */}
-      <div className="field-help" style={{ marginTop: 8 }}>
-        These rows SET the plan’s investing stream: {formatUSD(streams.investingMonthly)}/mo while
-        working, {formatUSD(streams.investingMonthlyRetired ?? 0)}/mo after the last paycheck —
-        summed from the after-work column, where a blank cell means “same as now”.
-      </div>
+    <div className="card">
+      {investingLines.map((line) => (
+        <div key={line.id}>
+          {investingLines.length > 1 ? (
+            <div className="pair-head" style={{ marginBottom: 6 }}>
+              {line.label}
+            </div>
+          ) : null}
+          <div className="row">
+            <NumberField
+              label="While working ($/mo)"
+              value={line.monthlyNow}
+              width={170}
+              tip={INVESTING_HELP}
+              onCommit={(v) =>
+                editLine(line.id, (l) => {
+                  l.monthlyNow = v ?? 0;
+                })
+              }
+            />
+            <NumberField
+              label="After the last paycheck ($/mo)"
+              allowEmpty
+              placeholder="same as now"
+              value={line.monthlyRetired}
+              width={210}
+              tip={INVESTING_RETIRED_TIP}
+              onCommit={(v) =>
+                editLine(line.id, (l) => {
+                  if (v == null) delete l.monthlyRetired;
+                  else l.monthlyRetired = v;
+                })
+              }
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

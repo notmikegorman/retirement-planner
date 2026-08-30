@@ -26,8 +26,13 @@ export function ProfileFormModule(props: {
   title: string;
   /** The form body, bound to the draft. Rendered inside the fieldset. */
   children: (profile: Profile, doc: ProfileDoc) => ReactNode;
-  /** Content below the form, OUTSIDE the fieldset — always-active cards. */
-  after?: ReactNode;
+  /**
+   * Content below the form, OUTSIDE the fieldset — always-active cards, and
+   * anything interactive in view mode (a modal's buttons would come up
+   * disabled inside the fieldset). The function form gets the same draft and
+   * doc the body does, for after-content that depends on profile state.
+   */
+  after?: ReactNode | ((profile: Profile, doc: ProfileDoc) => ReactNode);
   /**
    * A view-switching strip, rendered ABOVE the fieldset and outside it —
    * tabs are navigation, not edits, and inside the fieldset view mode would
@@ -97,7 +102,7 @@ export function ProfileFormModule(props: {
         <fieldset key={doc.rev} disabled={!doc.editing} className="moduleFieldset">
           {props.children(doc.profile, doc)}
         </fieldset>
-        {props.after}
+        {typeof props.after === 'function' ? props.after(doc.profile, doc) : props.after}
       </div>
       <DiscardChangesPrompt blocker={doc.blocker} />
     </>

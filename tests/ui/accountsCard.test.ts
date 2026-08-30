@@ -343,7 +343,8 @@ describe('the managed table (the standard, as shipped machinery)', () => {
  */
 describe('every field the old account card rendered is still reachable', () => {
   const EDITOR_FIELDS: ReadonlyArray<readonly [string, string]> = [
-    ['the muted internal id', 'id: {account.id}'],
+    // The muted `id:` line left the inventory deliberately (owner's call,
+    // 2026-08-30): the id is the URL segment, readable off the address bar.
     ['the PLACEHOLDER chip', 'isPlaceholder(account.notes) ? <PlaceholderChip />'],
     ['Name', 'label="Name"'],
     ['Type', 'options={ACCOUNT_TYPE_OPTIONS}'],

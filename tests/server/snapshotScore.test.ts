@@ -266,6 +266,32 @@ describe('a recorded score is never written over', () => {
   });
 });
 
+describe('the file is written in the shape the schema reads', () => {
+  it('a spend attach lands in schema position, not appended at the end', async () => {
+    // Reads normalize key order (zod rebuilds objects in declaration order),
+    // so the BYTES of a row's score used to depend on whether any later write
+    // re-read the file after its spend attach — the session's last attach
+    // kept its appended-at-the-end keys. With two rows scoring concurrently
+    // (the ledger auto-snapshots on arrival), which attach lands last is a
+    // scheduling race, and the dual-stack byte gate caught the two backends
+    // disagreeing about exactly that. The store now writes through the
+    // schema (writeLedger), so the last write is normalized like every row
+    // a later write would have re-serialized anyway.
+    await withPlan();
+    const row = await snapshot();
+    await startScoring(row.id, fakeDeps());
+
+    const raw = await fs.readFile(path.join(tmpDir, 'networth.json'), 'utf8');
+    const spendAt = raw.indexOf('"sustainableSpend"');
+    const modeAt = raw.indexOf('"mode"');
+    expect(spendAt).toBeGreaterThan(-1);
+    expect(modeAt).toBeGreaterThan(-1);
+    // Schema order puts the spend pair right after medianTerminalReal —
+    // BEFORE mode. The bug's bytes had it trailing planHash at the end.
+    expect(spendAt).toBeLessThan(modeAt);
+  });
+});
+
 describe('the score attaches after the row is already written', () => {
   it('runs THE PLAN at final quality on the profile seed', async () => {
     // Whatever plan.json holds at the moment of scoring is what is scored —
