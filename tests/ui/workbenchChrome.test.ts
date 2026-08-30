@@ -420,6 +420,17 @@ describe('the panel and the results column read at one size', () => {
     expect(results).toContain('data-run-key={result.meta.runKey}');
   });
 
+  it('flips the bottom folds’ header tips upward, out of the scroll box’s clip', () => {
+    // The panel clips its overflow, and a downward bubble from the last
+    // headers shows a few pixels at most (measured live in review,
+    // 2026-08-30). The bar is the bubble's containing block so the flip is
+    // relative to the header, not the panel.
+    expect(ruleBody('.wb-section-bar')).toMatch(/position:\s*relative/);
+    const flipped = ruleBody('.wb-section:nth-last-child(-n + 2) .wb-section-bar .infotip-bubble');
+    expect(flipped).toMatch(/bottom:\s*calc\(100% \+ 4px\)/);
+    expect(flipped).toMatch(/top:\s*auto/);
+  });
+
   it('binds each split-off tab to its panel, and each fold to its rehomed tip', () => {
     // A tab button over a permanently empty panel is the failure a label
     // list alone cannot catch: the branches are pinned by id.

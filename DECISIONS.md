@@ -2122,3 +2122,11 @@ nest inside a button). The text-glyph chevron that rendered at a few
 pixels became a 14px stroke SVG that rotates on aria-expanded. Settings'
 three cards keep their sub-titles: they name different things than the
 fold does.
+
+The eighth pass's review panel measured one more thing worth its cost:
+the History fold's rehomed header tip opened DOWNWARD into the panel's
+clipped bottom edge — ~6px of a 199px bubble visible, nothing signalling
+the rest. The section bar became its bubble's containing block, and the
+last two folds' tips open UPWARD (the top folds keep the downward default,
+which would clip the same way in reverse). Verified live in both
+directions; pinned in workbenchChrome.

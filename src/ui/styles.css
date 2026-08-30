@@ -1217,10 +1217,28 @@ dialog.modal::backdrop {
 }
 
 /* The header row: the toggle button plus the section's InfoTip beside it
-   (interactive content may not nest inside a <button>). */
+   (interactive content may not nest inside a <button>). Positioned so it is
+   the containing block for its own tip bubble — the panel-spanning rule's
+   left/right then hug the BAR, and the bottom-fold flip below can place the
+   bubble relative to the header instead of the whole scroll box. */
 .wb-section-bar {
+  position: relative;
   display: flex;
   align-items: center;
+}
+
+/*
+ * The LAST TWO folds open their header tip UPWARD. The panel is the bubble's
+ * scroll box, and a downward bubble from the bottom headers lands almost
+ * entirely below its visible edge — the review panel measured ~6px of the
+ * History tip showing on a 720px window, with nothing signalling the rest.
+ * The top folds keep the downward default, which would clip the same way in
+ * reverse; the middle ones have room either way.
+ */
+.wb-section:nth-last-child(-n + 2) .wb-section-bar .infotip-bubble {
+  top: auto;
+  bottom: calc(100% + 4px);
+  margin-top: 0;
 }
 
 .wb-section-head {
