@@ -349,7 +349,13 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
       .toMatch(/%/);
     // Terminal state through the seam — the spend solve lands after the
     // score, and the dual-stack gate learned the hard way not to move on
-    // before it does.
+    // before it does. TWO rows, EVERY spend, same as dualStack's wait: the
+    // ledger auto-snapshots on arrival, so this leg records the automatic
+    // row AND the scripted one, and each runs its own scoring pipeline. A
+    // `.some()` here let the second solve run on for MINUTES on the 2-core
+    // runner — its attach was still staging networth.json.crswap when the
+    // reload test planted a file of exactly that name, and Chrome answered
+    // with NoModificationAllowedError (CI, 2026-08-30).
     await expect
       .poll(
         () =>
@@ -362,7 +368,9 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
               }
             ).__fplanApi;
             const rows = await api.getNetWorth();
-            return rows.some((r) => r.score?.sustainableSpend !== undefined);
+            return (
+              rows.length >= 2 && rows.every((r) => r.score?.sustainableSpend !== undefined)
+            );
           }),
         { timeout: 300_000 },
       )
