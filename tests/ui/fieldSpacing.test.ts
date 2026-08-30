@@ -108,3 +108,39 @@ describe('field spacing invariants (src/ui/styles.css)', () => {
     }
   });
 });
+
+describe('the module checkbox collapse and its inlineRow restore stay each other’s inverse', () => {
+  it('collapses the alignment scaffolding in the stacked layout', () => {
+    // The reserved empty label track and the input-height control floor
+    // align a checkbox with LABELED neighbors in a horizontal row; stacked
+    // one-per-row they were ~50px of dead air above and between every
+    // checkbox (the owner's Tithing pot screenshot, 2026-08-30).
+    const collapsed = ruleBody('.moduleFieldset .field-checkbox');
+    expect(collapsed).toMatch(/grid-template-rows:\s*auto/);
+    expect(collapsed).toMatch(/row-gap:\s*0/);
+    expect(ruleBody('.moduleFieldset .field-checkbox > .field-label')).toMatch(/display:\s*none/);
+    expect(ruleBody('.moduleFieldset .field-checkbox > .field-control')).toMatch(
+      /min-height:\s*0/,
+    );
+  });
+
+  it('restores EXACTLY the base field values inside .row.inlineRow', () => {
+    // The restore block re-states label.field's track and .field-control's
+    // floor by value. Compared against the base rules so the copies cannot
+    // drift the way .field-note's hardcoded margin once did.
+    const base = ruleBody('label.field');
+    const restore = ruleBody('.moduleFieldset .row.inlineRow .field-checkbox');
+    const track = /grid-template-rows:\s*([^;]+);/;
+    const gap = /row-gap:\s*([^;]+);/;
+    expect(track.exec(restore)![1].trim()).toBe(track.exec(base)![1].trim());
+    expect(gap.exec(restore)![1].trim()).toBe(gap.exec(base)![1].trim());
+
+    const floor = /min-height:\s*([^;]+);/;
+    expect(
+      floor.exec(ruleBody('.moduleFieldset .row.inlineRow .field-checkbox > .field-control'))![1],
+    ).toBe(floor.exec(ruleBody('.field-control'))![1]);
+    expect(
+      ruleBody('.moduleFieldset .row.inlineRow .field-checkbox > .field-label'),
+    ).toMatch(/display:\s*block/);
+  });
+});

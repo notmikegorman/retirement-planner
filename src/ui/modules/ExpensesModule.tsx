@@ -10,95 +10,23 @@
  * turn transcribing a budget into forty page visits. It stays an in-place
  * editable grid inside the module's one view/edit form.
  */
-import { useEffect, useRef, useState } from 'react';
 import { BudgetCard } from '../components/profile/BudgetCard';
 import {
   applyDerivedStreams,
   makeExpenseLine,
   rentingWindowFromPlan,
 } from '../components/profile/expensesLogic';
+import { IntroModal } from './IntroModal';
 import { ProfileFormModule } from './ProfileFormModule';
 import { usePlanFacts } from './usePlanFacts';
 
 /**
  * The table's two ground rules used to sit above it as a preamble; the owner
- * moved them into a FIRST-VISIT modal (2026-08-30) so the page itself is just
- * the table. The flag is browser-local UI memory like the remembered tabs —
- * and deliberately NOT cleared by File > New: "do not show this again" is a
- * statement about the reader, not the folder.
+ * moved them into the FIRST-VISIT modal (2026-08-30) so the page itself is
+ * just the table. IntroModal.tsx carries the modal rules and the flag's
+ * not-cleared-by-File-New reasoning.
  */
 const INTRO_SEEN_KEY = 'fplan-expenses-intro-seen';
-
-function introSeen(): boolean {
-  try {
-    return localStorage.getItem(INTRO_SEEN_KEY) !== null;
-  } catch {
-    // No storage means the choice cannot be remembered — showing the modal
-    // on every visit would nag, so err on the quiet side.
-    return true;
-  }
-}
-
-/**
- * The intro, shown once per visit at most and never again once dismissed with
- * the box ticked. Same modal rules as ConfirmModal: no backdrop dismiss,
- * Escape closes (identically to the button — both honor the checkbox), focus
- * lands on the button so a reflexive Enter just closes it.
- */
-function ExpensesIntro() {
-  const [open, setOpen] = useState(() => !introSeen());
-  const [dontShowAgain, setDontShowAgain] = useState(true);
-  const okRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (open) okRef.current?.focus();
-  }, [open]);
-  if (!open) return null;
-  const close = () => {
-    if (dontShowAgain) {
-      try {
-        localStorage.setItem(INTRO_SEEN_KEY, '1');
-      } catch {
-        // Nothing to do: the modal still closes, and introSeen()'s own
-        // failure branch keeps it from nagging.
-      }
-    }
-    setOpen(false);
-  };
-  return (
-    <div
-      className="deleteConfirmOverlay"
-      role="presentation"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') close();
-      }}
-    >
-      <div className="deleteConfirmPanel" role="dialog" aria-modal="true">
-        <h3>About this table</h3>
-        <p>
-          Every figure is $/month in <strong>today’s dollars</strong> — the plan inflates them
-          itself, so never type a future number.
-        </p>
-        <p>
-          A blank cell in the last three columns is <strong>inherited</strong> — it shows the
-          figure it inherits in grey italics, and typing over it makes the number yours.
-        </p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 4px' }}>
-          <input
-            type="checkbox"
-            checked={dontShowAgain}
-            onChange={(e) => setDontShowAgain(e.target.checked)}
-          />
-          Do not show this again
-        </label>
-        <div className="deleteConfirmActions">
-          <button ref={okRef} type="button" className="primary" onClick={close}>
-            Got it
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function ExpensesModule() {
   const { planEvents, planHousing } = usePlanFacts();
@@ -110,14 +38,27 @@ export function ExpensesModule() {
         over the itemised table — the rules it states are the table's. The
         scalar-streams empty state explains itself field by field.
       */
-      after={(draft) => ((draft.expenses.lines ?? []).length > 0 ? <ExpensesIntro /> : null)}
+      after={(draft) =>
+        (draft.expenses.lines ?? []).length > 0 ? (
+          <IntroModal title="About this table" storageKey={INTRO_SEEN_KEY}>
+            <p>
+              Every figure is $/month in <strong>today’s dollars</strong> — the plan inflates
+              them itself, so never type a future number.
+            </p>
+            <p>
+              A blank cell in the last three columns is <strong>inherited</strong> — it shows the
+              figure it inherits in grey italics, and typing over it makes the number yours.
+            </p>
+          </IntroModal>
+        ) : null
+      }
       /*
         The table standard's Add, in the banner — not a toolbar row, which
         held 32px of empty space above the table in view mode (the buttons
         hide but their row keeps its height so nothing jumps). Itemised
         only: before itemisation there is no table, and a first line created
         from here would quietly make the near-empty table the truth for the
-        other streams (GivingLines documents the same hazard).
+        other streams (GivingFields notes the same hazard).
       */
       extraActions={(draft, doc) =>
         doc.editing && (draft.expenses.lines ?? []).length > 0 ? (

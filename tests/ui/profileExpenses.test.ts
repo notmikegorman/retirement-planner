@@ -1048,9 +1048,9 @@ describe('the budget tabs are homogeneous', () => {
 
   it('stamps each surface’s own category on the rows it creates', () => {
     // The living add moved into the Expenses banner (ExpensesModule's
-    // extraActions, 2026-08-30) — same stamp, new home; giving's stays on
-    // its Tithing-tab toolbar, and Investing's single row is created by the
-    // form's first commit (both in BudgetCard).
+    // extraActions, 2026-08-30); giving's and investing's rows are created
+    // by their fields' create-on-commit branches (both in BudgetCard) —
+    // there is no giving toolbar or add-row any more.
     const expensesModule = read('../../src/ui/modules/ExpensesModule.tsx');
     expect(expensesModule).toContain("makeExpenseLine(lines, 'living')");
     expect(budgetCard).toContain("makeExpenseLine(ls, 'charitable')");
@@ -1064,10 +1064,16 @@ describe('the budget tabs are homogeneous', () => {
     // scalars stale — invisible to the engine (it derives from the lines) but
     // exactly what "delete every row and the streams keep their last totals"
     // would then restore wrongly.
+    // EXACTLY the five write paths: editLinesWith (the tables), editLineById
+    // (the per-line fields), and the three create-on-commit branches
+    // (investing's pair shares one via createWith; giving's has its own) —
+    // plus the itemise seeding, which writes the same values by construction.
+    // Exact, not >=: a sixth site should be a deliberate decision here, and
+    // a fourth means a write path lost the discipline.
     expect(
       budgetCard.match(/applyDerivedStreams\(p\.expenses\);/g)?.length,
-      'BudgetCard line-write paths missing the scalar-cache rewrite',
-    ).toBeGreaterThanOrEqual(4);
+      'BudgetCard line-write paths and the scalar-cache rewrite drifted apart',
+    ).toBe(5);
     expect(read('../../src/ui/modules/ExpensesModule.tsx')).toContain(
       'applyDerivedStreams(p.expenses);',
     );
@@ -1112,11 +1118,58 @@ describe('the budget tabs are homogeneous', () => {
     expect(budgetCard).toContain('title={line.note}');
   });
 
-  it('says on the Tithing tab why giving has only a Now column', () => {
-    // One money column beside two three-column siblings must read as designed,
-    // not unfinished — the muted sentence is that statement.
-    expect(budgetCard).toContain('giving after');
-    expect(budgetCard).toContain('the plan never reads an after-work or');
+  it('renders the while-working giving as fields, not a table', () => {
+    // The owner's call (2026-08-30): the model reads exactly ONE number off
+    // the giving rows — their monthly total — so the table (and its
+    // asymmetry-explaining preamble, now the Tithing intro modal) retired.
+    // One field per charitable line, written through the shared per-line
+    // editor so the scalar cache follows, and NO add-row: a giving line is
+    // born from the itemise seeding or the create-on-commit branch, exactly
+    // like InvestingFields.
+    expect(budgetCard).toContain('export function GivingFields');
+    expect(budgetCard).not.toContain('GivingLines');
+    expect(budgetCard).toContain('label={`${line.label} ($/mo)`}');
+    const givingFields = budgetCard.slice(
+      budgetCard.indexOf('export function GivingFields'),
+      budgetCard.indexOf('export function InvestingFields'),
+    );
+    expect(givingFields).toContain('editLineById(update, line.id,');
+    expect(givingFields).not.toContain('LinesTable');
+    expect(givingFields).not.toContain('+ Add row');
+
+    // BRANCH ORDER IS LOAD-BEARING: the scalar branch (no lines at all —
+    // edit charitableMonthly directly, creating nothing) must be tested
+    // BEFORE the charitable filter, or a pre-itemisation commit would
+    // manufacture the budget's first line and quietly make the near-empty
+    // table the truth for living and investing too.
+    const scalarAt = givingFields.indexOf('lines.length === 0');
+    const filterAt = givingFields.indexOf("l.category === 'charitable'");
+    expect(scalarAt).toBeGreaterThan(-1);
+    expect(filterAt).toBeGreaterThan(scalarAt);
+    expect(givingFields).toContain('p.expenses.charitableMonthly = v ?? 0;');
+
+    // The Tithing module renders it for BOTH branches — no itemised gate.
+    const tithingModule2 = read('../../src/ui/modules/TithingModule.tsx');
+    expect(tithingModule2).toContain(
+      "{tab === 'working' && <GivingFields expenses={draft.expenses} update={doc.update} />}",
+    );
+  });
+
+  it('reverts a negative figure instead of committing it into a Save that must fail', () => {
+    // The retired table's MoneyCell carried the no-negatives rule; the
+    // fields carry it through NumberField's min floor. Every money field on
+    // the two fields-not-tables surfaces declares it.
+    const fieldsRegion = budgetCard.slice(budgetCard.indexOf('export function GivingFields'));
+    const numberFields = fieldsRegion.match(/<NumberField/g)?.length ?? 0;
+    const floors = fieldsRegion.match(/min=\{0\}/g)?.length ?? 0;
+    expect(numberFields).toBeGreaterThan(0);
+    expect(floors).toBe(numberFields);
+  });
+
+  it('manufactures no line from an empty or zero blur on the create-on-commit fields', () => {
+    // NumberField commits on every blur; without the guard, tabbing through
+    // the form in edit mode would litter the budget with $0 rows.
+    expect(budgetCard.match(/if \(v == null \|\| v === 0\) return;/g)?.length).toBe(3);
   });
 });
 

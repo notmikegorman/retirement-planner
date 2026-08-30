@@ -2038,3 +2038,50 @@ it, pinned. And the open-set storage moved into workbenchLogic.ts so its
 four behaviors are EXECUTED (tests/ui/inputSections.test.ts) instead of
 string-pinned; the extraActions slot renders in both banner modes, as its
 own docstring promised.
+
+## Giving becomes its numbers, and the checkboxes lose their scaffolding (2026-08-30, seventh pass)
+
+**The while-working giving table retired** (the owner's call, with the
+right observation behind it: the model reads exactly ONE number off the
+giving rows — their monthly total — so they never needed a table).
+GivingFields renders one plain field per charitable line, labeled by the
+line itself, no add-row — the same shape as InvestingFields, for the same
+reasons: pre-itemisation it edits the scalar directly, an itemised budget
+with no giving row gets create-on-commit, and multiple lines each keep
+their own field with a small Total note (the split is the owner's data —
+collapsing it to one box would merge his named rows). Writes go through a
+shared editLineById carrying the applyDerivedStreams discipline.
+
+**The preamble became the second first-visit modal.** The
+today's-dollars/only-a-Now-column paragraph left the page; a shared
+IntroModal component (extracted from the Expenses one — overlay rules,
+Escape, default-ticked do-not-show-again, the not-cleared-by-File-New
+flag) now serves both, Tithing's under 'fplan-tithing-intro-seen' with
+one sentence. The only-a-Now-column half of the old paragraph is not in
+the modal: with no columns left there is no asymmetry to explain.
+
+**The strange pot-tab spacing** the owner screenshotted was CheckboxField's
+alignment scaffolding: a reserved EMPTY label track plus an input-height
+control floor, both built so a checkbox lines up beside labeled inputs in
+a horizontal row. In the module's stacked one-per-row layout that is ~50px
+of dead air above and between every checkbox. The .moduleFieldset rules
+now collapse the track, the label and the height floor — and restore all
+three inside .row.inlineRow, where the horizontal alignment they exist
+for is real. Same family as the earlier .field-note shim, now with the
+checkboxes covered.
+
+The pass's own review panel (13 agents, 3 dimensions) then caught what the
+conversion had dropped: the old table's MoneyCell reverted NEGATIVE input
+at the field, and NumberField committed it — a Save-time zod banner where
+an instant revert used to be. NumberField grew an opt-in `min` floor
+(below-min reverts like unparseable text) and every money field on the two
+fields-not-tables surfaces declares min 0 — including InvestingFields,
+whose identical round-5 gap the panel flagged as pre-existing. The
+create-on-commit branches also gained a no-litter guard (a blur with
+nothing or zero typed manufactures no line — NumberField commits on every
+blur, and tabbing through edit mode must not append $0 rows), the
+applyDerivedStreams count pin tightened to exactly five, and the modal
+keys, giving branch order, and checkbox CSS all got the coverage the
+panel showed they lacked (tests/ui/introModal.test.ts and the fieldSpacing
+inverse-pair pins, which compare the inlineRow restore against the base
+field rules so the copied values cannot drift).

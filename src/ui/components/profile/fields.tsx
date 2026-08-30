@@ -146,6 +146,12 @@ export function NumberField(props: {
   int?: boolean;
   /** Blank input commits undefined instead of reverting. */
   allowEmpty?: boolean;
+  /**
+   * Floor below which input REVERTS like unparseable text — MoneyCell's
+   * no-negatives rule, opt-in here. Without it a typed "-100" commits, and
+   * the schema then fails the whole Save instead of the one field.
+   */
+  min?: number;
   /** Short hint, shown inline under the control. */
   help?: string;
   /** Verbose help, shown behind the "?" beside the label. */
@@ -158,7 +164,8 @@ export function NumberField(props: {
   /** Field-shaped validation failure: red border + message under the control. */
   error?: string | null;
 }) {
-  const { label, value, onCommit, pct, int, allowEmpty, help, tip, placeholder, width } = props;
+  const { label, value, onCommit, pct, int, allowEmpty, min, help, tip, placeholder, width } =
+    props;
   const display = (v: number | undefined): string =>
     v == null ? '' : String(pct ? pctDisplayValue(v) : v);
   const [text, setText] = useState<string>(() => display(value));
@@ -181,6 +188,10 @@ export function NumberField(props: {
     }
     let v = pct ? parsed / 100 : parsed;
     if (int) v = Math.round(v);
+    if (min !== undefined && v < min) {
+      setText(display(value)); // below the floor -> revert, like unparseable
+      return;
+    }
     setText(display(v));
     onCommit(v);
   };

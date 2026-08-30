@@ -371,6 +371,21 @@ function editLinesWith(update: UpdateFn): EditLinesFn {
 }
 
 /**
+ * Edit ONE line by id — the fields-not-tables surfaces (InvestingFields,
+ * GivingFields) bind a control per line rather than rendering the table.
+ * Same scalar-cache discipline as editLinesWith: every line write rewrites
+ * the derived streams, so the file and the run never disagree.
+ */
+function editLineById(update: UpdateFn, id: string, mutate: (line: ExpenseLine) => void): void {
+  update((p) => {
+    const line = (p.expenses.lines ?? []).find((l) => l.id === id);
+    if (line === undefined) return;
+    mutate(line);
+    applyDerivedStreams(p.expenses);
+  });
+}
+
+/**
  * One tab's table: the lines of ONE category, with exactly the money columns
  * the engine reads off that category (LINE_TAB_COLUMNS says which, and why).
  * `lines` is always the FULL array — the filter lives here so no caller can
@@ -687,15 +702,21 @@ function LivingCard({
 }
 
 /**
- * The giving lines, rendered INSIDE the Tithing card so they sit right above
- * the rule that owns their after-work half.
+ * The while-working giving, as plain fields (the owner's call, 2026-08-30:
+ * the model reads exactly ONE number off these — the monthly total that
+ * feeds the charitable stream and the Tithing rule — so the rows never
+ * needed a table; giving after the last paycheck is the Going-forward
+ * tab's rule, and the plan never reads an after-work or survivor figure
+ * off a giving line). One field per charitable line, labeled by the line
+ * itself, no add-row — the same shape as InvestingFields, for the same
+ * reasons. Rendered inside the Tithing module so the figures sit right
+ * above the rule that owns their after-work half.
  *
- * Renders nothing before the budget is itemised: with no rows the scalar
- * streams are the truth and are edited on the Expenses tab, and a "+ Add row"
- * here would create the first row — at which point the near-empty table
- * silently becomes the truth for living and investing too, zeroing both.
+ * Before itemisation the scalar is the truth and is edited directly (no
+ * line is created, so the first-line-zeroes-the-other-streams hazard the
+ * old table-era comment warned about cannot arise here).
  */
-export function GivingLines({
+export function GivingFields({
   expenses,
   update,
 }: {
@@ -703,26 +724,82 @@ export function GivingLines({
   update: UpdateFn;
 }) {
   const lines = expenses.lines ?? [];
-  if (lines.length === 0) return null;
-  const editLines = editLinesWith(update);
-  return (
-    <>
-      {/* The asymmetry with the other budget tabs is deliberate, and this
-          sentence is where the tab says so — without it, one money column
-          reads as an editor somebody forgot to finish. */}
-      <div className="row inlineRow">
-        <p className="muted" style={{ margin: 0 }}>
-          Every figure is $/month in today’s dollars, and there is only a Now column: giving after
-          the last paycheck follows the rule on the Going-forward tab, and
-          the plan never reads an after-work or survivor figure off a giving line.
-        </p>
-        <span className="spacer" />
-        <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'charitable')])}>
-          + Add row
-        </button>
+  if (lines.length === 0) {
+    return (
+      <div className="card">
+        <div className="row">
+          <NumberField
+            label="Charitable giving ($/mo)"
+            value={expenses.charitableMonthly}
+            width={190}
+            min={0}
+            tip={CHARITABLE_HELP}
+            onCommit={(v) =>
+              update((p) => {
+                p.expenses.charitableMonthly = v ?? 0;
+              })
+            }
+          />
+        </div>
       </div>
-      <LinesTable lines={lines} category="charitable" editLines={editLines} />
-    </>
+    );
+  }
+  const giving = lines.filter((l) => l.category === 'charitable');
+  if (giving.length === 0) {
+    // An itemised budget with no giving row: the first commit creates it.
+    return (
+      <div className="card">
+        <div className="row">
+          <NumberField
+            label="Charitable giving ($/mo)"
+            value={0}
+            width={190}
+            min={0}
+            tip={CHARITABLE_HELP}
+            onCommit={(v) => {
+              // A blur with nothing (or zero) typed manufactures no line —
+              // NumberField commits on every blur, and tabbing through the
+              // form must not litter the budget with $0 rows.
+              if (v == null || v === 0) return;
+              update((p) => {
+                const ls = p.expenses.lines ?? [];
+                p.expenses.lines = [
+                  ...ls,
+                  { ...makeExpenseLine(ls, 'charitable'), label: 'Charitable giving', monthlyNow: v },
+                ];
+                applyDerivedStreams(p.expenses);
+              });
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="card">
+      <div className="row">
+        {giving.map((line) => (
+          <NumberField
+            key={line.id}
+            label={`${line.label} ($/mo)`}
+            value={line.monthlyNow}
+            width={190}
+            min={0}
+            onCommit={(v) =>
+              editLineById(update, line.id, (l) => {
+                l.monthlyNow = v ?? 0;
+              })
+            }
+          />
+        ))}
+      </div>
+      {giving.length > 1 ? (
+        <div className="field-help" style={{ marginTop: 8 }}>
+          Total: {formatUSD(deriveExpenseStreams(expenses).charitableMonthly)}/mo — the plan reads
+          the sum.
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -749,6 +826,7 @@ export function InvestingFields({
             label="While working ($/mo)"
             value={expenses.investingMonthly}
             width={170}
+            min={0}
             tip={INVESTING_HELP}
             onCommit={(v) =>
               update((p) => {
@@ -762,6 +840,7 @@ export function InvestingFields({
             placeholder="0"
             value={expenses.investingMonthlyRetired}
             width={210}
+            min={0}
             tip={INVESTING_RETIRED_HELP}
             onCommit={(v) =>
               update((p) => {
@@ -798,36 +877,34 @@ export function InvestingFields({
             label="While working ($/mo)"
             value={0}
             width={170}
+            min={0}
             tip={INVESTING_HELP}
-            onCommit={(v) =>
+            onCommit={(v) => {
+              // Same no-litter rule as GivingFields' create branch: a blur
+              // with nothing (or zero) typed manufactures no line.
+              if (v == null || v === 0) return;
               createWith((line) => {
-                line.monthlyNow = v ?? 0;
-              })
-            }
+                line.monthlyNow = v;
+              });
+            }}
           />
           <NumberField
             label="After the last paycheck ($/mo)"
             value={0}
             width={210}
+            min={0}
             tip={INVESTING_RETIRED_HELP}
-            onCommit={(v) =>
+            onCommit={(v) => {
+              if (v == null || v === 0) return;
               createWith((line) => {
-                line.monthlyRetired = v ?? 0;
-              })
-            }
+                line.monthlyRetired = v;
+              });
+            }}
           />
         </div>
       </div>
     );
   }
-  const editLine = (id: string, mutate: (line: ExpenseLine) => void) =>
-    update((p) => {
-      const line = (p.expenses.lines ?? []).find((l) => l.id === id);
-      if (line === undefined) return;
-      mutate(line);
-      // Same discipline as editLinesWith: the scalar cache follows the lines.
-      applyDerivedStreams(p.expenses);
-    });
   return (
     <div className="card">
       {investingLines.map((line) => (
@@ -842,9 +919,10 @@ export function InvestingFields({
               label="While working ($/mo)"
               value={line.monthlyNow}
               width={170}
+            min={0}
               tip={INVESTING_HELP}
               onCommit={(v) =>
-                editLine(line.id, (l) => {
+                editLineById(update, line.id, (l) => {
                   l.monthlyNow = v ?? 0;
                 })
               }
@@ -855,9 +933,10 @@ export function InvestingFields({
               placeholder="same as now"
               value={line.monthlyRetired}
               width={210}
+            min={0}
               tip={INVESTING_RETIRED_TIP}
               onCommit={(v) =>
-                editLine(line.id, (l) => {
+                editLineById(update, line.id, (l) => {
                   if (v == null) delete l.monthlyRetired;
                   else l.monthlyRetired = v;
                 })

@@ -1,9 +1,10 @@
 /**
  * Tithing — two tabs (the owner's split, 2026-08-30): WHILE WORKING holds the
- * charitable budget lines; GOING FORWARD holds the two after-the-last-paycheck
- * decisions — the un-tithed pot, and how to tithe from then on. Bound to the
- * profile itself, so the plan's overrides on the Workbench's Tithing tab are
- * visibly overrides OF these answers.
+ * giving figures (GivingFields — one field per charitable line; the model
+ * reads only their monthly total); GOING FORWARD holds the two
+ * after-the-last-paycheck decisions — the un-tithed pot, and how to tithe
+ * from then on. Bound to the profile itself, so the plan's overrides on the
+ * Plan page's Tithing tab are visibly overrides OF these answers.
  *
  * The tab is LOCAL state, deliberately not in the URL: these are two halves of
  * one editing surface (both write the same draft, one Save commits both) —
@@ -12,10 +13,8 @@
 import { useState } from 'react';
 import { deriveExpenseStreams } from '../../shared/expenses';
 import { potIsEnabled } from '../../shared/giving';
-import { formatUSD } from '../../shared/util';
-import { GivingLines } from '../components/profile/BudgetCard';
+import { GivingFields } from '../components/profile/BudgetCard';
 import { CheckboxField, InfoTip } from '../components/profile/fields';
-import { annualFromMonthly } from '../components/profile/profileLogic';
 import { OngoingGivingEditor, PotFields } from '../components/workbench/TithingCard';
 import {
   DEFAULT_GIVING_RULE,
@@ -23,6 +22,7 @@ import {
   effectiveGivingRule,
   potHelp,
 } from '../components/workbench/workbenchLogic';
+import { IntroModal } from './IntroModal';
 import { ProfileFormModule } from './ProfileFormModule';
 import { TabPanel, TabStrip } from './TabStrip';
 
@@ -33,6 +33,13 @@ const GIVING_RULE_HELP =
 const POT_PROFILE_HELP =
   'The household default for the pot. The plan can override it — or switch it off for one ' +
   'what-if — on the Plan page’s Tithing tab without changing this answer.';
+
+/**
+ * The today's-dollars ground rule used to sit as a preamble over the giving
+ * table; the owner moved it into the first-visit modal (2026-08-30), same
+ * as the Expenses table's. IntroModal.tsx carries the modal rules.
+ */
+const INTRO_SEEN_KEY = 'fplan-tithing-intro-seen';
 
 const TITHING_TABS = [
   { id: 'working', label: 'While working' },
@@ -56,6 +63,19 @@ export function TithingModule() {
           onSelect={setTab}
         />
       }
+      /*
+        Outside the fieldset (its button must work in view mode), like the
+        Expenses table's intro. The rule it states covers every giving
+        figure, itemised or not, so it is not gated on the budget's shape.
+      */
+      after={
+        <IntroModal title="About these figures" storageKey={INTRO_SEEN_KEY}>
+          <p>
+            Every figure is $/month in <strong>today’s dollars</strong> — the plan inflates them
+            itself, so never type a future number.
+          </p>
+        </IntroModal>
+      }
     >
       {(draft, doc) => {
         /**
@@ -66,19 +86,9 @@ export function TithingModule() {
          * replaced.
          */
         const givingMonthly = deriveExpenseStreams(draft.expenses).charitableMonthly;
-        const itemised = (draft.expenses.lines ?? []).length > 0;
         return (
           <TabPanel idPrefix="tithing" tab={tab}>
-            {tab === 'working' &&
-              (itemised ? (
-                <GivingLines expenses={draft.expenses} update={doc.update} />
-              ) : (
-                <p className="muted" style={{ marginTop: 0 }}>
-                  Giving while anyone is still earning is a budget stream — it is edited on the
-                  Expenses page, and it currently runs at {formatUSD(givingMonthly)}/mo (
-                  {formatUSD(annualFromMonthly(givingMonthly))}/yr).
-                </p>
-              ))}
+            {tab === 'working' && <GivingFields expenses={draft.expenses} update={doc.update} />}
             {tab === 'forward' && (
               <div className="card">
                 {/* The two decisions, same sections and same field components
