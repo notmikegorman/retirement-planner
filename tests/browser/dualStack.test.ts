@@ -557,14 +557,16 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
           }
         ).__fplanApi;
         const rows = await api.getNetWorth();
-        // EVERY row, not some: since the ledger auto-snapshots on arrival
-        // (2026-08-30) there are TWO rows scoring here — the automatic one
-        // and the scripted one — and a wait satisfied by whichever finishes
-        // first froze the folders while the slower stack's other row was
-        // still solving, forking networth.json by exactly one
-        // sustainableSpend field (the CI-only race the terminal-state rule
-        // exists for).
-        return rows.length > 0 &&
+        // TWO rows, EVERY spend: since the ledger auto-snapshots on arrival
+        // (2026-08-30) this leg records two rows — the automatic one and the
+        // scripted one — and BOTH conditions are load-bearing. `.some()`
+        // froze the folders while the slower stack's other row was still
+        // solving; `.every()` alone still returned early when the scripted
+        // click beat the automatic POST and the ledger momentarily held ONE
+        // fully-solved row. The terminal state is: both rows exist, and both
+        // carry their sustainable-spend figure (the CI-only races the
+        // terminal-state rule exists for).
+        return rows.length >= 2 &&
           rows.every((r) => r.score?.sustainableSpend !== undefined)
           ? 'done'
           : '';
