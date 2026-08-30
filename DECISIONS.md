@@ -2130,3 +2130,58 @@ the rest. The section bar became its bubble's containing block, and the
 last two folds' tips open UPWARD (the top folds keep the downward default,
 which would clip the same way in reverse). Verified live in both
 directions; pinned in workbenchChrome.
+
+## History finds the Settings module, the bonds find Investing, and the question marks go (2026-08-30, ninth pass)
+
+**Plan History left the Plan page** for the Settings module's LAST tab —
+every tab before it edits the profile; this one looks at what the PLAN
+used to be. There is no live draft on that page, so the tab fetches the
+plan itself; a restore updates its local copy (the store wrote plan.json
+during it), and the Plan page loads the restored file fresh on its next
+mount — which retired the workbench's whole in-place restore hand-off
+(restoredPlan/onPlanRestored and its save-queue choreography). The Plan
+page's remaining Settings fold was renamed ADVANCED — its id stays
+'settings' because the id is the stored open-set vocabulary.
+
+**The bonds dial has one home: Investing.** BondsAreSelect moved whole
+out of PlanCard into its own file and renders as an always-active card
+under the Investing module, editing the PLAN by get-mutate-put with the
+Plan page's own save-on-change semantics. Both workbench doors closed —
+the Plan card's section and the overrides card's corporate-share field —
+which also retired the cross-door staleness keys the review panels had
+added; the overrides card now passes the stored value through untouched,
+via the same commit-time fresh-passthrough as the other branches.
+
+**The phantom title over the Plan fold** was the first decision section's
+top border: every section draws a divider, and with the card's own title
+gone the first divider read as an empty heading. The sections wear a
+class now and the first one drops its divider in CSS.
+
+**Every "?" icon is gone** — the owner's "sometimes less is more". All of
+them flowed through the one InfoTip component, which now renders null;
+the call sites and their curated help text deliberately stay (they
+document each field where it lives, and re-enabling help is one function
+again). Inline `help=` one-liners under fields are not icons and still
+render. The fold-header hint machinery and the bubble-flip CSS stay
+wired-but-inert for the same reason.
+
+The pass's review panel (32 agents) found the seam the relocations had to
+cross: WorkbenchPage flushes an in-window autosave on unmount into a
+module-private `session.pendingSave`, and every OTHER consumer of
+plan.json had always waited it out (load(), loadPlanIntoWorkbench) — the
+two new cards did not. A restore or a bonds get-mutate-put racing that
+flush could let the stale PUT land last and silently resurrect the
+pre-edit plan, affirmed as success on screen. WorkbenchPage now exports
+the gate (awaitPendingPlanSave), a write-chainer that also REGISTERS
+itself as the pending write (chainPlanWrite — the bonds card's PUTs ride
+it, so the Plan page's next load waits for them too), and
+forgetPlanComparisons (the restored plan must not inherit the replaced
+plan's pinned baseline — the old restore path's rule, carried across the
+move). The restore-flow copy stopped speaking workbench ("it becomes the
+current plan; the Plan page runs it the next time you open it"), the
+drive's restore receipt waits on BOTH button labels (Restore it renames
+to Restoring… while busy — a wait on one label resolves at the rename,
+not the completion), and three load-bearing orphaned tips got one-line
+`help=` rescues: the ACA how-to, and the survivor-fraction scope note at
+both of its doors. The search page's probe/saturation tips stay orphaned
+with the page parked.

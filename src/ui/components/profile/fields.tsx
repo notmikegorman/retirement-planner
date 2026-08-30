@@ -87,32 +87,17 @@ function fieldClass(error: string | null | undefined): string {
  * every real button off — and help is not an edit. A span stays focusable and
  * clickable in view mode, which is exactly when someone reads help.
  */
-export function InfoTip(props: { label: string; text: ReactNode; align?: 'start' | 'end' }) {
-  const id = useId();
-  return (
-    <span className={props.align === 'end' ? 'infotip infotip-end' : 'infotip'}>
-      <span
-        role="button"
-        tabIndex={0}
-        className="infotip-btn"
-        aria-label={`More about ${props.label}`}
-        aria-describedby={id}
-        // Safari leaves controls unfocused on click, so :focus-within — the
-        // only thing that opens the bubble for a keyboard user — would never
-        // fire for a mouse user there. Focusing explicitly makes click work
-        // everywhere without a second (stateful) reveal mechanism.
-        onClick={(e) => e.currentTarget.focus()}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') e.currentTarget.blur();
-        }}
-      >
-        <span aria-hidden="true">?</span>
-      </span>
-      <span className="infotip-bubble" id={id} role="tooltip">
-        {props.text}
-      </span>
-    </span>
-  );
+export function InfoTip(_props: { label: string; text: ReactNode; align?: 'start' | 'end' }) {
+  /*
+   * RENDERS NOTHING (the owner's call, 2026-08-30): "get rid of all question
+   * mark icons everywhere — sometimes less is more." Every "?" in the app
+   * flowed through this one component, so this is the whole removal. The
+   * call sites and their curated help text deliberately STAY — they document
+   * each field where it lives, and re-enabling help (as icons or anything
+   * else) is this one function again. Inline `help=` one-liners under fields
+   * are not icons and still render.
+   */
+  return null;
 }
 
 /**

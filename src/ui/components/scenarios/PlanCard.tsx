@@ -15,9 +15,9 @@
  * glidepath EVENTS still exist end to end (old saved scenarios must keep
  * parsing and running); a whole-portfolio one in the loaded plan now shows as
  * a read-only row under Additional events, edited only through the Raw JSON
- * editor. What stayed is the "Bonds are" dial below — a plan-level market
- * assumption, not a dated change, so it never belonged to that section's
- * checkbox in the first place.
+ * editor. The "Bonds are" dial that outlived that section moved again on
+ * 2026-08-30 — under the Investing module (BondsAreSelect.tsx), its one
+ * home now.
  *
  * Nothing new is stored: the card reads and rewrites the ordinary retire /
  * claim_social_security events in the plan (readPlan / writePlan in
@@ -28,7 +28,6 @@
 import { useState, type ReactNode } from 'react';
 import type {
   Account,
-  AssumptionOverrides,
   Person,
   ScenarioEvent,
   SocialSecurityData,
@@ -38,26 +37,17 @@ import { formatUSD } from '../../../shared/util';
 // preview here can never disagree with the simulation.
 import { fraMonths, spousalFactor, workerFactor } from '../../../tax/socialSecurity';
 import { FieldNote, InfoTip } from '../profile/fields';
-import { CorporateShareField } from './CorporateShareField';
 import {
   DEFAULT_CLAIM_AGE,
   SS_CLAIM_AGES,
   ageAtDate,
   autoSeppStatus,
-  bondPresetFor,
-  bondPresetFraction,
-  corporateFractionOf,
-  corporateShareErrorText,
-  corporateShareText,
   dateAtAge,
   describeSeppBridges,
   formatAge,
-  parseNumber,
   readPlan,
-  setCorporateFraction,
   writePlan,
   type AutoSeppStatus,
-  type BondPreset,
   type PlanDecisions,
 } from './scenarioHelpers';
 
@@ -95,18 +85,9 @@ interface PlanCardProps {
   autoSepp?: boolean;
   /** Statutory claiming factors for the benefit preview (null while loading). */
   ssData?: SocialSecurityData | null;
-  /**
-   * The plan's assumption overrides, for the allocation section's "Bonds are"
-   * select — the SAME market.bondComposition.corporateFraction dial the
-   * Settings tab's percent field edits (see BondsAreSelect). Read fresh from
-   * the draft on every render; this card never holds its own copy.
-   */
-  overrides: AssumptionOverrides | undefined;
   onChange: (events: ScenarioEvent[]) => void;
   /** Checked = automatic 72(t) bridge on; the panel writes the plan field. */
   onAutoSeppChange?: (on: boolean) => void;
-  /** The "Bonds are" commit path — the panel patches assumption_overrides. */
-  onOverridesChange: (overrides: AssumptionOverrides | undefined) => void;
 }
 
 export function PlanCard({
@@ -115,10 +96,8 @@ export function PlanCard({
   accounts = [],
   autoSepp,
   ssData = null,
-  overrides,
   onChange,
   onAutoSeppChange,
-  onOverridesChange,
 }: PlanCardProps) {
   const plan = readPlan(events, people);
   const commit = (next: PlanDecisions) => onChange(writePlan(events, next, people));
@@ -137,38 +116,8 @@ export function PlanCard({
         onAutoSeppChange={onAutoSeppChange}
       />
       <ClaimSection plan={plan} people={people} ssData={ssData} commit={commit} />
-      {/*
-        The bond dial survives the allocation section it used to sit in (see
-        the header): the accounts hold bonds today whether or not the mix ever
-        changes, and the composition reprices every simulated year — so it is
-        plan-level configuration, not part of a dated what-if.
-      */}
-      <Section
-        title="What the bonds are"
-        help={
-          'What the bond share of every account is made of — Treasuries, or a blend with ' +
-          'corporates. A market assumption for the whole plan, priced from history: in 2008 ' +
-          'Treasuries returned +20.1% while Baa corporates returned −3.4%, so the choice moves ' +
-          'the crash years, not the averages.'
-        }
-      >
-        <BondsAreSelect
-          /*
-            Keyed by the STORED fraction: the Settings section's corporate-
-            share field edits the same dial. Mutually exclusive sections
-            keep the two doors from mounting together today, but the guard
-            stays (the panel has flipped fold semantics once already) —
-            without it, the Custom box's mount-seeded typing buffer survives
-            an outside write, shows the old figure, and a blur would commit
-            it right back over the newer one. An outside (or own) commit
-            remounts the select fresh; typing in the box writes nothing, so
-            no remount can interrupt it.
-          */
-          key={String(corporateFractionOf(overrides) ?? 'unset')}
-          overrides={overrides}
-          onChange={onOverridesChange}
-        />
-      </Section>
+      {/* The "What the bonds are" dial moved under the Investing module
+          (the owner's relocation, 2026-08-30 — BondsAreSelect.tsx). */}
     </div>
   );
 }
@@ -186,11 +135,12 @@ function Section({
   help: string;
   children: ReactNode;
 }) {
-  // The section's explanation lives behind the "?" beside its heading rather
-  // than as a permanent paragraph: three of these paragraphs, stacked, are what
-  // pushed the controls that actually matter below the fold.
+  // The `help` text once lived behind a "?" by the heading; the icons are
+  // gone (2026-08-30) and the text stays as documentation of the decision.
+  // The FIRST section drops its divider in CSS — with the card's title gone,
+  // a top border here read as an empty heading above it (owner's screenshot).
   return (
-    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+    <div className="wb-plan-section">
       <h3 style={{ margin: '0 0 6px' }}>
         {title}
         <InfoTip label={title.toLowerCase()} text={help} />
@@ -530,105 +480,3 @@ function ClaimPreview({
 // What the bonds are (the dial that outlived the allocation section)
 // ---------------------------------------------------------------------------
 
-/**
- * "Bonds are" — what the bond share IS, in the vocabulary of the instruments
- * the user would actually buy.
- *
- * THE DIAL LIVES SOMEWHERE ELSE TOO. This select reads and writes
- * assumption_overrides.market.bondComposition.corporateFraction — the same
- * override the Settings tab's "Corporate share of bonds (%)" field edits.
- * Conceptually it IS a market assumption, and that card is its correct home;
- * practically the bond decision is made on the Plan card (the user changed
- * their allocation and looked for "a dropdown of BND or VGIT" here). One
- * override, two doors: both derive from the stored plan on every render, so
- * they cannot drift, and this control caches nothing but a typing buffer.
- *
- * It OUTLIVED the allocation section it was born inside: the what-if that
- * section modeled was executed for real (2026-08-18) and the section retired,
- * but the accounts hold bonds every year of every plan, so the composition
- * dial keeps its own section on the card.
- *
- * The fund names are parenthetical anchors, never the primary vocabulary:
- * the model names compositions, not products, and the mapping is
- * approximate — which the help line says out loud.
- */
-function BondsAreSelect({
-  overrides,
-  onChange,
-}: {
-  overrides: AssumptionOverrides | undefined;
-  onChange: (overrides: AssumptionOverrides | undefined) => void;
-}) {
-  const fraction = corporateFractionOf(overrides);
-  const stored = bondPresetFor(fraction);
-  /*
-   * Menu intent, not a cached value. Picking "Custom" writes nothing until a
-   * number is committed, so without this flag the select would snap straight
-   * back to the stored preset and the field could never be revealed. It only
-   * ever FORCES 'custom': the two concrete presets write through immediately
-   * and re-derive from the stored plan, and a remount (tab switch, plan
-   * replace) re-derives everything from the override again.
-   */
-  const [customChosen, setCustomChosen] = useState(false);
-  const preset: BondPreset = customChosen ? 'custom' : stored;
-  /** The Custom box's typing buffer (parse-on-blur, like every number field). */
-  const [customText, setCustomText] = useState(() =>
-    fraction !== undefined ? corporateShareText(fraction) : '',
-  );
-
-  const pick = (next: BondPreset) => {
-    if (next === 'custom') {
-      // Seed the box from what is stored NOW (0.3 flips to "30", ready to
-      // edit), then just reveal it — nothing is written until it commits.
-      setCustomText(fraction !== undefined ? corporateShareText(fraction) : '');
-      setCustomChosen(true);
-      return;
-    }
-    setCustomChosen(false);
-    // Treasuries CLEARS rather than writing 0: absent already means
-    // all-Treasury, so a plan that never set the dial stays untouched and a
-    // flip away-and-back leaves no residue (setCorporateFraction has the
-    // full contrast with the OverridesCard's typed-0 convention).
-    onChange(setCorporateFraction(overrides, bondPresetFraction(next)));
-  };
-
-  const commitCustom = (text: string) => {
-    // Out-of-range or non-numeric input shows its error inline (the shared
-    // field computes it) and is never written — the OverridesCard rule.
-    if (corporateShareErrorText(text) !== undefined) return;
-    const share = parseNumber(text);
-    // Blank clears, like blanking the Settings field: "no stated share".
-    onChange(setCorporateFraction(overrides, share === null ? undefined : share / 100));
-  };
-
-  return (
-    // No inner divider: the Section heading above already sets this block off.
-    <div>
-      <div className="row">
-        <label className="field" style={{ width: 340 }}>
-          <span className="field-label">Bonds are</span>
-          <select value={preset} onChange={(e) => pick(e.target.value as BondPreset)}>
-            <option value="treasuries">US Treasuries — what VGIT tracks</option>
-            <option value="total_bond">
-              Total bond market — what BND approximates (~30% corporate)
-            </option>
-            <option value="custom">Custom…</option>
-          </select>
-        </label>
-        {preset === 'custom' && (
-          <CorporateShareField
-            value={customText}
-            placeholder="0"
-            onChange={setCustomText}
-            onBlur={commitCustom}
-          />
-        )}
-      </div>
-      <div className="field-help" style={{ marginTop: 4 }}>
-        One setting for the whole plan: it says what every bond sleeve is made of, in every
-        account and every year. The fund mapping is approximate;
-        the same dial appears on Settings as &ldquo;Corporate share of bonds (%)&rdquo;.
-      </div>
-    </div>
-  );
-}

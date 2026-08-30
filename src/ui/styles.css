@@ -1289,6 +1289,21 @@ dialog.modal::backdrop {
   padding: 2px 0 12px;
 }
 
+/* The Plan card's decision sections, hairline-divided — except the FIRST,
+   whose divider read as an empty heading once the card's own title went
+   (the owner's screenshot, 2026-08-30). */
+.wb-plan-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.card > .wb-plan-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 /* ------------------------- Paired working/retired ------------------------- */
 /*
  * The Spending and Income cards: one row per stream, two cells side by side —

@@ -3123,12 +3123,11 @@ export const PANEL_TABS = [
   { id: 'income', label: 'Income' },
   { id: 'housing', label: 'Housing' },
   { id: 'events', label: 'Events' },
-  { id: 'settings', label: 'Settings' },
-  // Last, and after Settings on purpose: every section before it edits the
-  // plan, and this one is the only one that looks at what the plan USED to
-  // be. A history fold sitting between two groups of knobs reads as another
-  // knob.
-  { id: 'history', label: 'History' },
+  // The id stays 'settings' under the ADVANCED label (the owner's rename,
+  // 2026-08-30 — it stopped sharing a name with the Settings module the
+  // moment plan History moved there): the id is the stored open-set
+  // vocabulary, and renaming it would forget which fold was open.
+  { id: 'settings', label: 'Advanced' },
 ] as const;
 
 export type PanelTabId = (typeof PANEL_TABS)[number]['id'];

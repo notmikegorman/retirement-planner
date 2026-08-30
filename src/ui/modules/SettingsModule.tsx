@@ -1,13 +1,18 @@
 /**
- * Settings — five tabs (the owner's split, 2026-08-30): GENERAL is how the
+ * Settings — six tabs (the owner's split, 2026-08-30): GENERAL is how the
  * simulation runs (horizon, target, path counts, seed, terminal floor);
  * SPENDING and WITHDRAWALS are the two policies; HEALTH holds the coverage
  * inputs (relocated from its own sidebar module the same day); ADVANCED holds
- * the two always-active cards — Appearance and the data folder — which sit
- * OUTSIDE the view/edit form because both act on change, not on Save.
+ * the two always-active cards — Appearance and the data folder; and HISTORY
+ * holds the plan's version history (relocated from the Plan page the same
+ * day). Advanced and History sit OUTSIDE the view/edit form because they act
+ * on change or on their own buttons, not on Save.
  */
-import { useState } from 'react';
-import type { SpendingPolicy, WithdrawalPolicy } from '../../shared/types';
+import { useEffect, useState } from 'react';
+import type { Profile, Scenario, SpendingPolicy, WithdrawalPolicy } from '../../shared/types';
+import { api } from '../api';
+import { PlanHistoryCard } from '../components/workbench/PlanHistoryCard';
+import { awaitPendingPlanSave, forgetPlanComparisons } from '../pages/WorkbenchPage';
 import { DEFAULT_GUARDRAILS } from '../../shared/types';
 import { InfoTip, NumberField, SelectField } from '../components/profile/fields';
 import {
@@ -59,6 +64,53 @@ const PRETAX_PREFERENCE_HELP =
  * used to be a sidebar toggle). OUTSIDE the view/edit form: it is a local
  * preference applied on change, not a profile field with a Save.
  */
+/**
+ * The plan's version history, relocated from the Plan page (2026-08-30).
+ * The card needs the CURRENT plan (its rows say whether they ARE the plan
+ * on screen, and Keep files it), so this tab fetches it — and a restore
+ * updates the local copy, which is also what the server wrote to disk; the
+ * Plan page loads the restored plan fresh on its next mount.
+ */
+function HistoryTab({ profile }: { profile: Profile }) {
+  const [plan, setPlan] = useState<Scenario | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    // The Plan page flushes an in-window autosave on its way off screen;
+    // reading the file before that write lands would show a stale badge —
+    // and would mean a Restore pressed right after could race the flush.
+    awaitPendingPlanSave()
+      .then(() => api.getPlan())
+      .then((p) => {
+        if (alive) setPlan(p);
+      })
+      .catch((err: unknown) => {
+        if (alive) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (error !== null) {
+    return <div className="error-banner">The plan could not be read: {error}</div>;
+  }
+  if (plan === null) return <div className="muted">Loading…</div>;
+  return (
+    <PlanHistoryCard
+      plan={plan}
+      profile={profile}
+      onRestored={(p) => {
+        setPlan(p);
+        // The pinned baseline was pinned from the plan the restore just
+        // replaced; keeping it would silently make it the yardstick for a
+        // different plan — the rule the workbench's own restore path
+        // carried before the move.
+        forgetPlanComparisons();
+      }}
+    />
+  );
+}
+
 function AppearanceCard() {
   const theme = useTheme();
   return (
@@ -79,13 +131,17 @@ function AppearanceCard() {
 }
 
 const SETTINGS_TABS: ReadonlyArray<
-  TabDef<'general' | 'spending' | 'withdrawals' | 'health' | 'advanced'>
+  TabDef<'general' | 'spending' | 'withdrawals' | 'health' | 'advanced' | 'history'>
 > = [
   { id: 'general', label: 'General' },
   { id: 'spending', label: 'Spending' },
   { id: 'withdrawals', label: 'Withdrawals' },
   { id: 'health', label: 'Health' },
   { id: 'advanced', label: 'Advanced' },
+  // Last (the owner's placement, 2026-08-30, moving it off the Plan page):
+  // every tab before it edits the profile; this one looks at what the PLAN
+  // used to be.
+  { id: 'history', label: 'History' },
 ];
 
 type SettingsTabId = (typeof SETTINGS_TABS)[number]['id'];
@@ -105,11 +161,21 @@ export function SettingsModule() {
           onSelect={setTab}
         />
       }
-      after={
+      after={(draft) =>
         tab === 'advanced' ? (
           <TabPanel idPrefix="settings" tab={tab}>
             <AppearanceCard />
             <DataFolderCard />
+          </TabPanel>
+        ) : tab === 'history' ? (
+          /*
+            Outside the view/edit form like Advanced: the History card is all
+            ACTIONS (Keep, Restore, Score), and a disabled fieldset would
+            switch every one of them off. It reads plan history, not the
+            profile — Save has nothing to do with it.
+          */
+          <TabPanel idPrefix="settings" tab={tab}>
+            <HistoryTab profile={draft} />
           </TabPanel>
         ) : null
       }
@@ -118,9 +184,9 @@ export function SettingsModule() {
         const settings = draft.settings;
         const spending = settings.spendingPolicy;
         const order = settings.withdrawalPolicy.order;
-        // Advanced renders through `after` (its cards must stay active in
-        // view mode); the fieldset holds nothing on that tab.
-        if (tab === 'advanced') return null;
+        // Advanced and History render through `after` (their cards must stay
+        // active in view mode); the fieldset holds nothing on those tabs.
+        if (tab === 'advanced' || tab === 'history') return null;
         return (
           <TabPanel idPrefix="settings" tab={tab}>
             {tab === 'general' && (

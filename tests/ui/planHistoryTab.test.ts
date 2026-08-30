@@ -415,7 +415,7 @@ describe('restoring asks first, and says afterwards what it actually did', () =>
   it('states the consequence and the undo in the question itself', () => {
     const prompt = restorePrompt(row());
     expect(prompt).toContain('Baseline — frozen Aug 20');
-    expect(prompt).toContain('It replaces the plan on screen');
+    expect(prompt).toContain('It becomes the current plan');
     expect(prompt).toContain('filed first, so this is undoable');
   });
 
@@ -873,18 +873,29 @@ describe('the restore question does not promise an undo it cannot give', () => {
 });
 
 describe('the tab’s wiring (source scan)', () => {
-  it('is in the panel’s strip and renders the card with the live draft', () => {
-    // The section list lives in workbenchLogic since the open-set storage
-    // became executable (tests/ui/inputSections.test.ts pins the order).
-    expect(read('../../src/ui/components/workbench/workbenchLogic.ts')).toContain(
+  it('is the Settings module’s LAST tab, fed the loaded plan', () => {
+    // History left the Plan page for the Settings module (the owner's
+    // relocation, 2026-08-30) — last tab, because every tab before it edits
+    // the profile and this one looks at what the PLAN used to be. The tab
+    // fetches the plan itself (there is no draft on that page); a restore
+    // updates the local copy, and the Plan page loads the restored plan.json
+    // fresh on its next mount.
+    const settingsModule = read('../../src/ui/modules/SettingsModule.tsx');
+    expect(settingsModule).toContain("{ id: 'history', label: 'History' }");
+    expect(settingsModule).toMatch(/'advanced', label: 'Advanced' \},[\s\S]*?'history'/);
+    expect(settingsModule).toContain('<PlanHistoryCard');
+    expect(settingsModule).toContain('plan={plan}');
+    expect(settingsModule).toContain('profile={profile}');
+    // The restore callback also forgets the pinned baseline — it was pinned
+    // from the plan the restore just replaced (the workbench's own old rule,
+    // carried across the move).
+    expect(settingsModule).toContain('forgetPlanComparisons()');
+    expect(settingsModule).toContain('awaitPendingPlanSave()');
+    // And it is GONE from the Plan page's fold list.
+    expect(read('../../src/ui/components/workbench/workbenchLogic.ts')).not.toContain(
       "{ id: 'history', label: 'History' }",
     );
-    expect(panel).toContain("section(\n          'history',");
-    expect(panel).toContain('<PlanHistoryCard');
-    // The DRAFT, not the file: the autosave is debounced 400ms, so a match
-    // computed from disk would put the badge on the wrong row for that long
-    // after every keystroke.
-    expect(panel).toContain('plan={draft}');
+    expect(panel).not.toContain('<PlanHistoryCard');
   });
 
   it('never restores on the first press — the row asks first', () => {
@@ -945,16 +956,15 @@ describe('the tab’s wiring (source scan)', () => {
     expect(card).toContain('if (idle) return;');
   });
 
-  it('hands a restored plan to the workbench WITHOUT marking it saved', () => {
-    // Deliberate: an autosave fired inside the debounce can still be in flight
-    // carrying the pre-restore draft. Letting the next PUT fire queues the
-    // restored plan behind it on `saveChain`, so the restored plan is what
-    // ends up on disk however the two raced. Marking it saved would skip that
-    // PUT and leave the file and the screen disagreeing for ever.
-    expect(workbench).toContain('const restoredPlan = (plan: Scenario) => {');
-    expect(workbench).toContain('onPlanRestored={restoredPlan}');
-    expect(workbench).toMatch(/restoredPlan = \(plan: Scenario\) => \{\s*replaceDraft\(plan\);/);
-    expect(workbench).not.toMatch(/restoredPlan[\s\S]{0,400}lastSavedKey\.current =/);
+  it('restores without any workbench hand-off — the page loads the file fresh', () => {
+    // The old in-place restore chain (restoredPlan/onPlanRestored, with its
+    // save-queue choreography) died with the move: a restore happens on the
+    // Settings page while the Plan page is unmounted, the server writes
+    // plan.json during it, and the Plan page's next mount loads that file.
+    // Nothing must resurrect a second hand-off path.
+    expect(workbench).not.toContain('restoredPlan');
+    expect(workbench).not.toContain('onPlanRestored');
+    expect(panel).not.toContain('onPlanRestored');
   });
 
   it('has no cabinet, no baseline and no drift line left in the panel', () => {

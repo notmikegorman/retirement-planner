@@ -253,6 +253,11 @@ export function EventForm({
                 placeholder={`blank = ${DEFAULT_SURVIVOR_LIVING_FRACTION}`}
                 onChange={(e) => set({ livingFraction: e.target.value })}
               />
+              {/* The one load-bearing scope fact, kept visible when the tips
+                  went quiet (2026-08-30); DEATH_FRACTION_HELP holds the rest. */}
+              <span className="field-help">
+                Of everyday LIVING spending only — housing and health are modelled separately
+              </span>
             </label>
             <label className="field">
               <span className="field-label">

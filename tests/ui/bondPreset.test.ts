@@ -1,12 +1,11 @@
 /**
- * The Plan card's "Bonds are" preset select (feedback: a user changed their
- * allocation and "expected a dropdown of BND or VGIT" — the dial existed but
- * lived two cards away on the market-overrides card).
- *
- * One dial, two doors: the select and the OverridesCard's "Corporate share
- * of bonds (%)" field both edit
- * assumption_overrides.market.bondComposition.corporateFraction. The pure
- * mapping (preset <-> fraction), the surgical write (everything else in the
+ * The "Bonds are" preset select — under the Investing module since
+ * 2026-08-30, its ONE home after the two-door era (it was born on the Plan
+ * card from the feedback "expected a dropdown of BND or VGIT", with a twin
+ * percent field on the overrides card; both workbench doors closed with the
+ * move). It edits assumption_overrides.market.bondComposition.
+ * corporateFraction on the PLAN, by get-mutate-put. The pure mapping
+ * (preset <-> fraction), the surgical write (everything else in the
  * override survives), and the absence rules (absent stays absent; a flip
  * away-and-back leaves no residue) live in scenarioHelpers and are tested
  * here directly. The wiring — which component reads what — is source-scanned,
@@ -129,7 +128,7 @@ describe('setCorporateFraction (the surgical write both presets and the custom b
   });
 });
 
-describe('the two doors stay in sync through the shared override', () => {
+describe('the select and the stored override stay in sync (the two-door era\u2019s pure mapping)', () => {
   it('a preset pick is what the OverridesCard field then shows', () => {
     // Plan card writes 0.3; the Settings field (overrideFieldsFrom is its
     // read path) shows "30" — the number the user was promised he would
@@ -176,46 +175,52 @@ describe('the two doors stay in sync through the shared override', () => {
 });
 
 describe('the wiring (source scan)', () => {
-  it('the Plan card hosts the select in its own section, fed by the draft override', () => {
-    // The dial OUTLIVED the allocation section it was born inside: that
-    // what-if was executed for real (2026-08-18) and its section retired, but
-    // the accounts hold bonds every year of every plan, so the composition
-    // keeps its own section on the Plan card — after the claim decision.
-    expect(planCard).toContain('<BondsAreSelect');
-    expect(planCard).toMatch(/ClaimSection[\s\S]*?BondsAreSelect/);
-    expect(planCard).not.toContain('AllocationSection');
-    // It derives from the shared override on every render (no copy)…
-    expect(planCard).toContain('corporateFractionOf(overrides)');
-    // …and the panel feeds it the draft's own override object and the same
-    // patch path every other card commits through.
-    expect(scenarioPanel).toContain('overrides={draft.assumption_overrides}');
-    expect(scenarioPanel).toContain(
-      'onOverridesChange={(assumption_overrides) => onChange({ assumption_overrides })}',
-    );
+  it('the Investing module hosts the select, fed by the loaded plan and put whole', () => {
+    // ONE DIAL, ONE DOOR (the owner's relocation, 2026-08-30): the select
+    // moved off the Plan page — where it lived twice — into an always-active
+    // card under Investing. It still edits the PLAN (assumption_overrides),
+    // through get-mutate-put on the loaded plan.
+    const bondsSelect = read('../../src/ui/components/scenarios/BondsAreSelect.tsx');
+    const investingModule = read('../../src/ui/modules/InvestingModule.tsx');
+    expect(bondsSelect).toContain('export function BondsAreSelect');
+    expect(bondsSelect).toContain('corporateFractionOf(overrides)');
+    expect(investingModule).toContain('<BondsAreSelect overrides={plan.assumption_overrides}');
+    // Ordered against the workbench's own writes, both directions: the mount
+    // fetch waits out any pending autosave flush (a whole-plan PUT built on
+    // a pre-flush fetch would RESURRECT the pre-edit plan), and each write
+    // goes through chainPlanWrite, which serializes it and registers it as
+    // the pending write the Plan page's next load waits for.
+    expect(investingModule).toContain('awaitPendingPlanSave()');
+    expect(investingModule).toContain('chainPlanWrite(() => api.putPlan(next))');
+    // Both workbench doors CLOSED with the move: the Plan card renders no
+    // bonds section, and the overrides card passes the stored value through
+    // untouched instead of editing it.
+    expect(planCard).not.toContain('<BondsAreSelect');
+    expect(overridesCard).not.toContain('<CorporateShareField');
+    expect(overridesCard).toContain('corporateShare: fresh.market.corporateShare');
   });
 
-  it('Custom reveals the SAME percent field component the OverridesCard uses', () => {
-    expect(planCard).toMatch(/preset === 'custom' &&[\s\S]*?<CorporateShareField/);
-    expect(overridesCard).toContain('<CorporateShareField');
-    // The shared component carries the label and the shared bound check, so
-    // the two homes cannot drift apart visually or in what they accept.
+  it('Custom reveals the percent field, with its bound check and clear-on-blank', () => {
+    const bondsSelect = read('../../src/ui/components/scenarios/BondsAreSelect.tsx');
+    expect(bondsSelect).toMatch(/preset === 'custom' &&[\s\S]*?<CorporateShareField/);
     expect(sharedField).toContain('Corporate share of bonds (%)');
     expect(sharedField).toContain('corporateShareErrorText');
     // The commit converts percent → fraction exactly as buildOverrides does
     // (the box speaks 30, the schema speaks 0.3), and blank clears rather
     // than writing anything. Pinned at the source because the handler is the
     // one atom of this feature a pure test cannot execute.
-    expect(planCard).toContain('share === null ? undefined : share / 100');
+    expect(bondsSelect).toContain('share === null ? undefined : share / 100');
   });
 
   it('compositions lead, funds anchor: the labels name what bonds ARE, and say the mapping is loose', () => {
+    const bondsSelect = read('../../src/ui/components/scenarios/BondsAreSelect.tsx');
     // The model does not endorse products — the fund names appear only as
     // parenthetical anchors after the composition they stand for.
-    expect(planCard).toContain('US Treasuries — what VGIT tracks');
-    expect(planCard).toContain('Total bond market — what BND approximates (~30% corporate)');
+    expect(bondsSelect).toContain('US Treasuries — what VGIT tracks');
+    expect(bondsSelect).toContain('Total bond market — what BND approximates (~30% corporate)');
     // The one-line tip: whole-plan scope (it is a market assumption, not a
     // per-event setting) and the approximate mapping, said out loud.
-    expect(planCard).toContain('One setting for the whole plan');
-    expect(planCard).toContain('The fund mapping is approximate');
+    expect(bondsSelect).toContain('One setting for the whole plan');
+    expect(bondsSelect).toContain('The fund mapping is approximate');
   });
 });

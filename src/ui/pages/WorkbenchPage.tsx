@@ -99,6 +99,66 @@ function errorText(err: unknown): string {
 }
 
 /**
+ * Wait out any autosave the workbench flushed on its way off screen — the
+ * gate every OTHER page that reads or writes plan.json must pass first
+ * (load() and loadPlanIntoWorkbench always have; the Settings module's
+ * History tab and the Investing module's bonds card joined when they took
+ * up plan work, 2026-08-30). Without it, a page mounted right after leaving
+ * the Plan page can fetch the pre-flush plan — and a whole-plan
+ * get-mutate-put built on that fetch would then RESURRECT it.
+ */
+export async function awaitPendingPlanSave(): Promise<void> {
+  if (session.pendingSave) {
+    try {
+      await session.pendingSave;
+    } catch {
+      // The flush recorded its own message in session.saveError.
+    }
+    session.pendingSave = null;
+  }
+}
+
+/**
+ * Run a plan write from OUTSIDE the workbench, ordered against every other
+ * plan write: it waits out any pending flush first, and it leaves ITSELF as
+ * the pending write for the next reader to wait for — the ordering-is-total
+ * guarantee loadPlanIntoWorkbench documents, offered to in-place editors
+ * (the bonds dial). Sequential calls chain on each other for free, because
+ * each call reads the pendingSave the previous one set.
+ */
+export function chainPlanWrite(write: () => Promise<unknown>): Promise<void> {
+  const prev = session.pendingSave;
+  const run = (async () => {
+    if (prev) {
+      try {
+        await prev;
+      } catch {
+        // Recorded in session.saveError; this write supersedes it.
+      }
+    }
+    await write();
+  })();
+  session.pendingSave = run.then(
+    () => {
+      session.saveError = null;
+    },
+    (err: unknown) => {
+      session.saveError = errorText(err);
+    },
+  );
+  return run;
+}
+
+/**
+ * The comparison state belongs to the plan that just left the screen — the
+ * same rule loadPlanIntoWorkbench applies, callable by anything that
+ * replaces the plan from another page (the History tab's restore).
+ */
+export function forgetPlanComparisons(): void {
+  session.baseline = null;
+}
+
+/**
  * Put a plan into the workbench from somewhere else in the app (the Search
  * page's "open this finalist"), safely.
  *
@@ -112,14 +172,7 @@ function errorText(err: unknown): string {
  * called, and its next mount reads the file back.
  */
 export async function loadPlanIntoWorkbench(plan: Scenario): Promise<void> {
-  if (session.pendingSave) {
-    try {
-      await session.pendingSave;
-    } catch {
-      // The flush recorded its own message; this write supersedes it anyway.
-    }
-    session.pendingSave = null;
-  }
+  await awaitPendingPlanSave();
   await api.putPlan(plan);
   session.saveError = null;
   // The comparison state belongs to the plan that just left the screen: a
@@ -565,31 +618,10 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
     setRevision((r) => r + 1);
   };
 
-  /**
-   * A stored version has been copied onto the plan (the History tab's Restore).
-   *
-   * IT DELIBERATELY DOES NOT MARK THE PLAN AS SAVED, even though the server
-   * has just written exactly this to plan.json. Marking it would skip the next
-   * PUT — and skipping it re-opens a race the chain otherwise closes: an
-   * autosave fired inside the 400ms debounce can still be in flight when the
-   * restore lands, and it carries the PRE-restore draft. If that write is the
-   * last one to reach the file, plan.json holds the old plan while the screen
-   * holds the restored one, `lastSavedKey` says everything is saved, and
-   * nothing ever corrects it — the disagreement survives the reload.
-   *
-   * Letting the debounce fire one more PUT closes it: every write goes through
-   * `saveChain`, so the restored plan is queued BEHIND the stale autosave and
-   * is the one that ends up on disk however the two raced. The cost is a write
-   * that usually changes nothing, and a no-op write is free by construction —
-   * planStore compares against the file and files no history entry for one.
-   */
-  const restoredPlan = (plan: Scenario) => {
-    replaceDraft(plan);
-    // The pinned comparison baseline was pinned from the plan that just left
-    // the screen; keeping it would silently make it the yardstick for a
-    // different plan. Same rule as loadPlanIntoWorkbench.
-    setBaseline(null);
-  };
+  // (The History tab's restore flow lived here until 2026-08-30; it moved
+  // with the History card to the Settings module. A restore now happens on
+  // that page, and this page simply loads the restored plan.json fresh on
+  // its next mount.)
 
   // ---- baseline ----------------------------------------------------------
 
@@ -669,7 +701,6 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
             onRunSettingsChange={setSettings}
             onChange={updateDraft}
             onReplace={replaceDraft}
-            onPlanRestored={restoredPlan}
           />
         </div>
 

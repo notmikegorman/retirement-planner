@@ -38,6 +38,7 @@ export function HealthFields({ draft, doc }: { draft: Profile; doc: ProfileDoc }
           label="ACA benchmark premium ($/mo)"
           value={draft.health.acaBenchmarkMonthly}
           width={200}
+          help="healthcare.gov, browsing anonymously: the second-lowest-cost Silver plan, household total, at FULL price before subsidies"
           tip="Second-lowest-cost Silver plan, household total, full price before subsidies — the app computes the subsidy itself from your simulated income."
           onCommit={(v) =>
             doc.update((p) => {

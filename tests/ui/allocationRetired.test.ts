@@ -80,9 +80,12 @@ describe('nothing becomes an invisible knob (source scan)', () => {
     // is the rendered section carrying it as a title.
     expect(planCard).not.toContain('title="When the allocation changes"');
     expect(planCard).not.toContain('AllocationSection');
-    // The bond dial deliberately survives — it is a market assumption, not
-    // the retired what-if.
-    expect(planCard).toContain('<BondsAreSelect');
+    // The bond dial survived the retirement (it is a market assumption, not
+    // the what-if) and then moved under the Investing module (2026-08-30).
+    expect(planCard).not.toContain('<BondsAreSelect');
+    expect(
+      read('../../src/ui/components/scenarios/BondsAreSelect.tsx'),
+    ).toContain('export function BondsAreSelect');
     // The header tooltip counts what the card now presents: TWO decisions
     // (stop working, claim). "Three" was the retired section still talking.
     expect(planCard).toContain('These two decisions');

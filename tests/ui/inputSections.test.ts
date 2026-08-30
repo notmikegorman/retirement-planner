@@ -64,10 +64,10 @@ describe('readStoredOpenSections', () => {
 
   it('restores a stored set and prefers it over the legacy key', () => {
     stubStorage({
-      [PANEL_OPEN_STORAGE_KEY]: '["spending","history"]',
+      [PANEL_OPEN_STORAGE_KEY]: '["spending","events"]',
       [PANEL_TAB_LEGACY_KEY]: 'housing',
     });
-    expect([...readStoredOpenSections()].sort()).toEqual(['history', 'spending']);
+    expect([...readStoredOpenSections()].sort()).toEqual(['events', 'spending']);
   });
 
   it('honors a stored EMPTY set — all closed on purpose stays all closed', () => {
@@ -99,8 +99,8 @@ describe('readStoredOpenSections', () => {
 describe('storeOpenSections', () => {
   it('writes strip order whatever the click order was', () => {
     const store = stubStorage();
-    storeOpenSections(new Set(['history', 'plan', 'spending']));
-    expect(store.get(PANEL_OPEN_STORAGE_KEY)).toBe('["plan","spending","history"]');
+    storeOpenSections(new Set(['settings', 'plan', 'spending']));
+    expect(store.get(PANEL_OPEN_STORAGE_KEY)).toBe('["plan","spending","settings"]');
   });
 
   it('round-trips through the reader', () => {
@@ -133,9 +133,11 @@ describe('File > New forgets the open set', () => {
 });
 
 describe('the section list', () => {
-  it('holds the eight sections, Plan first and History last', () => {
+  it('holds the seven sections, Plan first and Advanced (id settings) last', () => {
     // The order IS the storage serialization order (strip order), so it is
-    // part of the contract these tests execute, not just chrome.
+    // part of the contract these tests execute, not just chrome. History
+    // left for the Settings module (2026-08-30), and 'settings' wears the
+    // ADVANCED label while keeping its stored id.
     expect(PANEL_TABS.map((t) => t.id)).toEqual([
       'plan',
       'spending',
@@ -144,7 +146,7 @@ describe('the section list', () => {
       'housing',
       'events',
       'settings',
-      'history',
     ]);
+    expect(PANEL_TABS.find((t) => t.id === 'settings')?.label).toBe('Advanced');
   });
 });

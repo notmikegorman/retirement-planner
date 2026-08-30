@@ -72,7 +72,6 @@ import { OverridesCard } from '../scenarios/OverridesCard';
 import { PLAN_CARD_TIP, PlanCard } from '../scenarios/PlanCard';
 import {
   autoSeppPatch,
-  corporateFractionOf,
   parseScenarioText,
   scenarioToText,
   type MarketDefaults,
@@ -80,7 +79,6 @@ import {
 import { InfoTip } from '../profile/fields';
 import { HOUSING_CARD_TIP, HousingCard } from './HousingCard';
 import { IncomeCard, INCOME_CARD_TIP } from './IncomeCard';
-import { HISTORY_CARD_TIP, PlanHistoryCard } from './PlanHistoryCard';
 import { SPENDING_CARD_TIP, SpendingCard } from './SpendingCard';
 import { TITHING_CARD_TIP, TithingCard } from './TithingCard';
 import {
@@ -111,13 +109,6 @@ export interface ScenarioPanelProps {
   onRunSettingsChange: (next: RunSettings) => void;
   onChange: (patch: Partial<Scenario>) => void;
   onReplace: (scenario: Scenario) => void;
-  /**
-   * A stored version has just been copied onto the plan (History tab). Distinct
-   * from `onReplace` because the plan is ALREADY on disk when this fires — the
-   * server wrote it during the restore — so the page it goes to has a different
-   * job to do about saving. See WorkbenchPage.restoredPlan.
-   */
-  onPlanRestored: (plan: Scenario) => void;
   /** The run on screen — the Housing card traces the last completed one. */
   result: RunResult | null;
 }
@@ -202,7 +193,6 @@ const SECTION_HINTS: Partial<Record<PanelTabId, ReactNode>> = {
   tithing: <InfoTip label="tithing" text={TITHING_CARD_TIP} />,
   income: <InfoTip label="income" text={INCOME_CARD_TIP} />,
   housing: <InfoTip label="the housing plan" text={HOUSING_CARD_TIP} />,
-  history: <InfoTip label="the plan’s history" text={HISTORY_CARD_TIP} />,
 };
 
 export function ScenarioPanel(props: ScenarioPanelProps) {
@@ -264,16 +254,8 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
             accounts={profile.accounts}
             autoSepp={draft.autoSepp}
             ssData={ssData}
-            // The "Bonds are" select edits the same override object the
-            // Settings section's OverridesCard does. Sections toggle
-            // independently, so BOTH can be mounted at once now — they stay
-            // in sync because each is a controlled select reading
-            // draft.assumption_overrides fresh on every render; the draft is
-            // still the one canonical copy.
-            overrides={draft.assumption_overrides}
             onChange={(events) => onChange({ events })}
             onAutoSeppChange={(on) => onChange(autoSeppPatch(on))}
-            onOverridesChange={(assumption_overrides) => onChange({ assumption_overrides })}
           />,
         )}
 
@@ -380,19 +362,14 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           <>
             <OverridesCard
               /*
-                Keyed by the SHARED corporate-share dial, the one field this
-                card and the Plan card both edit. Sections are mutually
-                exclusive now, so the two cards no longer co-mount — but the
-                guard stays: it costs nothing, the panel has flipped between
-                independent and exclusive folds once already (both on
-                2026-08-30), and the stale-buffer clobber it closes is real
-                whenever they DO mount together. Same for the commit-time
-                passthrough re-read inside OverridesCard.commit. Deliberately
-                NOT keyed by the whole overrides value: that remounted the
-                card on its own every committing blur, which threw keyboard
-                focus away mid-tab-through.
+                Plain revision key again: the corporate-share dial — the one
+                field two cards edited, which forced a value key here for a
+                day — moved under the Investing module (2026-08-30). The
+                remaining multi-writer hazard (expenses/income passthroughs)
+                is handled inside the card: commit re-reads those branches
+                from the live draft (see OverridesCard.commit).
               */
-              key={`over:${cardKey}:${String(corporateFractionOf(draft.assumption_overrides) ?? 'unset')}`}
+              key={`over:${cardKey}`}
               overrides={draft.assumption_overrides}
               marketDefaults={marketDefaults}
               onChange={(assumption_overrides) => onChange({ assumption_overrides })}
@@ -407,17 +384,8 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           </>,
         )}
 
-        {/*
-          NOT keyed by `revision`, unlike every card above it. The revision
-          bumps whenever the draft is replaced wholesale — which is what a
-          restore does — and remounting this card on its own restore would
-          throw away the sentence saying what the restore just did, at the
-          exact moment it is being read.
-        */}
-        {section(
-          'history',
-          <PlanHistoryCard plan={draft} profile={profile} onRestored={props.onPlanRestored} />,
-        )}
+        {/* Plan History moved to the Settings module's last tab (the
+            owner's relocation, 2026-08-30 — SettingsModule.tsx). */}
       </div>
     </div>
   );
@@ -549,15 +517,8 @@ function RunSettingsCard({
         </span>
       </div>
       <div className="field-help" style={{ marginTop: 4 }}>
-        The seed is held fixed on purpose
-        <InfoTip
-          label="the fixed seed"
-          text={
-            'Every live run draws the SAME set of futures, so when a number moves it moved ' +
-            'because of your edit, not because the Monte Carlo resampled. Change it deliberately ' +
-            'to check that an answer is not an artifact of one draw.'
-          }
-        />
+        The seed is held fixed on purpose — when a number moves, it moved because of your edit,
+        not because the Monte Carlo resampled.
       </div>
     </div>
   );

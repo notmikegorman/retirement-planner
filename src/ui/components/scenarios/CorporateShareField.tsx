@@ -1,18 +1,10 @@
 /**
- * The corporate-share percent input — ONE component, two doors.
- *
- * The OverridesCard's "Corporate share of bonds (%)" field and the Plan
- * card's "Bonds are: Custom" box edit the SAME override
- * (assumption_overrides.market.bondComposition.corporateFraction), so they
- * share the input itself: same label, same width, same bound check
- * (corporateShareErrorText) rendered the same way. A control that looked
- * different in its two homes would read as two settings, and "which one
- * wins?" is a question this app must never make the user ask.
- *
- * Text state stays with the caller (parse-on-blur, like every number field):
- * the OverridesCard folds it into its OverrideFields, the Plan card keeps a
- * local typing buffer. The error, though, is computed HERE from the current
- * text — both doors show the identical message at the identical moment.
+ * The corporate-share percent input. ONE caller now — BondsAreSelect's
+ * Custom box under the Investing module (2026-08-30); through the two-door
+ * era it was shared with the assumption-overrides card, which is why the
+ * label and the bound check (corporateShareErrorText) live here rather than
+ * with a caller. Text state stays with the caller (parse-on-blur, like
+ * every number field); the error is computed HERE from the current text.
  */
 import { corporateShareErrorText } from './scenarioHelpers';
 

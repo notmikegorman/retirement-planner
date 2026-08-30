@@ -34,13 +34,10 @@ describe('the ScenarioPanel Tithing tab', () => {
       'income',
       'housing',
       'events',
+      // Last, labelled ADVANCED since 2026-08-30 (the id is the stored
+      // open-set vocabulary and stays). History left for the Settings
+      // module the same day.
       'settings',
-      // Last, after Settings: History is the one section that does not edit
-      // the plan. It replaced the deleted 'saved' tab, and its position is
-      // pinned here for the same reason Tithing's is — a section quietly
-      // dropped or reordered is exactly the regression this list exists to
-      // catch.
-      'history',
     ]);
     expect(scenarioPanel).toContain("section(\n          'tithing',");
     expect(scenarioPanel).toContain('<TithingCard');

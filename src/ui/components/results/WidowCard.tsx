@@ -565,6 +565,11 @@ function WidowControls({
                 })
               }
             />
+            {/* The one load-bearing scope fact, kept visible when the tips
+                went quiet (2026-08-30); LIVING_FRACTION_TIP holds the rest. */}
+            <span className="field-help">
+              Of everyday LIVING spending only — housing and health are modelled separately
+            </span>
           </label>
         )}
       </div>

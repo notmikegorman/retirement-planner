@@ -1048,17 +1048,15 @@ export function buildOverrides(
 }
 
 // ---------------------------------------------------------------------------
-// Bond composition: one dial, two doors
+// Bond composition
 // ---------------------------------------------------------------------------
 //
 // A user thinks in the instruments he would buy ("BND or VGIT"); the model
 // thinks in what those instruments are made of
-// (market.bondComposition.corporateFraction). These helpers bridge the two so
-// the Plan card can offer a "Bonds are" preset select beside the allocation
-// mix — where the bond decision is actually made — while the Settings tab's
-// "Corporate share of bonds (%)" field keeps stating the number directly.
-// Both controls read and write THE SAME override; neither caches it, so they
-// cannot drift.
+// (market.bondComposition.corporateFraction). These helpers bridge the two
+// for the "Bonds are" preset select — under the Investing module since
+// 2026-08-30, its one home after the two-door era (the Plan card's section
+// and the overrides card's percent field both closed with the move).
 
 /** The Plan card's vocabulary for the stored fraction. */
 export type BondPreset = 'treasuries' | 'total_bond' | 'custom';

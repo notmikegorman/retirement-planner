@@ -384,26 +384,21 @@ describe('the panel and the results column read at one size', () => {
     // before going mutually exclusive; cards that copy draft state keep
     // their multi-writer guards anyway — the panel has flipped fold
     // semantics once already, and each guard is inert while sections cannot
-    // co-mount. Three guards, each pinned:
-    // 1. OverridesCard reseeds when the SHARED corporate-share dial changes
-    //    (the Plan card edits the same value)…
-    expect(panel).toContain(
-      "key={`over:${cardKey}:${String(corporateFractionOf(draft.assumption_overrides) ?? 'unset')}`}",
-    );
-    // …2. and its commit re-emits the passthrough branches from the LIVE
-    // draft, not the mount-time copy (the card-side half of the guard).
+    // co-mount. (The corporate-share keys that used to be guards 1 and 4
+    // retired WITH the second bonds door: the dial lives under the
+    // Investing module alone now.) Two guards, each pinned:
+    // 1. OverridesCard's commit re-emits the passthrough branches from the
+    //    LIVE draft, not the mount-time copy — including the bonds dial it
+    //    no longer edits.
     const overridesCard = read('../../src/ui/components/scenarios/OverridesCard.tsx');
     expect(overridesCard).toContain('const fresh = overrideFieldsFrom(overrides);');
     expect(overridesCard).toContain('expenses: fresh.expenses,');
     expect(overridesCard).toContain('income: fresh.income,');
-    // 3. EventsCard remounts on any outside rewrite of the events array —
+    expect(overridesCard).toContain('corporateShare: fresh.market.corporateShare');
+    // 2. EventsCard remounts on any outside rewrite of the events array —
     // its open editor saves by a captured index, and Plan/Housing writes
     // reorder or filter that array.
     expect(panel).toContain('key={`events:${cardKey}:${stableStringify(draft.events)}`}');
-    // 4. The Plan card's custom-bonds buffer reseeds when the stored dial
-    // moves under it (the Settings-side field edits the same value).
-    const planCard = read('../../src/ui/components/scenarios/PlanCard.tsx');
-    expect(planCard).toContain("key={String(corporateFractionOf(overrides) ?? 'unset')}");
   });
 
   it('keeps the folds mutually exclusive, and stamps the on-screen run for the lanes', () => {
@@ -421,10 +416,13 @@ describe('the panel and the results column read at one size', () => {
   });
 
   it('flips the bottom folds’ header tips upward, out of the scroll box’s clip', () => {
-    // The panel clips its overflow, and a downward bubble from the last
-    // headers shows a few pixels at most (measured live in review,
-    // 2026-08-30). The bar is the bubble's containing block so the flip is
-    // relative to the header, not the panel.
+    // DORMANT BY DESIGN while the owner's no-?-icons rule stands (InfoTip
+    // renders null, so no bubble opens anywhere). The rule is kept — and
+    // pinned — because re-enabling help is a one-function change, and
+    // without the flip the bottom folds' tips would reopen straight into
+    // the scroll box's clip (measured live in review: ~6px visible).
+    // The bar is the bubble's containing block so the flip is relative to
+    // the header, not the panel.
     expect(ruleBody('.wb-section-bar')).toMatch(/position:\s*relative/);
     const flipped = ruleBody('.wb-section:nth-last-child(-n + 2) .wb-section-bar .infotip-bubble');
     expect(flipped).toMatch(/bottom:\s*calc\(100% \+ 4px\)/);
@@ -444,7 +442,10 @@ describe('the panel and the results column read at one size', () => {
     // (the *_CARD_TIP exports) named so a rename cannot silently strand a
     // fold without its help.
     expect(panel).toContain('hint={SECTION_HINTS[id]}');
-    for (const id of ['plan', 'spending', 'tithing', 'income', 'housing', 'history']) {
+    // Five hints since History left for the Settings module (2026-08-30).
+    // The InfoTip component renders null while the owner's no-?-icons rule
+    // stands; the wiring stays so the help text keeps its home.
+    for (const id of ['plan', 'spending', 'tithing', 'income', 'housing']) {
       expect(panel).toContain(`${id}: <InfoTip`);
     }
     for (const tip of [
@@ -453,7 +454,6 @@ describe('the panel and the results column read at one size', () => {
       'TITHING_CARD_TIP',
       'INCOME_CARD_TIP',
       'HOUSING_CARD_TIP',
-      'HISTORY_CARD_TIP',
     ]) {
       expect(panel).toContain(tip);
     }

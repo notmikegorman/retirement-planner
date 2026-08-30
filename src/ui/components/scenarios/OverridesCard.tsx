@@ -9,7 +9,6 @@
  */
 import { useState } from 'react';
 import type { AssumptionOverrides } from '../../../shared/types';
-import { CorporateShareField } from './CorporateShareField';
 import {
   buildOverrides,
   overrideFieldErrors,
@@ -52,8 +51,9 @@ export function OverridesCard({ overrides, marketDefaults, onChange }: Overrides
    * card sits mounted, and re-emitting the mount-time expenses/income
    * blocks would silently revert their edits on this card's next blur.
    * The fields this card genuinely edits stay on `f` — they are typing
-   * buffers, and nothing else writes them (the shared corporate-share dial
-   * is the exception, handled by this card's key in ScenarioPanel).
+   * buffers, and nothing else writes them. (The corporate-share dial, once
+   * the shared exception, moved under the Investing module on 2026-08-30
+   * and is a fresh passthrough below like the other branches.)
    */
   const commit = (next: OverrideFields) => {
     setF(next);
@@ -67,6 +67,9 @@ export function OverridesCard({ overrides, marketDefaults, onChange }: Overrides
           spendingGuardrails: fresh.spendingGuardrails,
           terminalFloorReal: fresh.terminalFloorReal,
           marketPassthrough: fresh.marketPassthrough,
+          // The bonds dial lives under the Investing module now (2026-08-30);
+          // this card re-emits whatever the plan holds, never its own copy.
+          market: { ...next.market, corporateShare: fresh.market.corporateShare },
         },
         defaults,
       ),
@@ -127,28 +130,9 @@ export function OverridesCard({ overrides, marketDefaults, onChange }: Overrides
         </span>
       </div>
 
-      {/*
-        Also mode-independent: the blend reprices the bond sleeve in every
-        sampled historical year, so it belongs beside the cash yield, not in
-        the deterministic row above. The input is the SHARED component the
-        Plan card's "Bonds are: Custom" box uses — one dial, two doors — so
-        text state flows through this card's fields but the box and its error
-        are pixel-identical in both homes.
-      */}
-      <div className="row" style={{ marginTop: 12 }}>
-        <CorporateShareField
-          value={f.market.corporateShare}
-          placeholder="0"
-          onChange={(text) => setF({ ...f, market: { ...f.market, corporateShare: text } })}
-          onBlur={(text) => commit({ ...f, market: { ...f.market, corporateShare: text } })}
-        />
-        <span className="field-note muted">
-          Blank or 0 = Treasuries only. Corporates yield more but crash with stocks instead of
-          against them (2008: Baa &minus;3.4% vs 10-yr Treasuries +20.1%). A total-bond fund like
-          BND is roughly 30. The Plan card&apos;s &ldquo;Bonds are&rdquo; select sets this same
-          number.
-        </span>
-      </div>
+      {/* The corporate-share field moved with the "Bonds are" dial under the
+          Investing module (2026-08-30) — one dial, one door now. This card
+          passes the stored value through untouched (see commit). */}
 
       <div className="row" style={{ marginTop: 12 }}>
         <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
