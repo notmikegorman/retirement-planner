@@ -653,6 +653,12 @@ describe('the base path helpers', () => {
     expect(withBase('/workbench', '/retirement-planner')).toBe(
       '/retirement-planner/workbench',
     );
+    // The app ROOT writes the BARE base — no trailing slash (the owner's
+    // ask, 2026-08-30): Plan's address on the deployed site is
+    // .../retirement-planner, and stripBase above reads both forms back as
+    // '/', so a host directory-redirect on refresh trims itself back out.
+    expect(withBase('/', '/retirement-planner')).toBe('/retirement-planner');
+    expect(withBase('/', '')).toBe('/');
     expect(withBase('/profile/expenses', '')).toBe('/profile/expenses');
   });
 

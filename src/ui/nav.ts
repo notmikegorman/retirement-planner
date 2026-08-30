@@ -223,9 +223,20 @@ export function stripBase(pathname: string, base: string): string {
   return pathname;
 }
 
-/** The app-path → history.pushState direction. */
+/**
+ * The app-path → history.pushState direction.
+ *
+ * THE APP ROOT WRITES THE BARE BASE, no trailing slash (the owner's ask,
+ * 2026-08-30): a based deploy shows .../retirement-planner for Plan, not
+ * .../retirement-planner/. stripBase reads the bare base back as '/' (and
+ * the slashed form via its prefix branch), so the round trip holds either
+ * way — a hard refresh may bounce through the host's directory redirect and
+ * the canonical rewrite then trims it again. At root (base '') the path is
+ * already the bare '/'.
+ */
 export function withBase(path: string, base: string): string {
-  return base === '' ? path : `${base}${path}`;
+  if (base === '') return path;
+  return path === '/' ? base : `${base}${path}`;
 }
 
 /** What this build was told at bundle time; '' outside a bundler (tests). */
