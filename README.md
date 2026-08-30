@@ -1,4 +1,4 @@
-# Finance Planner
+# Retirement Planner
 
 A retirement planner for one household that runs **entirely in your browser**
 and keeps its files where you can read them.
@@ -46,7 +46,7 @@ ask again with a single **Reconnect** click. Installing the page as an app
 (the install icon in Chrome's address bar — "Add to Dock" on a Mac) makes the
 grant stick so it stops asking.
 
-Picked the wrong folder? **Dashboard → Switch storage** returns to the
+Picked the wrong folder? **Profile → Settings → Switch storage** returns to the
 question so you can pick a different one; it never touches the folder or the
 files in it.
 
@@ -129,8 +129,8 @@ unaffected. Never refresh, and the app never connects to anything at all.
 - **Updates announce themselves.** When a new version is deployed, a small
   "Reload to update" card appears; nothing swaps out from under a running
   session.
-- **Caches grow.** `runs/` is unbounded by design; the Dashboard shows its
-  size, and deleting it costs only recomputation.
+- **Caches grow.** `runs/` is unbounded by design; Profile → Settings shows
+  its size, and deleting it costs only recomputation.
 
 ## It is not financial advice
 
@@ -199,4 +199,3 @@ built and gated.
 - `SPEC.md` — the original brief. `PLAN.md` — the build phases. Both historical; where they disagree with the code, the code wins.
 - `VERIFICATIONS.md` — every tax number, its source, and the date it was checked.
 - `ASSUMPTIONS.md` — placeholders to replace and open questions.
-- The Methodology page inside the app — the modelling simplifications, in plain English.

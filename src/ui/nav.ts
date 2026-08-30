@@ -40,8 +40,15 @@ import { useCallback, useEffect, useState } from 'react';
  * Pages, in top-strip order; App.tsx says why the strip reads this way.
  * Net Worth sits directly after Profile because it is the profile's ledger:
  * the same accounts, priced and totalled on the days the user chose to look.
+ *
+ * Two pages left this list on 2026-08-30 (owner's call): 'dashboard' (its
+ * snapshot duplicated the Profile and Net Worth pages; its one unique card —
+ * the data folder — moved to Profile > Settings) and 'methodology' (static
+ * documentation nobody navigated to; it lives on in git history). Their old
+ * paths resolve to HOME like any unknown path — a stale link lands on the
+ * Workbench rather than a blank screen.
  */
-export const PAGES = ['workbench', 'search', 'dashboard', 'profile', 'networth', 'methodology'] as const;
+export const PAGES = ['workbench', 'search', 'profile', 'networth'] as const;
 
 export type Page = (typeof PAGES)[number];
 
@@ -109,9 +116,7 @@ export const PAGE_TABS = {
   workbench: RESULTS_TAB_IDS,
   search: SEARCH_TAB_IDS,
   profile: PROFILE_TAB_IDS,
-  dashboard: [],
   networth: [],
-  methodology: [],
 } as const satisfies Record<Page, readonly string[]>;
 
 /** The tabs a given page can name in its path; `never` for the untabbed ones. */
@@ -239,7 +244,7 @@ export function routePath(route: Route): string {
  * another page names no tab and lets that page's own memory decide.
  *
  * A tab that does not belong to the page is dropped, not written — a
- * /dashboard/expenses would be a URL that parses back to something else.
+ * /networth/expenses would be a URL that parses back to something else.
  */
 export function nextRoute(current: Route, page: Page, tab?: string | null): Route {
   const wanted = tab === undefined ? (page === current.page ? current.tab : null) : tab;
@@ -305,9 +310,7 @@ export const PAGE_TAB_STORAGE_KEY = {
   workbench: RESULTS_TAB_STORAGE_KEY,
   search: SEARCH_TAB_STORAGE_KEY,
   profile: PROFILE_TAB_STORAGE_KEY,
-  dashboard: null,
   networth: null,
-  methodology: null,
 } as const satisfies Record<Page, string | null>;
 
 /**
@@ -339,6 +342,31 @@ export function writeStoredTab(key: string, id: string): void {
     // Storage disabled: the URL still carries the tab, so only the fallback
     // for a URL that names none is lost.
   }
+}
+
+// ---------------------------------------------------------------------------
+// The navigation guard (module-level; at most one holder at a time)
+// ---------------------------------------------------------------------------
+
+/**
+ * A page holding unsaved work registers a guard; navigate() consults it
+ * before moving. Returning true TAKES OVER the move — the guard shows its own
+ * prompt and either calls `proceed` to finish exactly the navigation that was
+ * asked for, or drops it. Returning false lets the move happen immediately.
+ *
+ * This exists for the Profile page's dirty-form blocker (the smplkit
+ * standard): the app's nav is buttons calling navigate(), not anchors, so a
+ * click-capture interceptor would never see a move. The one deliberate gap is
+ * the browser's own Back button — popstate re-reads a URL the browser already
+ * changed, and arguing with it loses; beforeunload covers full page leaves.
+ */
+export type NavigationGuard = (next: Route, proceed: () => void) => boolean;
+
+let navigationGuard: NavigationGuard | null = null;
+
+/** Register (or, with null, release) THE guard. Pages must release on unmount. */
+export function setNavigationGuard(guard: NavigationGuard | null): void {
+  navigationGuard = guard;
 }
 
 // ---------------------------------------------------------------------------
@@ -436,9 +464,13 @@ export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: St
      * not leave an entry, or Back walks through views nobody chose.
      */
     const action = opts?.replace === true ? 'replace' : historyAction(here, path);
-    if (action === 'replace') window.history.replaceState(null, '', withBase(path, base));
-    else window.history.pushState(null, '', withBase(path, base));
-    setRoute(next);
+    const commit = () => {
+      if (action === 'replace') window.history.replaceState(null, '', withBase(path, base));
+      else window.history.pushState(null, '', withBase(path, base));
+      setRoute(next);
+    };
+    if (navigationGuard !== null && navigationGuard(next, commit)) return;
+    commit();
   }, []);
 
   return { route, navigate, storedTabs };

@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "Finance Planner",
+      "name": "Retirement Planner",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",

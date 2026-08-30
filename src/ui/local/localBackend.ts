@@ -124,7 +124,7 @@ function writerIdentity(): { clientId: string; label: string } {
   } catch {
     clientId = `web-${randomHex(8)}`; // storage disabled: identity lasts the tab
   }
-  return { clientId, label: 'Finance Planner (browser tab)' };
+  return { clientId, label: 'Retirement Planner (browser tab)' };
 }
 
 /** The stand-in while no proxy URL is configured — see the module header. */
@@ -277,7 +277,7 @@ export async function bootLocalBackend(): Promise<Api> {
    * Decision D7, made visible: the runs/ cache stays UNBOUNDED (exactly what
    * the Node server did — picked-folder writes are quota-exempt real disk),
    * and in exchange its size is measured at every meta() ask and shown on
-   * the Dashboard. Measured straight off the handle (getFile().size — no
+   * Profile > Settings. Measured straight off the handle (getFile().size — no
    * bytes read) rather than through the FileStore seam, which deliberately
    * has no stat call: this is a metric about the folder, not a record read.
    */

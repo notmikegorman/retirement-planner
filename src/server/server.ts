@@ -192,7 +192,7 @@ async function main(): Promise<void> {
   // ----- Profile ----------------------------------------------------------
   // The RESOLVED profile: holdings-mode accounts carry balances/allocations
   // derived from stored quotes, so every reader of this route — the editor,
-  // the dashboard, the workbench's client-side input hash — sees the same
+  // the workbench's client-side input hash — sees the same
   // numbers a run would use. Accounts whose symbols have no stored quote keep
   // their last-resolved figures (the editor must render before the first
   // refresh); only the RUN routes treat that as fatal.
@@ -459,7 +459,7 @@ async function main(): Promise<void> {
   } else {
     app.get('/', async (_req, reply) =>
       reply.type('text/html').send(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Finance Planner</title></head>
+        `<!doctype html><html><head><meta charset="utf-8"><title>Retirement Planner</title></head>
 <body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto;">
 <h1>UI not built</h1>
 <p>UI not built &mdash; run: <code>npm start</code> (or <code>npm run dev:ui</code> for the dev server).</p>
@@ -479,7 +479,7 @@ async function main(): Promise<void> {
   // the banner (and the browser we may be about to open) needs the loopback
   // form instead.
   const url = `http://${displayHost(host)}:${port}/`;
-  console.log(`Finance planner running at ${url}`);
+  console.log(`Retirement Planner running at ${url}`);
   console.log(`Data folder: ${init.dataDir}`);
   if (!existsSync(path.join(init.dataDir, '.git'))) {
     console.log(

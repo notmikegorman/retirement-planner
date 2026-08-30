@@ -1,4 +1,4 @@
-# Installing Finance Planner
+# Installing Retirement Planner
 
 > **This is legacy mode.** The primary way to run the planner is the hosted
 > browser app — **<https://notmikegorman.github.io/retirement-planner>** —
@@ -335,7 +335,7 @@ command-line arguments.
 
 **Check the log first.** `scripts/service.sh logs` on either platform.
 
-**"Another Finance Planner is already writing …"** — exactly what it says, and
+**"Another Retirement Planner is already writing …"** — exactly what it says, and
 the message names the process, its port and its checkout. Usually a development
 server you forgot about. Two servers on one data folder discard each other's
 writes silently, so this refusal is deliberate. See

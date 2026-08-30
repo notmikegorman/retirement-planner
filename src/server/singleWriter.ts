@@ -165,7 +165,7 @@ export function describeConflict(
   dataDir: string,
 ): string {
   const lines = [
-    `Another Finance Planner is already writing ${dataDir}.`,
+    `Another Retirement Planner is already writing ${dataDir}.`,
     '',
     'Two servers on one data folder lose each other\'s writes silently: both read',
     'the whole file, both write the whole file, and the second one wins. A plan',

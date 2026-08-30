@@ -26,6 +26,7 @@ import {
   type ProfileTabId,
 } from '../nav';
 import { useToast } from '../toast';
+import { DiscardChangesPrompt, useDirtyFormBlocker } from '../dirtyFormBlocker';
 import {
   CheckboxField,
   FieldNote,
@@ -36,6 +37,7 @@ import {
   TextField,
 } from '../components/profile/fields';
 import { AccountsCard } from '../components/profile/AccountsCard';
+import { DataFolderCard } from '../components/profile/DataFolderCard';
 import { BudgetCard, GivingLines, InvestingCard } from '../components/profile/BudgetCard';
 import { InsuranceCard } from '../components/profile/InsuranceCard';
 import { OngoingGivingEditor, PotFields } from '../components/workbench/TithingCard';
@@ -165,10 +167,19 @@ const PRETAX_PREFERENCE_HELP =
  * localStorage behind it for a bare /profile — nav.ts's resolveTab owns which
  * one wins. Coming back to check one number does not start at the top every
  * time, and the tab you are looking at is now the thing you can send someone.
- * The SAVE BAR stays OUTSIDE the tabs deliberately: unlike the Workbench, this
- * page does not autosave, so the control that commits an edit — and the words
- * warning you there is an uncommitted one — must never be a tab away from the
- * field you just changed.
+ *
+ * THE PAGE WEARS THE SMPLKIT DETAIL-PAGE CHROME (2026-08-30; the standard
+ * lives in the app repo's docs/frontend-standards.md): a header row holding
+ * the title and the save-state pill, then ONE `.detailsTabHeader` row with
+ * the tab bar on the left and the tab-scoped actions — Discard / Save — on
+ * the right. Save used to live in its own bar above everything, which read
+ * as belonging to no tab at all; the owner went looking for it inside the
+ * tab, where Add account and Delete live, and that is where the standard
+ * puts it. The actions render on EVERY tab (all ten edit the same draft,
+ * so all ten are "the details tab"), and the row's reserved height keeps
+ * the panel from reflowing between tabs. Leaving the page with unsaved
+ * edits runs into the standard's dirty-form blocker rather than silently
+ * dropping them (dirtyFormBlocker.tsx).
  *
  * EXPENSES USED TO CARRY THREE SUBJECTS: the budget, the rule for giving after
  * the last paycheck, and the life-insurance policy. They are three different
@@ -278,6 +289,15 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
     });
   }, []);
 
+  // Above the early returns (hooks must be unconditional). Tab switches stay
+  // inside the page — the same draft survives them — so they are waved
+  // through; only leaving the page runs into the prompt.
+  const dirty =
+    draft !== null && saved !== null && stableStringify(draft) !== stableStringify(saved);
+  const blocker = useDirtyFormBlocker(dirty, {
+    safeNavigation: (next) => next.page === 'profile',
+  });
+
   if (loading) return <div className="muted">Loading…</div>;
   if (loadError || !draft || !saved) {
     return (
@@ -287,8 +307,6 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
       </div>
     );
   }
-
-  const dirty = stableStringify(draft) !== stableStringify(saved);
 
   const save = async () => {
     setSaving(true);
@@ -332,34 +350,47 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
 
   return (
     <div>
-      <div className="row" style={{ marginBottom: 16 }}>
-        <button className="primary" disabled={!dirty || saving} onClick={() => void save()}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-        <button disabled={(!dirty && !saveError) || saving} onClick={() => void load()}>
-          Discard changes
-        </button>
-        <span className="muted">
-          {dirty ? 'Unsaved changes' : 'All changes saved to profile.json'}
-        </span>
+      <div className="detailHeader">
+        <div className="detailHeaderLeft">
+          <div className="detailHeaderTitleRow">
+            <h1>Profile</h1>
+            <span
+              className={dirty ? 'statusPill isDirty' : 'statusPill isSaved'}
+              title={dirty ? 'Save writes profile.json' : 'All changes saved to profile.json'}
+            >
+              {dirty ? 'Unsaved changes' : 'Saved'}
+            </span>
+          </div>
+        </div>
       </div>
 
+      {/* Whole-form failures only — field-shaped ones render on their field. */}
       {saveError ? <div className="error-banner">Save failed: {saveError}</div> : null}
 
-      <div className="tabs" role="tablist" aria-label="Profile sections">
-        {PROFILE_TAB_IDS.map((id) => (
-          <button
-            key={id}
-            role="tab"
-            id={`profile-tab-${id}`}
-            aria-selected={tab === id}
-            aria-controls={`profile-panel-${id}`}
-            className={tab === id ? 'tab is-active' : 'tab'}
-            onClick={() => selectTab(id)}
-          >
-            {PROFILE_TAB_LABELS[id]}
+      <div className="detailsTabHeader">
+        <nav className="modalTabBar" role="tablist" aria-label="Profile sections">
+          {PROFILE_TAB_IDS.map((id) => (
+            <button
+              key={id}
+              role="tab"
+              id={`profile-tab-${id}`}
+              aria-selected={tab === id}
+              aria-controls={`profile-panel-${id}`}
+              className={tab === id ? 'modalTabBtn isActive' : 'modalTabBtn'}
+              onClick={() => selectTab(id)}
+            >
+              {PROFILE_TAB_LABELS[id]}
+            </button>
+          ))}
+        </nav>
+        <div className="detailsTabActions">
+          <button disabled={(!dirty && !saveError) || saving} onClick={() => void load()}>
+            Discard changes
           </button>
-        ))}
+          <button className="primary" disabled={!dirty || saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
       </div>
 
       <div key={rev} role="tabpanel" id={`profile-panel-${tab}`} aria-labelledby={`profile-tab-${tab}`}>
@@ -406,6 +437,7 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
               <div className="row">
                 <TextField
                   label="Name"
+                  required
                   value={person.name}
                   width={180}
                   onCommit={(v) =>
@@ -416,6 +448,7 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
                 />
                 <NumberField
                   label="Birth year"
+                  required
                   int
                   value={person.birthYear}
                   width={100}
@@ -1069,6 +1102,17 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
                   value={spending.guardrails?.upper ?? DEFAULT_GUARDRAILS.upper}
                   width={190}
                   help="1.2 = cut once the rate is 20% above where it started"
+                  /*
+                    An inverted band breaches both rails every year, and the
+                    server's schema rejects it — better to say so on the field
+                    than to fail the save with a zod message. (Field-shaped
+                    errors render on the field; the banner is whole-form.)
+                  */
+                  error={
+                    guardrailsOk(spending.guardrails)
+                      ? null
+                      : 'Must sit above the lower rail'
+                  }
                   onCommit={(v) =>
                     update((p) => {
                       setGuardrail(p.settings.spendingPolicy, 'upper', v);
@@ -1126,12 +1170,6 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
                     })
                   }
                 />
-                {/* An inverted band breaches both rails every year, and the
-                    server's schema rejects it — better to say so beside the
-                    field than to fail the save with a zod message. */}
-                {guardrailsOk(spending.guardrails) ? null : (
-                  <FieldNote className="warn">upper rail must be above the lower one</FieldNote>
-                )}
               </div>
             </>
           ) : null}
@@ -1195,9 +1233,13 @@ export function ProfilePage({ route, navigate, storedTab }: PageProps) {
             />
           </div>
         </div>
+        {/* Where the bytes live — moved here from the retired Dashboard. */}
+        <DataFolderCard />
           </>
         )}
       </div>
+
+      <DiscardChangesPrompt blocker={blocker} />
     </div>
   );
 }

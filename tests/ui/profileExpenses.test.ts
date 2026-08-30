@@ -961,12 +961,13 @@ const insuranceCard = read('../../src/ui/components/profile/InsuranceCard.tsx');
 const css = read('../../src/ui/styles.css');
 
 /**
- * The three surfaces that QUOTE the household's spending baseline rather than
- * edit it. BudgetCard is deliberately absent: its StreamsCard half is the
- * no-rows editor, where the scalars are the truth and must be read directly.
+ * The surfaces that QUOTE the household's spending baseline rather than edit
+ * it. BudgetCard is deliberately absent: its StreamsCard half is the no-rows
+ * editor, where the scalars are the truth and must be read directly.
+ * (DashboardPage was the third such surface until the page retired,
+ * 2026-08-30.)
  */
 const QUOTING_SOURCES: ReadonlyArray<{ name: string; src: string }> = [
-  { name: 'DashboardPage.tsx', src: read('../../src/ui/pages/DashboardPage.tsx') },
   {
     name: 'SpendingCard.tsx',
     src: read('../../src/ui/components/workbench/SpendingCard.tsx'),

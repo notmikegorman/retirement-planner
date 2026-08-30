@@ -1697,3 +1697,56 @@ Pinned in node by `tests/ui/planBlockStash.test.ts` (key shape, garbage
 tolerance, folder-identity rules) and the housing cases in
 `tests/ui/housingCard.test.ts` (stash-before-removal, the three-source
 order, the provenance wordings).
+
+## The strip slims to three, and the Profile wears the smplkit chrome (2026-08-30)
+
+Three owner calls in one pass, all about the app finally being used like a
+product rather than toured like a build.
+
+**The name is Retirement Planner.** "Finance Planner" was the working title;
+every user-facing surface now says Retirement Planner (topbar brand, tab
+title, PWA manifest, the server banner, the writer-guard refusals, the
+service descriptions, the docs). Internal identifiers deliberately keep
+their old names — the `finance-planner` package/service labels, the
+`~/finance-planner-data` default, the `FPLAN_*` env prefix, `fplan-*`
+storage keys — because renaming those breaks installed services and parked
+folders to make a string prettier, and nobody reads them.
+
+**The top strip is Workbench · Profile · Net Worth.** Dashboard and
+Methodology left the URL vocabulary entirely (stale paths resolve to the
+Workbench like any unknown path); Search keeps its page, its machinery and
+its /search paths but draws no button — `NAV_HIDDEN` in App.tsx is the whole
+parking mechanism, and deleting the entry un-parks it. The Dashboard was a
+read-only echo of Profile and Net Worth except for one card that mattered:
+the data-folder card (folder path, D7's run-cache size, engine version,
+storage persistence, Switch storage). That card moved whole to Profile →
+Settings (`DataFolderCard.tsx`), and every sentence that pointed at
+"Dashboard → Switch storage" — including the folder menu's OPFS note and
+the 2026-08-29 chooser decision above — now reads Profile → Settings.
+The Methodology page's content lives on in git history and DECISIONS;
+nothing deep-linked to it.
+
+**The Profile adopts the smplkit detail-page standard** (the app repo's
+docs/frontend-standards.md), because the owner went looking for Save inside
+the tab — where Add account and Delete live — and found it in a detached
+bar at the top of the page. The page now renders the standard's chrome: a
+detail header (title + save-state pill), one `.detailsTabHeader` row with
+underline tabs left and the tab-scoped actions — Discard changes / Save —
+right, field-level `required` markers and on-field validation errors
+(`fields.tsx` grew `required`/`error` props; the inverted guardrail band is
+the first wired error), and the standard's dirty-form blocker: leaving the
+page with unsaved edits raises the Discard-unsaved-changes prompt
+(`dirtyFormBlocker.tsx`, wired through a navigation-guard seam in nav.ts,
+since this app navigates by buttons rather than anchors). The class names
+are the standard's own (camelCase in a kebab-case sheet, on purpose) so the
+standards doc reads onto this code verbatim; the palette stays this app's.
+The Workbench strips deliberately keep the old `.tabs` treatment — their
+two-strips-one-bar alignment is its own design, and restyling it is a
+separate decision.
+
+**A completed welcome form resets the remembered tabs.** The zero-start
+setup's submit now clears the four per-page tab keys and returns the URL to
+the app root (main.tsx `resetRememberedViews`): the keys are per-browser,
+not per-folder, so File > New into an empty folder used to open the fresh
+plan on whatever input tab the OLD plan was last touching — the owner hit
+exactly that, landing on Housing where Plan belonged.

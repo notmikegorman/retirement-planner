@@ -73,7 +73,7 @@ short_head() {
 from_commit="$(short_head)"
 from_engine="$(engine_version)"
 
-fplan_step "Finance Planner at $FPLAN_APP_DIR"
+fplan_step "Retirement Planner at $FPLAN_APP_DIR"
 fplan_say "  currently: commit $from_commit, engine $from_engine"
 fplan_say "  data:      $FPLAN_DATA_DIR"
 

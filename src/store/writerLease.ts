@@ -133,7 +133,7 @@ export type LeaseDecision =
 export function describeLeaseConflict(lease: WriterLease, leaseName: string): string {
   const staleAfterS = Math.round((lease.heartbeatMs * STALE_AFTER_BEATS) / 1000);
   return [
-    'Another Finance Planner is already writing this data folder.',
+    'Another Retirement Planner is already writing this data folder.',
     '',
     'Two writers on one folder lose each other\'s work silently: both read the',
     'whole file, both write the whole file, and the second one wins. A plan',

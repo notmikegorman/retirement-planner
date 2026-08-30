@@ -74,7 +74,7 @@ import {
 const LIVE_DEBOUNCE_MS = 400;
 
 /**
- * What survives leaving the page. Navigating to the Dashboard and back would
+ * What survives leaving the page. Navigating to the Profile and back would
  * otherwise blank the results until the live loop finished a fresh run and —
  * worse — silently drop a pinned baseline. The run itself comes from
  * runResultCache by id; only the comparison state lives here.

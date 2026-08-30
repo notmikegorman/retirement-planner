@@ -5,10 +5,8 @@ import { ToastProvider } from './toast';
 import { FolderControl } from './components/topbar/FolderControl';
 import { WorkbenchPage } from './pages/WorkbenchPage';
 import { SearchPage } from './pages/SearchPage';
-import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { NetWorthPage } from './pages/NetWorthPage';
-import { MethodologyPage } from './pages/MethodologyPage';
 
 /**
  * The Workbench is first and is where the app opens: turning the knobs and
@@ -29,11 +27,18 @@ import { MethodologyPage } from './pages/MethodologyPage';
 const NAV_LABELS: Record<Page, string> = {
   workbench: 'Workbench',
   search: 'Search',
-  dashboard: 'Dashboard',
   profile: 'Profile',
   networth: 'Net Worth',
-  methodology: 'Methodology',
 };
+
+/**
+ * Pages that stay in the URL vocabulary but draw no top-strip button. Search
+ * is parked here (owner's call, 2026-08-30): the whole module — page, server
+ * machinery, /search paths — keeps working for whoever types the URL, but the
+ * strip stops advertising it. Deleting it from this set is the entire
+ * un-parking operation.
+ */
+const NAV_HIDDEN: ReadonlySet<Page> = new Set(['search']);
 
 /**
  * The service worker's update affordance (Phase 7): visible exactly while a
@@ -68,9 +73,9 @@ export function App() {
       <ToastProvider>
         <div className="app">
           <header className="topbar">
-            <div className="brand">Finance Planner</div>
+            <div className="brand">Retirement Planner</div>
             <nav>
-              {PAGES.map((item) => (
+              {PAGES.map((item) => NAV_HIDDEN.has(item) ? null : (
                 <button
                   key={item}
                   className={page === item ? 'nav-btn active' : 'nav-btn'}
@@ -108,10 +113,8 @@ export function App() {
           <main className={page === 'workbench' || page === 'search' ? 'content wide' : 'content'}>
             {page === 'workbench' && <WorkbenchPage {...props} />}
             {page === 'search' && <SearchPage {...props} />}
-            {page === 'dashboard' && <DashboardPage {...props} />}
             {page === 'profile' && <ProfilePage {...props} />}
             {page === 'networth' && <NetWorthPage {...props} />}
-            {page === 'methodology' && <MethodologyPage {...props} />}
           </main>
           <SwUpdateBar />
         </div>

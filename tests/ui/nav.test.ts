@@ -48,24 +48,21 @@ import {
   type Route,
 } from '../../src/ui/nav';
 
-/** Every addressable view in the app: the five pages plus each page's tabs. */
+/** Every addressable view in the app: the pages plus each page's tabs. */
 const EVERY_ROUTE: Route[] = PAGES.flatMap((page) => [
   { page, tab: null } as Route,
   ...(PAGE_TABS[page] as readonly string[]).map((tab) => ({ page, tab }) as Route),
 ]);
 
 describe('the vocabulary', () => {
-  it('covers the six pages, in top-strip order', () => {
+  it('covers the four pages, in top-strip order', () => {
     // Net Worth sits directly after Profile: it is the profile's ledger — the
     // same accounts, priced and totalled on the days the user chose to look.
-    expect([...PAGES]).toEqual([
-      'workbench',
-      'search',
-      'dashboard',
-      'profile',
-      'networth',
-      'methodology',
-    ]);
+    // ('dashboard' and 'methodology' left the vocabulary 2026-08-30 — their
+    // paths are tombstones now, asserted with the other unknown paths below.
+    // 'search' is still addressable but draws no top-strip button; App.tsx's
+    // NAV_HIDDEN carries that rule.)
+    expect([...PAGES]).toEqual(['workbench', 'search', 'profile', 'networth']);
   });
 
   it('gives every page a tab list, and only the tabbed pages a non-empty one', () => {
@@ -74,8 +71,7 @@ describe('the vocabulary', () => {
     expect([...PAGE_TABS.workbench]).toEqual([...RESULTS_TAB_IDS]);
     expect([...PAGE_TABS.search]).toEqual([...SEARCH_TAB_IDS]);
     expect([...PAGE_TABS.profile]).toEqual([...PROFILE_TAB_IDS]);
-    expect([...PAGE_TABS.dashboard]).toEqual([]);
-    expect([...PAGE_TABS.methodology]).toEqual([]);
+    expect([...PAGE_TABS.networth]).toEqual([]);
   });
 
   it('names the tabs the pages actually offer', () => {
@@ -122,7 +118,7 @@ describe('the vocabulary', () => {
     expect(isTabOfPage('profile', 'tithing')).toBe(true);
     expect(isTabOfPage('workbench', 'tithing')).toBe(true);
     expect(isTabOfPage('search', 'tithing')).toBe(false);
-    expect(isTabOfPage('dashboard', 'tithing')).toBe(false);
+    expect(isTabOfPage('networth', 'tithing')).toBe(false);
   });
 
   it('keeps the storage keys it had before the URL existed', () => {
@@ -143,7 +139,7 @@ describe('parseRoute', () => {
   it('reads a page from the first segment', () => {
     expect(parseRoute('/profile')).toEqual({ page: 'profile', tab: null });
     expect(parseRoute('/search')).toEqual({ page: 'search', tab: null });
-    expect(parseRoute('/methodology')).toEqual({ page: 'methodology', tab: null });
+    expect(parseRoute('/networth')).toEqual({ page: 'networth', tab: null });
   });
 
   it('reads a tab from the second segment', () => {
@@ -169,10 +165,13 @@ describe('parseRoute', () => {
 
   it('resolves an unknown path instead of blanking the screen', () => {
     // Whatever arrives — a typo, a link to a page that was deleted (there used
-    // to be /compare and /results), a favicon-ish path — lands somewhere real.
+    // to be /compare, /results, /dashboard and /methodology), a favicon-ish
+    // path — lands somewhere real.
     expect(parseRoute('/nonsense')).toEqual(HOME);
     expect(parseRoute('/compare')).toEqual(HOME);
     expect(parseRoute('/results/summary')).toEqual(HOME);
+    expect(parseRoute('/dashboard')).toEqual(HOME);
+    expect(parseRoute('/methodology')).toEqual(HOME);
     expect(parseRoute('/%%%')).toEqual(HOME);
   });
 
@@ -182,7 +181,7 @@ describe('parseRoute', () => {
     // tab — never to an empty panel.
     expect(parseRoute('/profile/budget')).toEqual({ page: 'profile', tab: null });
     expect(parseRoute('/profile/space')).toEqual({ page: 'profile', tab: null });
-    expect(parseRoute('/dashboard/summary')).toEqual({ page: 'dashboard', tab: null });
+    expect(parseRoute('/networth/summary')).toEqual({ page: 'networth', tab: null });
   });
 
   it('ignores segments past the tab', () => {
@@ -209,8 +208,8 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 6 pages + 7 results tabs + 4 search tabs + 10 profile tabs = 27.
-    expect(paths.length).toBe(27);
+    // 4 pages + 7 results tabs + 4 search tabs + 10 profile tabs = 25.
+    expect(paths.length).toBe(25);
   });
 });
 
@@ -227,7 +226,7 @@ describe('nextRoute', () => {
     // The new page's own memory (or its first tab) decides — this is the only
     // moment localStorage gets a say once the URL is in play.
     expect(nextRoute(onExpenses, 'workbench')).toEqual({ page: 'workbench', tab: null });
-    expect(nextRoute(onExpenses, 'dashboard')).toEqual({ page: 'dashboard', tab: null });
+    expect(nextRoute(onExpenses, 'networth')).toEqual({ page: 'networth', tab: null });
   });
 
   it('takes an explicit tab, including on the page you are already on', () => {
@@ -243,9 +242,9 @@ describe('nextRoute', () => {
   });
 
   it('drops a tab that belongs to another page', () => {
-    // Would otherwise write /dashboard/expenses — a URL that parses back to
-    // /dashboard, so the address bar and the screen would disagree on reload.
-    expect(nextRoute(HOME, 'dashboard', 'expenses')).toEqual({ page: 'dashboard', tab: null });
+    // Would otherwise write /networth/expenses — a URL that parses back to
+    // /networth, so the address bar and the screen would disagree on reload.
+    expect(nextRoute(HOME, 'networth', 'expenses')).toEqual({ page: 'networth', tab: null });
     expect(nextRoute(HOME, 'workbench', 'household')).toEqual({ page: 'workbench', tab: null });
   });
 });
@@ -435,8 +434,8 @@ describe('a browsing session', () => {
   it('drops the forward entries a new navigation supersedes', () => {
     // Back, then somewhere else: the abandoned branch must not stay reachable.
     const s = new Session('/workbench');
-    s.click('cashflow').go('profile').back().go('dashboard');
-    expect([s.path, s.depth]).toEqual(['/dashboard', 3]);
+    s.click('cashflow').go('profile').back().go('networth');
+    expect([s.path, s.depth]).toEqual(['/networth', 3]);
   });
 });
 
@@ -632,8 +631,7 @@ describe('useRoute wires the History API', () => {
     expect(PAGE_TAB_STORAGE_KEY.workbench).toBe(RESULTS_TAB_STORAGE_KEY);
     expect(PAGE_TAB_STORAGE_KEY.search).toBe(SEARCH_TAB_STORAGE_KEY);
     expect(PAGE_TAB_STORAGE_KEY.profile).toBe(PROFILE_TAB_STORAGE_KEY);
-    // The untabbed pages have nothing to remember; a key here would be a lie.
-    expect(PAGE_TAB_STORAGE_KEY.dashboard).toBeNull();
-    expect(PAGE_TAB_STORAGE_KEY.methodology).toBeNull();
+    // The untabbed page has nothing to remember; a key here would be a lie.
+    expect(PAGE_TAB_STORAGE_KEY.networth).toBeNull();
   });
 });

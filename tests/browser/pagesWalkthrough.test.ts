@@ -22,7 +22,7 @@
  *   (fixture-fed quote refresh, then the final-quality run) → a net-worth
  *   snapshot with score AND spend attached → a reload that lands back in
  *   the same storage with the cached final run restored (and boot-sweeps
- *   planted .crswap orphans) → the Dashboard's D7 run-cache size → a deep
+ *   planted .crswap orphans) → Profile > Settings' D7 run-cache size → a deep
  *   link that reloads through the 404 trick (status 404, app rendered) →
  *   the D8 fallback asserted by feature-flagging showDirectoryPicker away
  *   in a fresh context — the ONE place the fictional starter household
@@ -425,12 +425,20 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     ).toEqual({ root: false, runs: false });
   }, 600_000);
 
-  it('the Dashboard shows the run cache (D7) and the switch-storage affordance', async () => {
-    await page.getByRole('button', { name: 'Dashboard' }).click();
-    const cardText = await page
-      .locator('.card')
-      .filter({ hasText: 'Data folder' })
-      .innerText();
+  it('Profile > Settings shows the run cache (D7) and the switch-storage affordance', async () => {
+    // The data-folder card moved here when the Dashboard retired (2026-08-30);
+    // decision D7's visibility bargain and the switch-storage door came with it.
+    await page.getByRole('button', { name: 'Profile' }).click();
+    await page
+      .getByRole('tablist', { name: 'Profile sections' })
+      .getByRole('tab', { name: 'Settings' })
+      .click();
+    const card = page.locator('.card').filter({ hasText: 'Data folder' });
+    await card.waitFor({ state: 'visible', timeout: 120_000 });
+    // The card fills in after its meta() round trip; wait for the D7 row
+    // rather than reading the transient Loading… state.
+    await card.getByText(/Run cache:/).waitFor({ state: 'visible', timeout: 120_000 });
+    const cardText = await card.innerText();
     expect(cardText).toContain('(browser-private storage)');
     const runCache = /Run cache: (\d+) runs · ([\d.]+ (?:B|KB|MB))/.exec(cardText);
     expect(runCache).not.toBeNull();

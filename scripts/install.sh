@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Finance Planner as a service that starts at boot, on Linux (systemd
+# Install Retirement Planner as a service that starts at boot, on Linux (systemd
 # user unit) or macOS (launchd agent).
 #
 # Safe to run twice. A second run against an existing install reads back what
@@ -99,7 +99,7 @@ if [ ! -d "$app_dir" ]; then
   git clone "$repo" "$app_dir"
 fi
 app_dir="$(cd -- "$app_dir" && pwd)"
-[ -f "$app_dir/package.json" ] || fplan_die "$app_dir has no package.json — that is not the Finance Planner checkout."
+[ -f "$app_dir/package.json" ] || fplan_die "$app_dir has no package.json — that is not the Retirement Planner checkout."
 
 node_bin="${FPLAN_NODE_BIN:-$(command -v node || true)}"
 [ -n "$node_bin" ] || fplan_die "No node on PATH. Install Node 22 LTS (20.6 is the hard floor) and run this again."
@@ -245,7 +245,7 @@ fi
 
 cat <<EOF
 
-  Finance Planner is at   $(fplan_base_url)/
+  Retirement Planner is at   $(fplan_base_url)/
   Your data lives in      $data_dir
   Logs                    $app_dir/scripts/service.sh logs
   Update                  $app_dir/scripts/update.sh

@@ -1,5 +1,5 @@
 /**
- * Small form primitives shared by the profile/dashboard pages.
+ * Small form primitives shared by the profile page's tabs and cards.
  *
  * Number inputs keep local string state and parse on blur (or Enter) so
  * typing isn't fought; commit handlers receive parsed numbers.
@@ -41,6 +41,24 @@ function blurOnEnter(e: KeyboardEvent<HTMLInputElement>): void {
 
 function Help({ text }: { text: string | undefined }) {
   return text ? <span className="field-help">{text}</span> : null;
+}
+
+/**
+ * A field-shaped validation failure, rendered ON the field (the smplkit
+ * standard): the wrapper gets `fieldHasError` (red border on the control, via
+ * fieldClass below) and this line carries the words. The banner stays
+ * reserved for whole-form failures.
+ */
+function FieldError({ error }: { error: string | null | undefined }) {
+  return error ? (
+    <span className="fieldErrorMessage" role="alert">
+      {error}
+    </span>
+  ) : null;
+}
+
+function fieldClass(error: string | null | undefined): string {
+  return error ? 'field fieldHasError' : 'field';
 }
 
 /**
@@ -96,10 +114,16 @@ export function InfoTip(props: { label: string; text: ReactNode; align?: 'start'
  * Every control below renders its label through this, so the affordance sits in
  * exactly the same place on every field in the app.
  */
-export function FieldLabel(props: { label: string; tip?: ReactNode; tipAlign?: 'start' | 'end' }) {
+export function FieldLabel(props: {
+  label: string;
+  tip?: ReactNode;
+  tipAlign?: 'start' | 'end';
+  /** Renders the standard red asterisk after the label text (fieldRequired). */
+  required?: boolean;
+}) {
   return (
     <span className="field-label">
-      {props.label}
+      {props.required ? <span className="fieldRequired">{props.label}</span> : props.label}
       {props.tip !== undefined && props.tip !== null ? (
         <InfoTip label={props.label} text={props.tip} align={props.tipAlign} />
       ) : null}
@@ -123,6 +147,10 @@ export function NumberField(props: {
   /** What an empty box means (pairs with allowEmpty). */
   placeholder?: string;
   width?: number;
+  /** Red asterisk on the label — for fields the profile schema requires. */
+  required?: boolean;
+  /** Field-shaped validation failure: red border + message under the control. */
+  error?: string | null;
 }) {
   const { label, value, onCommit, pct, int, allowEmpty, help, tip, placeholder, width } = props;
   const display = (v: number | undefined): string =>
@@ -152,8 +180,8 @@ export function NumberField(props: {
   };
 
   return (
-    <label className="field" style={width ? { width } : undefined}>
-      <FieldLabel label={label} tip={tip} />
+    <label className={fieldClass(props.error)} style={width ? { width } : undefined}>
+      <FieldLabel label={label} tip={tip} required={props.required} />
       <input
         inputMode="decimal"
         value={text}
@@ -162,6 +190,7 @@ export function NumberField(props: {
         onBlur={commit}
         onKeyDown={blurOnEnter}
       />
+      <FieldError error={props.error} />
       <Help text={help} />
     </label>
   );
@@ -175,6 +204,10 @@ export function TextField(props: {
   help?: string;
   tip?: ReactNode;
   placeholder?: string;
+  /** Red asterisk on the label — for fields the profile schema requires. */
+  required?: boolean;
+  /** Field-shaped validation failure: red border + message under the control. */
+  error?: string | null;
 }) {
   const [text, setText] = useState(props.value);
   const style =
@@ -184,8 +217,8 @@ export function TextField(props: {
         ? { width: props.width }
         : undefined;
   return (
-    <label className="field" style={style}>
-      <FieldLabel label={props.label} tip={props.tip} />
+    <label className={fieldClass(props.error)} style={style}>
+      <FieldLabel label={props.label} tip={props.tip} required={props.required} />
       <input
         value={text}
         placeholder={props.placeholder}
@@ -195,6 +228,7 @@ export function TextField(props: {
         }}
         onKeyDown={blurOnEnter}
       />
+      <FieldError error={props.error} />
       <Help text={props.help} />
     </label>
   );
@@ -208,10 +242,14 @@ export function SelectField(props: {
   width?: number;
   help?: string;
   tip?: ReactNode;
+  /** Red asterisk on the label — for fields the profile schema requires. */
+  required?: boolean;
+  /** Field-shaped validation failure: red border + message under the control. */
+  error?: string | null;
 }) {
   return (
-    <label className="field" style={props.width ? { width: props.width } : undefined}>
-      <FieldLabel label={props.label} tip={props.tip} />
+    <label className={fieldClass(props.error)} style={props.width ? { width: props.width } : undefined}>
+      <FieldLabel label={props.label} tip={props.tip} required={props.required} />
       <select value={props.value} onChange={(e) => props.onChange(e.target.value)}>
         {props.options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -219,6 +257,7 @@ export function SelectField(props: {
           </option>
         ))}
       </select>
+      <FieldError error={props.error} />
       <Help text={props.help} />
     </label>
   );

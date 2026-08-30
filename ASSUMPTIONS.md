@@ -315,7 +315,7 @@ projections are only as good as these numbers — replace them and the plan reco
     actually delivers after 70½. Worth building next — it is the largest remaining tax lever
     in the giving design.
 
-## Modeling assumptions worth knowing (full list: Methodology page / DECISIONS.md)
+## Modeling assumptions worth knowing (full list: DECISIONS.md)
 
 2026 tax law frozen and CPI-indexed forward (statutory-unindexed items stay fixed:
 SS taxation thresholds, NIIT); ACA enhanced credits assumed **not** extended (toggle per

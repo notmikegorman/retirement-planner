@@ -1,5 +1,5 @@
 /**
- * Unit tests for the pure helpers behind DashboardPage and ProfilePage
+ * Unit tests for the pure helpers behind the Profile page and its cards
  * (src/ui/components/profile/profileLogic.ts). All expected values are
  * hand-computed; the arithmetic is spelled out in comments.
  */
@@ -25,7 +25,6 @@ import {
   makeDefaultMortgage,
   makeNewAccount,
   moveItem,
-  netWorth,
   normalizeAccountForType,
   normalizeOwnerForType,
   normalizeSpendingPolicy,
@@ -155,28 +154,6 @@ function makeProfile(): Profile {
     },
   };
 }
-
-describe('netWorth', () => {
-  it('sums account balances plus home value with no mortgage', () => {
-    // Accounts: 850,000 + 250,000 + 120,000 + 30,000 + 70,000 + 35,000 = 1,355,000
-    // + home 550,000 - mortgage 0 = 1,905,000
-    expect(netWorth(makeProfile())).toBe(1905000);
-  });
-
-  it('subtracts the mortgage balance when present', () => {
-    const p = makeProfile();
-    p.home.mortgage = {
-      originalPrincipal: 300000,
-      balance: 200000,
-      rate: 0.05,
-      termYears: 30,
-      startYear: 2020,
-      startMonth: 1,
-    };
-    // 1,355,000 + 550,000 - 200,000 = 1,705,000
-    expect(netWorth(p)).toBe(1705000);
-  });
-});
 
 describe('ageAt', () => {
   it('is full years attained: born June 1971, as of Aug 2026 -> 55', () => {

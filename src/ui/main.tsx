@@ -11,6 +11,13 @@ import {
   loadFolderHandle,
   profileSetupNeeded,
 } from './local/storageChoice';
+import {
+  PROFILE_TAB_STORAGE_KEY,
+  RESULTS_TAB_STORAGE_KEY,
+  SEARCH_TAB_STORAGE_KEY,
+  appBase,
+  withBase,
+} from './nav';
 import './styles.css';
 
 /**
@@ -93,6 +100,38 @@ async function chooseOtherStorage(): Promise<void> {
 }
 
 /**
+ * A completed setup form is a FRESH START, and a fresh start must not inherit
+ * the previous household's reading position. The remembered-tab keys are
+ * per-browser, not per-folder, and setup completes without a page reload — so
+ * without this, File > New into an empty folder opens the Workbench on
+ * whatever input tab the OLD plan was last touching (the owner hit exactly
+ * that: a brand-new plan opening on Housing instead of Plan). Dropping the
+ * keys lets every strip fall back to its first tab; the URL is reset to the
+ * app root for the same reason, since a leftover /workbench/cashflow — or a
+ * path from a page that no longer exists — is also the old folder's position.
+ * <App/> has not mounted yet on this path, so its one storage snapshot reads
+ * the cleared state.
+ */
+function resetRememberedViews(): void {
+  const keys = [
+    RESULTS_TAB_STORAGE_KEY,
+    SEARCH_TAB_STORAGE_KEY,
+    PROFILE_TAB_STORAGE_KEY,
+    // The Workbench input panel's key — file-local in ScenarioPanel.tsx
+    // (PANEL_TAB_STORAGE_KEY), repeated here rather than exported because
+    // tests/ui/tithingTab.test.ts pins that declaration line verbatim.
+    'fplan-inputs-tab',
+  ];
+  try {
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {
+    // Storage disabled: the stale-tab hazard cannot exist without storage.
+  }
+  const root = withBase('/', appBase()) || '/';
+  if (window.location.pathname !== root) window.history.replaceState(null, '', root);
+}
+
+/**
  * BOOT ORDER, local mode: the storage gate first (where should the data
  * live? — rendered as a page whenever the answer needs a user gesture:
  * first-visit choice, folder re-grant), then the backend (folder → writer
@@ -138,6 +177,9 @@ async function boot(): Promise<void> {
               // The ordinary store path: validated by the same schema as any
               // other profile write, behind the writer guard already held.
               await api.putProfile(profile);
+              // Only after the write: a failed submit re-renders the form and
+              // must not have thrown away the current household's tabs.
+              resetRememberedViews();
               await boot();
             }}
           />,

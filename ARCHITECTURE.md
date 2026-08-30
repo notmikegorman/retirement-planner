@@ -77,7 +77,7 @@ src/server/    File IO + API, node face. fileStore.ts (the node:fs driver of
                snapshotScorer.ts + planHistoryScorer.ts (score AFTER the row or
                the version is written, and attach the result or the reason
                there is none).
-src/ui/        React pages (Workbench, Search, Dashboard, Profile, Methodology),
+src/ui/        React pages (Workbench, Search, Profile, Net Worth),
                io/ (browser-only storage: fsaFileStore.ts — the
                FileSystemDirectoryHandle driver, atomic whole-file writes via
                createWritable→close — and browserWriterGuard.ts, Web Locks +

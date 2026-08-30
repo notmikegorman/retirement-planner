@@ -20,7 +20,7 @@ force=""
 fplan_require_config
 platform="$(fplan_platform)"
 
-fplan_step "Removing the Finance Planner service"
+fplan_step "Removing the Retirement Planner service"
 
 if fplan_is_answering; then
   # Same wait as everywhere else: stopping mid-score costs a row its figure,

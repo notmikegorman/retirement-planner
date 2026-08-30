@@ -1,5 +1,5 @@
 /**
- * Shared contract types for the finance planner.
+ * Shared contract types for the retirement planner.
  *
  * This file is the single source of truth for the shapes passed between
  * ui <-> server <-> engine <-> tax. Modules must not invent parallel types

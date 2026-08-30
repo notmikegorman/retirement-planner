@@ -104,7 +104,7 @@ export function supportsFolderPicker(): boolean {
  * Ask the browser to shield this origin's storage from eviction — the OPFS
  * bytes and the stored folder handle both live under it. Called once, when
  * storage is chosen; the answer is surfaced QUIETLY (a console line and a
- * Dashboard row) because it changes durability at the margin, not the
+ * Profile > Settings row) because it changes durability at the margin, not the
  * design: records in a picked folder are real files eviction cannot touch,
  * and OPFS mode's honest label already says the browser owns its fate.
  */

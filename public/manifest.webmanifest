@@ -1,5 +1,5 @@
 {
-  "name": "Finance Planner",
+  "name": "Retirement Planner",
   "short_name": "Planner",
   "description": "Local-first retirement planner: deterministic, historical, and Monte Carlo projections with real US tax math. Runs entirely in your browser; your data stays in your folder.",
   "start_url": "./",

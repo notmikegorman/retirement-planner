@@ -121,7 +121,7 @@ export function renderSystemdUnit(cfg: ServiceConfig): string {
     .map(([k, v]) => `Environment=${systemdQuote(`${k}=${v}`)}`)
     .join('\n');
   return `[Unit]
-Description=Finance Planner (local-first retirement planner)
+Description=Retirement Planner (local-first)
 Documentation=file://${cfg.appDir}/README.md
 After=network-online.target
 

@@ -1,5 +1,5 @@
 /**
- * Pure helpers behind DashboardPage and ProfilePage.
+ * Pure helpers behind the Profile page and its cards.
  *
  * Kept free of React/DOM so they can be unit-tested under vitest's node
  * environment. All money values are dollars, rates are decimals.
@@ -81,7 +81,7 @@ export function formatBirth(birthYear: number, birthMonth: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Dashboard math
+// Display math
 // ---------------------------------------------------------------------------
 
 /**
@@ -96,13 +96,6 @@ export function ageAt(
   birthMonth: number,
 ): number {
   return nowYear - birthYear - (nowMonth < birthMonth ? 1 : 0);
-}
-
-/** Sum of account balances + home value, minus mortgage balance if any. */
-export function netWorth(profile: Profile): number {
-  const accounts = profile.accounts.reduce((sum, a) => sum + a.balance, 0);
-  const mortgage = profile.home.mortgage?.balance ?? 0;
-  return accounts + profile.home.value - mortgage;
 }
 
 export function personName(profile: Profile, personId: string): string {

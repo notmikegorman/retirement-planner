@@ -1,4 +1,4 @@
-# Developing Finance Planner
+# Developing Retirement Planner
 
 Working on the code while an installed copy keeps running, without the two of
 them destroying each other's data.
@@ -62,7 +62,7 @@ naming its pid, hostname, port and checkout. A second server against the same
 folder refuses to start and tells you what has it:
 
 ```
-Another Finance Planner is already writing /home/alex/finance-planner-data.
+Another Retirement Planner is already writing /home/alex/finance-planner-data.
 
   held by : pid 4321 on planner-box
   serving : http://127.0.0.1:5599/
