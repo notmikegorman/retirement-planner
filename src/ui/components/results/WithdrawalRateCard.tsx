@@ -1,5 +1,5 @@
 /**
- * The classic withdrawal rate, year by year (Summary tab).
+ * The classic withdrawal rate, year by year (the Withdrawals tab since the Summary split, 2026-08-30).
  *
  * The tile above this chart states ONE number — the first fully retired
  * year's rate. The chart exists to show that number's shape over the whole
@@ -95,7 +95,7 @@ export function WithdrawalRateCard({
   const chart = useChartTheme();
   const points = withdrawalRateSeries(referencePath);
   if (points.length === 0) {
-    // The chart never goes blank silently — the tile rule, one card down.
+    // The chart never goes blank silently — the tile rule (the tile lives on the Details tab now).
     return (
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Withdrawal rate, year by year</h2>
@@ -107,7 +107,7 @@ export function WithdrawalRateCard({
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>Withdrawal rate, year by year</h2>
-      {/* Fixed height inside the Summary flow — the card never scrolls. */}
+      {/* Fixed height inside the tab panel — the card never scrolls. */}
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={points} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} />

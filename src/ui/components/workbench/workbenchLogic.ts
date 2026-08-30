@@ -72,7 +72,7 @@ export interface GuardrailRailsView {
 }
 
 /**
- * What the Summary strip can say about the withdrawal rate. The two rateless
+ * What the results strip can say about the withdrawal rate. The two rateless
  * kinds exist so the tile states its own reason instead of going blank: a plan
  * that never fully retires inside the horizon has no such year to price, and a
  * plan already retired in its first simulated year has no prior-year closing
@@ -423,14 +423,15 @@ export function withdrawalTooltipView(p: WithdrawalRatePoint): WithdrawalTooltip
 }
 
 /**
- * What the Summary shows where the chart would be when the series is empty:
- * plain words, the tile-never-goes-blank rule again. Both rateless reasons
- * share the sentence because the tile directly above the chart already states
- * which one applies to this run.
+ * What the Withdrawals tab shows where the chart would be when the series is
+ * empty: plain words, the tile-never-goes-blank rule again. The sentence
+ * carries BOTH rateless reasons itself — the tile that used to disambiguate
+ * them sits on the Details tab since the Summary split (2026-08-30), a tab
+ * away from this chart.
  */
 export const WITHDRAWAL_CHART_EMPTY_NOTE =
   'Nothing to chart — this plan never fully retires inside the horizon, or the portfolio ' +
-  'had no opening balance when it did.';
+  'had no opening balance when it did. (The withdrawal tile on the Details tab shows which.)';
 
 // ---------------------------------------------------------------------------
 // How precisely a run measured a fraction of its paths
@@ -883,8 +884,8 @@ function unresolvedChange(
     tone: 'neutral',
     note:
       `No measurable change: ${moved} is inside what these two runs resolve (${band}). Run now ` +
-      `re-runs at the recorded conditions; the Search page measures effects this small, paired ` +
-      `across seeds.`,
+      `(on the Summary tab) re-runs at the recorded conditions; the Search page measures ` +
+      `effects this small, paired across seeds.`,
     changeTitle:
       `The two runs differ by ${moved}, which is inside the ${band} a difference between runs ` +
       `this size carries — so the app will not call it a move`,
@@ -899,9 +900,9 @@ function unresolvedChange(
 const SUCCESS_TOOLTIP =
   'The fraction of simulated futures in which the money never ran out and the portfolio ' +
   'finished at or above the terminal-value floor in your settings. It is an ESTIMATE from ' +
-  'this run’s paths, not a measurement: the chip above the verdict states how precisely ' +
-  'these paths pinned it down, and re-running the same plan at a different path count moves ' +
-  'it by about that much with nothing about the plan having changed.';
+  'this run’s paths, not a measurement: the precision chip on the Summary tab states how ' +
+  'precisely these paths pinned it down, and re-running the same plan at a different path ' +
+  'count moves it by about that much with nothing about the plan having changed.';
 
 function successDelta(current: RunMetrics, comparison: RunMetrics | null): MetricDelta {
   const base: Pick<MetricDelta, 'key' | 'label' | 'value' | 'tooltip'> = {

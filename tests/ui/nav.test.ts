@@ -106,14 +106,18 @@ describe('the vocabulary', () => {
   it('names the tabs the pages actually offer', () => {
     // Hand-listed rather than derived, so renaming a tab id — which silently
     // breaks every link anyone has saved to it — has to be done on purpose.
+    // Summary split three ways and Widow moved LAST (both the owner's
+    // calls, 2026-08-30) — nav.ts's RESULTS_TAB_IDS comment carries why.
     expect([...RESULTS_TAB_IDS]).toEqual([
       'summary',
-      'widow',
+      'details',
+      'withdrawals',
       'outlook',
       'tithing',
       'taxes',
       'cashflow',
       'explore',
+      'widow',
     ]);
     expect([...SEARCH_TAB_IDS]).toEqual(['space', 'progress', 'report', 'history']);
     expect([...NETWORTH_TAB_IDS]).toEqual(['trend', 'score', 'spend', 'snapshots']);
@@ -252,8 +256,15 @@ describe('parseRoute', () => {
 });
 
 describe('routePath', () => {
-  it('writes /page and /page/sub', () => {
-    expect(routePath({ page: 'workbench', tab: null })).toBe('/workbench');
+  it('writes /page and /page/sub — and the ROOT for a bare Plan', () => {
+    // Plan is HOME and the root is its address (the owner's call,
+    // 2026-08-30): the site root must not redirect anywhere, and the
+    // sidebar's Plan item lands on the root URL. Tabbed views keep their
+    // named paths.
+    expect(routePath({ page: 'workbench', tab: null })).toBe('/');
+    // The legacy path canonicalizes to the root, as one fact: parse the old
+    // address, write the new one.
+    expect(routePath(parseRoute('/workbench'))).toBe('/');
     expect(routePath({ page: 'workbench', tab: 'cashflow' })).toBe('/workbench/cashflow');
     expect(routePath({ page: 'accounts', tab: 'k401' })).toBe('/accounts/k401');
   });
@@ -276,8 +287,8 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 12 pages + 7 results tabs + 4 search tabs + 4 net-worth tabs = 27.
-    expect(paths.length).toBe(27);
+    // 12 pages + 9 results tabs + 4 search tabs + 4 net-worth tabs = 29.
+    expect(paths.length).toBe(29);
   });
 });
 
@@ -479,7 +490,8 @@ describe('a browsing session', () => {
   it('changes the screen every time Back changes the URL, across a page visit', () => {
     // The reproduction, one press at a time. Storage says 'summary' at load.
     const s = new Session('/', { 'fplan-results-tab': 'summary' });
-    expect([s.path, s.tab()]).toEqual(['/workbench', 'summary']);
+    // A bare Plan's canonical path is the ROOT (2026-08-30).
+    expect([s.path, s.tab()]).toEqual(['/', 'summary']);
 
     s.click('cashflow');
     expect([s.path, s.tab(), s.depth]).toEqual(['/workbench/cashflow', 'cashflow', 2]);
@@ -493,7 +505,7 @@ describe('a browsing session', () => {
 
     // The press that used to move the URL and nothing else.
     s.back();
-    expect(s.path).toBe('/workbench');
+    expect(s.path).toBe('/');
     expect(s.tab()).toBe('summary');
   });
 

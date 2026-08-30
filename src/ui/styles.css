@@ -1216,11 +1216,19 @@ dialog.modal::backdrop {
   border-bottom: 1px solid var(--border);
 }
 
+/* The header row: the toggle button plus the section's InfoTip beside it
+   (interactive content may not nest inside a <button>). */
+.wb-section-bar {
+  display: flex;
+  align-items: center;
+}
+
 .wb-section-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px 8px;
   border: none;
   border-radius: 0;
@@ -1247,10 +1255,11 @@ dialog.modal::backdrop {
   border-radius: 4px;
 }
 
+/* An inline SVG since the owner sized up the glyph (2026-08-30): the text
+   triangle drew at a few pixels whatever the font-size said. */
 .wb-section-chevron {
   color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1;
+  flex: none;
   transition: transform 120ms ease;
 }
 

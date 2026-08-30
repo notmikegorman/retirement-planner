@@ -2085,3 +2085,40 @@ keys, giving branch order, and checkbox CSS all got the coverage the
 panel showed they lacked (tests/ui/introModal.test.ts and the fieldSpacing
 inverse-pair pins, which compare the inlineRow restore against the base
 field rules so the copied values cannot drift).
+
+## The root is Plan's address, the folds go exclusive, and Summary splits (2026-08-30, eighth pass)
+
+**The site root stopped redirecting.** routePath writes '/' for a bare
+Plan — the root shows the Plan page under its own address, and the
+sidebar's Plan item lands there. '/workbench' still parses (the tab paths
+keep their /workbench/<tab> form — the tab is the part worth sending) and
+canonicalizes to '/'.
+
+**The results strip split Summary three ways and sent Widow to the end.**
+Summary keeps the verdict card; the run-comparison metrics (delta chips,
+baseline pin, the provenance run key) moved under DETAILS; the
+withdrawal-rate view under WITHDRAWALS. Widow — long defended in nav.ts as
+"directly after the answer it qualifies" — moved last at the owner's call.
+The browser drives' "a new run landed" signal was the provenance line,
+which the split moved out of Summary's sight: the results wrapper now
+stamps data-run-key with the on-screen run, and the drives wait on that —
+pinned, because a dropped stamp would strand them on a timeout.
+
+**The folds went mutually exclusive** — opening one closes whichever was
+open, so the column never grows past one section's content: the accordion
+behaves like the tab era did, with all eight labels showing. The storage
+keeps its set shape (a multi-id set stored by the few hours of independent
+toggling collapses to its first-in-strip-order member). The co-mount
+guards from the sixth pass stay with their comments made honest: the
+hazards they close are unreachable today, the guards cost nothing, and
+this panel has flipped fold semantics once already.
+
+**The double titles died and the chevron grew up.** Each card's inner h2
+merely repeated the fold's label; the titles are gone (PlanCard also lost
+its "Will this work?" caption — the verdict opposite is that question's
+answer), and their InfoTips moved onto the fold headers, which became a
+BAR (toggle button + tip beside it, since interactive content may not
+nest inside a button). The text-glyph chevron that rendered at a few
+pixels became a 14px stroke SVG that rotates on aria-expanded. Settings'
+three cards keep their sub-titles: they name different things than the
+fold does.

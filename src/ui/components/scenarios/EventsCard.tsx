@@ -119,7 +119,7 @@ export function EventsCard({ events, people, accounts, onChange, ssData = null }
   return (
     <div className="card">
       <div className="row">
-        <h2 style={{ margin: 0 }}>Additional events</h2>
+        {/* No heading: the section header names this card. */}
         <span className="spacer" />
         {mode.kind === 'idle' && <button onClick={() => setMode({ kind: 'pick' })}>Add event</button>}
       </div>

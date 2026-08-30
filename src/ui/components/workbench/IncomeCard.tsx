@@ -33,7 +33,8 @@ import {
   workingIncomeLines,
 } from './workbenchLogic';
 
-const CARD_TIP =
+/** The section-header tip (ScenarioPanel renders it beside the fold). */
+export const INCOME_CARD_TIP =
   'What comes IN, on the same two-column shape as spending: what you earn now on the left, what ' +
   'you expect to bring in once you have stopped on the right. Only the right-hand side is a plan ' +
   'setting — blank means “whatever the profile says”, and a number here leaves profile.json alone.';
@@ -79,10 +80,8 @@ export function IncomeCard({ profileIncome, people, overrides, onChange }: Incom
 
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>
-        Income
-        <InfoTip label="income" text={CARD_TIP} />
-      </h2>
+      {/* No heading: the section header names this card (ScenarioPanel
+          carries its tip). */}
       <div className="pair-grid">
         <div className="pair-head">While working</div>
         <div className="pair-head">

@@ -61,6 +61,12 @@ import {
   type PlanDecisions,
 } from './scenarioHelpers';
 
+/** The section-header tip (ScenarioPanel renders it beside the fold). */
+export const PLAN_CARD_TIP =
+  'These two decisions drive the answer, so they are always here and always filled in. ' +
+  'Anything else you want to model — moving, selling the house, a big one-off cost — goes ' +
+  'in the Events section below.';
+
 /** Ages offered for "when we stop working". */
 /**
  * Retirement ages offered for a person: from the age they reach in the first
@@ -120,22 +126,9 @@ export function PlanCard({
 
   return (
     <div className="card">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>
-          The plan
-          <InfoTip
-            label="the plan"
-            text={
-              'These two decisions drive the answer, so they are always here and always filled ' +
-              'in. Anything else you want to model — moving, selling the house, a big one-off ' +
-              'cost — goes in Additional events below.'
-            }
-          />
-        </h2>
-        <span className="spacer" />
-        <span className="muted">Will this work?</span>
-      </div>
-
+      {/* No heading and no "Will this work?" caption: the section header
+          names this card (ScenarioPanel carries its tip), and the verdict
+          opposite is the question's answer. */}
       <StopWorkingSection
         plan={plan}
         people={people}
@@ -162,12 +155,14 @@ export function PlanCard({
         <BondsAreSelect
           /*
             Keyed by the STORED fraction: the Settings section's corporate-
-            share field edits the same dial, and sections can be open at once
-            (2026-08-30) — without this, the Custom box's mount-seeded typing
-            buffer survives an outside write, shows the old figure, and a
-            blur would commit it right back over the newer one. An outside
-            (or own) commit remounts the select fresh; typing in the box
-            writes nothing, so no remount can interrupt it.
+            share field edits the same dial. Mutually exclusive sections
+            keep the two doors from mounting together today, but the guard
+            stays (the panel has flipped fold semantics once already) —
+            without it, the Custom box's mount-seeded typing buffer survives
+            an outside write, shows the old figure, and a blur would commit
+            it right back over the newer one. An outside (or own) commit
+            remounts the select fresh; typing in the box writes nothing, so
+            no remount can interrupt it.
           */
           key={String(corporateFractionOf(overrides) ?? 'unset')}
           overrides={overrides}

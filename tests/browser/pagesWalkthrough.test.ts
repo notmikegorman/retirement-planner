@@ -235,7 +235,10 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     const resultsText = await page.locator('.wb-results').innerText();
     expect(resultsText).toContain('Add your accounts on the Accounts page');
     expect(resultsText).not.toContain('%');
-    expect(await page.locator('.wb-metric-value').count()).toBe(0);
+    // Tab-independent since the Summary split moved the metric tiles to
+    // Details: the gated column renders no results body AT ALL, and the
+    // data-run-key stamp exists exactly when one is drawn from a run.
+    expect(await page.locator('[data-run-key]').count()).toBe(0);
 
     // The sidebar's folder control names the storage this session actually
     // booted on — the OPFS seam boots browser-private, and the control must

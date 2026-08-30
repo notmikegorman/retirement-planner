@@ -271,10 +271,13 @@ describe('the two tab strips sit on one line, structurally', () => {
     // Nothing between the column and its only child.
     expect(column.slice(panelOpen, scenario)).not.toMatch(/<[A-Za-z]/);
 
-    // Each fold is a section opening with its always-visible header button
-    // (InputSection owns the first `return (` in the file).
-    expect(openingTags(panel, 'return (').slice(0, 2)).toEqual([
+    // Each fold is a section opening with its header BAR — the toggle
+    // button plus the section's InfoTip beside it (interactive content may
+    // not nest inside a <button>); InputSection owns the first `return (`
+    // in the file.
+    expect(openingTags(panel, 'return (').slice(0, 3)).toEqual([
       '<section .wb-section',
+      '<div .wb-section-bar',
       '<button .wb-section-head',
     ]);
   });
@@ -377,9 +380,11 @@ describe('the panel and the results column read at one size', () => {
   });
 
   it('guards every card that copies draft state against the other open sections', () => {
-    // Sections toggle independently (2026-08-30), so cards that hold copies
-    // of draft state can no longer assume they are the only mounted writer.
-    // Three guards, each pinned:
+    // The panel's folds toggled independently for a few hours (2026-08-30)
+    // before going mutually exclusive; cards that copy draft state keep
+    // their multi-writer guards anyway — the panel has flipped fold
+    // semantics once already, and each guard is inert while sections cannot
+    // co-mount. Three guards, each pinned:
     // 1. OverridesCard reseeds when the SHARED corporate-share dial changes
     //    (the Plan card edits the same value)…
     expect(panel).toContain(
@@ -399,6 +404,48 @@ describe('the panel and the results column read at one size', () => {
     // moves under it (the Settings-side field edits the same value).
     const planCard = read('../../src/ui/components/scenarios/PlanCard.tsx');
     expect(planCard).toContain("key={String(corporateFractionOf(overrides) ?? 'unset')}");
+  });
+
+  it('keeps the folds mutually exclusive, and stamps the on-screen run for the lanes', () => {
+    // Opening a section closes whichever was open (the owner's revision,
+    // 2026-08-30, after a few hours of independent toggling) — the toggle,
+    // the render binding, and the single-member store call together.
+    expect(panel).toContain('const next = openId === id ? null : id;');
+    expect(panel).toContain('open={openId === id}');
+    expect(panel).toContain('storeOpenSections(new Set(next === null ? [] : [next]))');
+    // The browser drives wait on data-run-key as their "a new run landed on
+    // screen" signal — the provenance line they used to read moved onto the
+    // Details tab with the Summary split. Dropping the stamp would strand
+    // them on a timeout, not a clear failure, so it is pinned here.
+    expect(results).toContain('data-run-key={result.meta.runKey}');
+  });
+
+  it('binds each split-off tab to its panel, and each fold to its rehomed tip', () => {
+    // A tab button over a permanently empty panel is the failure a label
+    // list alone cannot catch: the branches are pinned by id.
+    expect(results).toContain("{tab === 'summary' && (");
+    expect(results).toContain("{tab === 'details' && (");
+    expect(results).toContain("{tab === 'withdrawals' && (");
+    expect(results).toContain('<WithdrawalRateCard');
+    // The cards' inner titles died with the Summary-echo rule; their
+    // InfoTips live on the fold headers now. Six hints, by id, wired
+    // through the section helper — and the strip's InfoTip import chain
+    // (the *_CARD_TIP exports) named so a rename cannot silently strand a
+    // fold without its help.
+    expect(panel).toContain('hint={SECTION_HINTS[id]}');
+    for (const id of ['plan', 'spending', 'tithing', 'income', 'housing', 'history']) {
+      expect(panel).toContain(`${id}: <InfoTip`);
+    }
+    for (const tip of [
+      'PLAN_CARD_TIP',
+      'SPENDING_CARD_TIP',
+      'TITHING_CARD_TIP',
+      'INCOME_CARD_TIP',
+      'HOUSING_CARD_TIP',
+      'HISTORY_CARD_TIP',
+    ]) {
+      expect(panel).toContain(tip);
+    }
   });
 
   it('dresses the results strip as the shared modalTabBar, tab-era overrides gone', () => {

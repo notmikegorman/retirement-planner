@@ -475,7 +475,11 @@ interface DriveUiState {
 async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState> {
   const verdict = page.locator('.verdict').first();
   const qualityChip = page.locator('.wb-chip').first();
-  const provenance = page.locator('div.muted').filter({ hasText: '· run' }).first();
+  // The on-screen run, read off the wrapper's data-run-key stamp: the
+  // provenance line this used to read moved onto the Details tab with the
+  // Summary split (2026-08-30), out of sight of a drive sitting on Summary.
+  const runStamp = page.locator('[data-run-key]').first();
+  const runKeyOnScreen = () => runStamp.getAttribute('data-run-key').then((v) => v ?? '');
 
   // --- Boot: the quick run lands; nothing is falsely "restored" cold --------
   await page.goto(entryUrl);
@@ -486,7 +490,7 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   );
 
   // --- The plan edit: the daily guard's one chance to fire ------------------
-  const runBefore = await provenance.innerText();
+  const runBefore = await runKeyOnScreen();
   // The inputs panel is expand/collapse sections now (2026-08-30): the
   // header BUTTON opens Spending (Plan alone opens by default in a fresh
   // context, so this is an open, never an accidental close).
@@ -497,11 +501,11 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   const livingBox = page.locator('#wb-input-panel-spending .pair-cell input').first();
   await livingBox.fill(String(DRIVE_LIVING_OVERRIDE));
   await livingBox.press('Enter');
-  // The debounced save+run fire together; the provenance line changing is the
+  // The debounced save+run fire together; the run-key stamp changing is the
   // quick run for the EDITED plan landing on screen.
   await until(
-    () => provenance.innerText(),
-    (t) => t !== runBefore,
+    () => runKeyOnScreen(),
+    (t) => t !== '' && t !== runBefore,
     'the edited plan’s quick run',
   );
 
@@ -660,12 +664,12 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   // Restore: an ordinary guarded save of the version's plan. The workbench
   // re-runs against it — and lands on the FINAL run the version scoring just
   // cached, which is the cached-final contract working a second way.
-  const runBeforeRestore = await provenance.innerText();
+  const runBeforeRestore = await runKeyOnScreen();
   await page.getByRole('button', { name: 'Restore', exact: true }).click();
   await page.getByRole('button', { name: 'Restore it' }).click();
   await until(
-    () => provenance.innerText(),
-    (t) => t !== runBeforeRestore,
+    () => runKeyOnScreen(),
+    (t) => t !== '' && t !== runBeforeRestore,
     'the restored plan’s run',
   );
   const verdictAfterRestore = (await verdict.innerText()).trim();

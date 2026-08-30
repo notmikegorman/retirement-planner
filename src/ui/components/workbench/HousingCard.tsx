@@ -74,7 +74,8 @@ type MortgageFinancing = Extract<HousingFinancing, { type: 'mortgage' }>;
 // Help text (verbose help lives behind the "?" — see fields.tsx)
 // ---------------------------------------------------------------------------
 
-const CARD_TIP =
+/** The section-header tip (ScenarioPanel renders it beside the fold). */
+export const HOUSING_CARD_TIP =
   'The move is plan-level configuration, not an event: the profile holds the house you HAVE, ' +
   'the plan holds what you will DO with it. The engine turns what you enter here back into the ' +
   'sale, the rental and the purchase it has always simulated — the §121 exclusion, selling ' +
@@ -619,10 +620,7 @@ export function HousingCard(props: HousingCardProps) {
   return (
     <div className="card">
       <div className="row">
-        <h2 style={{ margin: 0 }}>
-          Housing
-          <InfoTip label="the housing plan" text={CARD_TIP} />
-        </h2>
+        {/* No heading: the section header names this card. */}
         <span className="spacer" />
         <button
           onClick={() => {
@@ -1357,11 +1355,7 @@ function HousingOff({
   const floatingPrice = stale.some((e) => e.type === 'buy_house' && e.price === 'sale_proceeds');
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>
-        Housing
-        <InfoTip label="the housing plan" text={CARD_TIP} />
-      </h2>
-
+      {/* No heading: the section header names this card. */}
       <div className="muted">
         The move is not modelled here yet. Turning it on replaces the sell / rent / buy events with
         one form: you say when you sell, how long you rent and what you buy, and the sale price,

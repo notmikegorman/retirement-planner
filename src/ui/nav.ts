@@ -103,24 +103,25 @@ const ENTITY_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  */
 
 /**
- * The Workbench's right-hand strip.
+ * The Plan page's right-hand strip.
  *
- * Widow sits SECOND, directly after the answer it qualifies. The household
- * score and the survivor's score are one thought — "this works, and here is
- * what it is worth to my spouse if I am not here" — and burying the second half at
- * the end of the strip, behind four views about tax and cashflow, would make
- * the question something you have to go looking for. It is also the one tab
- * that does not run itself (see WidowCard), which is exactly why it must be
- * easy to reach: it only ever shows a number you asked for.
+ * Summary split three ways (the owner's call, 2026-08-30): the verdict card
+ * keeps the Summary name, the run-comparison metrics moved under DETAILS,
+ * and the withdrawal-rate view under WITHDRAWALS — three panels stacked on
+ * one tab meant everything below the verdict was a scroll away. Widow moved
+ * LAST the same day (it used to sit second, argued as "directly after the
+ * answer it qualifies"; the owner ranked reading order above that).
  */
 export const RESULTS_TAB_IDS = [
   'summary',
-  'widow',
+  'details',
+  'withdrawals',
   'outlook',
   'tithing',
   'taxes',
   'cashflow',
   'explore',
+  'widow',
 ] as const;
 
 export const SEARCH_TAB_IDS = ['space', 'progress', 'report', 'history'] as const;
@@ -308,6 +309,15 @@ export function parseRoute(path: string): Route {
 
 /** The canonical path for a route — the only string ever written to history. */
 export function routePath(route: Route): string {
+  /*
+   * PLAN IS HOME, AND THE ROOT IS ITS ADDRESS (the owner's call, 2026-08-30):
+   * a bare Plan writes '/', never '/workbench' — so the site root does not
+   * "redirect" anywhere, and the sidebar's Plan item lands on the root URL.
+   * The legacy '/workbench' still PARSES (it is in PAGES), and the canonical
+   * rewrite then cleans it up to '/'. A tabbed view keeps its named path
+   * (/workbench/cashflow): the tab is the part of the address worth sending.
+   */
+  if (route.page === 'workbench' && route.tab === null) return '/';
   return route.tab === null ? `/${route.page}` : `/${route.page}/${route.tab}`;
 }
 

@@ -31,12 +31,16 @@
  * fixed that but hid seven groups behind one visible label. These sections
  * keep what each era got right — exactly ONE opens by default (Plan), so the
  * column starts short, and all eight headers stay visible as a flat stack, so
- * nothing collapsed is ever out of sight. Sections toggle independently: two
- * open at once is allowed and useful (edit Spending while History is in
- * view). The grouping is unchanged from the tab era — overrides, run
- * settings and raw JSON still share the one Settings section, and History
- * stays last because every section above it edits the plan while History
- * looks at what it used to be.
+ * nothing collapsed is ever out of sight. Sections are MUTUALLY EXCLUSIVE
+ * (the owner's revision, same day, after a few hours of independent
+ * toggling): opening one closes whichever was open, so the column never
+ * grows past one section's content — the accordion behaves like the tabs
+ * did, with all the labels showing. The grouping is unchanged from the tab
+ * era — overrides, run settings and raw JSON still share the one Settings
+ * section, and History stays last because every section above it edits the
+ * plan while History looks at what it used to be. The cards' own inner
+ * titles are gone (the fold names the card); their InfoTips moved onto the
+ * fold headers (SECTION_HINTS).
  *
  * The OPEN SET persists in localStorage (the tab era's single-selection key
  * seeds it on first load), so a reload comes back to the sections you were
@@ -65,7 +69,7 @@ import type {
 import { stableStringify } from '../../../shared/util';
 import { EventsCard } from '../scenarios/EventsCard';
 import { OverridesCard } from '../scenarios/OverridesCard';
-import { PlanCard } from '../scenarios/PlanCard';
+import { PLAN_CARD_TIP, PlanCard } from '../scenarios/PlanCard';
 import {
   autoSeppPatch,
   corporateFractionOf,
@@ -74,11 +78,11 @@ import {
   type MarketDefaults,
 } from '../scenarios/scenarioHelpers';
 import { InfoTip } from '../profile/fields';
-import { HousingCard } from './HousingCard';
-import { IncomeCard } from './IncomeCard';
-import { PlanHistoryCard } from './PlanHistoryCard';
-import { SpendingCard } from './SpendingCard';
-import { TithingCard } from './TithingCard';
+import { HOUSING_CARD_TIP, HousingCard } from './HousingCard';
+import { IncomeCard, INCOME_CARD_TIP } from './IncomeCard';
+import { HISTORY_CARD_TIP, PlanHistoryCard } from './PlanHistoryCard';
+import { SPENDING_CARD_TIP, SpendingCard } from './SpendingCard';
+import { TITHING_CARD_TIP, TithingCard } from './TithingCard';
 import {
   PANEL_TABS,
   readStoredOpenSections,
@@ -123,32 +127,55 @@ export interface ScenarioPanelProps {
  * section's cards mounted only while open — closing a section unmounts its
  * content exactly as leaving a tab used to, so the cards' remount-on-revision
  * keys and mount-time field seeding behave as they always have.
+ *
+ * The header is a BAR, not just the button: the section's InfoTip (the tip
+ * that used to sit on the card's now-removed inner title) is itself a
+ * focusable role=button, and interactive content may not nest inside a
+ * <button> — so the tip sits beside the toggle, inside the same visual row.
  */
 function InputSection(props: {
   id: PanelTabId;
   label: string;
+  /** The section's InfoTip — the card's old title tip, rehomed. */
+  hint?: ReactNode;
   open: boolean;
   onToggle: (id: PanelTabId) => void;
   children: ReactNode;
 }) {
   return (
     <section className="wb-section">
-      <button
-        type="button"
-        className="wb-section-head"
-        id={`wb-input-head-${props.id}`}
-        aria-expanded={props.open}
-        // Only while the body EXISTS: closed sections unmount their content
-        // (deliberate — see above), and aria-controls naming an absent id is
-        // an axe violation and a broken relationship for a screen reader.
-        aria-controls={props.open ? `wb-input-panel-${props.id}` : undefined}
-        onClick={() => props.onToggle(props.id)}
-      >
-        <span className="wb-section-chevron" aria-hidden="true">
-          ▸
-        </span>
-        {props.label}
-      </button>
+      <div className="wb-section-bar">
+        <button
+          type="button"
+          className="wb-section-head"
+          id={`wb-input-head-${props.id}`}
+          aria-expanded={props.open}
+          // Only while the body EXISTS: closed sections unmount their content
+          // (deliberate — see above), and aria-controls naming an absent id is
+          // an axe violation and a broken relationship for a screen reader.
+          aria-controls={props.open ? `wb-input-panel-${props.id}` : undefined}
+          onClick={() => props.onToggle(props.id)}
+        >
+          <svg
+            className="wb-section-chevron"
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+          >
+            <path
+              d="M5.5 3.5 L10.5 8 L5.5 12.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {props.label}
+        </button>
+        {props.hint}
+      </div>
       {props.open ? (
         <div
           className="wb-section-body"
@@ -163,17 +190,42 @@ function InputSection(props: {
   );
 }
 
+/**
+ * The section-header tips: each card's old inner-title InfoTip, rehomed on
+ * the fold that names it (the owner removed the duplicate titles,
+ * 2026-08-30). Events explains itself in its own first line, and Settings'
+ * three cards keep their sub-titles — neither needs a header tip.
+ */
+const SECTION_HINTS: Partial<Record<PanelTabId, ReactNode>> = {
+  plan: <InfoTip label="the plan" text={PLAN_CARD_TIP} />,
+  spending: <InfoTip label="spending" text={SPENDING_CARD_TIP} />,
+  tithing: <InfoTip label="tithing" text={TITHING_CARD_TIP} />,
+  income: <InfoTip label="income" text={INCOME_CARD_TIP} />,
+  housing: <InfoTip label="the housing plan" text={HOUSING_CARD_TIP} />,
+  history: <InfoTip label="the plan’s history" text={HISTORY_CARD_TIP} />,
+};
+
 export function ScenarioPanel(props: ScenarioPanelProps) {
   const { draft, saveState, onRetrySave, profile, ssData, marketDefaults, revision, onChange } =
     props;
 
-  const [open, setOpen] = useState<ReadonlySet<PanelTabId>>(readStoredOpenSections);
+  /*
+   * MUTUALLY EXCLUSIVE folds (the owner's call, 2026-08-30, revising the
+   * independent toggling this panel launched with): at most ONE section is
+   * open — clicking a closed one opens it and closes whichever was open;
+   * clicking the open one closes it. Storage keeps the set shape
+   * (readStoredOpenSections' contract, with its tab-era seed); a multi-id
+   * set stored by the independent era collapses to its first-in-strip-order
+   * member here.
+   */
+  const [openId, setOpenId] = useState<PanelTabId | null>(() => {
+    const stored = readStoredOpenSections();
+    return PANEL_TABS.find((t) => stored.has(t.id))?.id ?? null;
+  });
   const toggle = (id: PanelTabId) => {
-    const next = new Set(open);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setOpen(next);
-    storeOpenSections(next);
+    const next = openId === id ? null : id;
+    setOpenId(next);
+    storeOpenSections(new Set(next === null ? [] : [next]));
   };
 
   const cardKey = String(revision);
@@ -183,7 +235,8 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
     <InputSection
       id={id}
       label={PANEL_TABS.find((t) => t.id === id)!.label}
-      open={open.has(id)}
+      hint={SECTION_HINTS[id]}
+      open={openId === id}
       onToggle={toggle}
     >
       {children}
@@ -299,12 +352,14 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
               Keyed by the EVENTS VALUE. The card's open editor saves by the
               index it captured at Edit-click; the Plan card (writePlan
               filters and reorders the whole array) and the Housing card
-              (clears superseded events) can rewrite events while it sits
-              open — a save would then land on the wrong row. Value-keyed
-              remount closes the editor on any outside write, which is
-              exactly what leaving the Events tab used to do; its own saves
-              remount too (the editor closes on save anyway), and form
-              typing writes nothing, so no remount interrupts it.
+              (clears superseded events) could rewrite events while it sat
+              open — a save would then land on the wrong row. Mutually
+              exclusive sections make that co-mount impossible today, but
+              the guard stays (the panel has flipped fold semantics once
+              already): a value-keyed remount closes the editor on any
+              outside write, its own saves remount too (the editor closes on
+              save anyway), and form typing writes nothing, so no remount
+              interrupts it.
             */
             key={`events:${cardKey}:${stableStringify(draft.events)}`}
             events={draft.events}
@@ -326,17 +381,16 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
             <OverridesCard
               /*
                 Keyed by the SHARED corporate-share dial, the one field this
-                card and the Plan card both edit: with sections independently
-                open (2026-08-30), a Plan-card write must reseed this card's
-                typing buffer, or its stale text would blur-commit right back
-                over the newer value. The rest of the multi-writer hazard —
-                the expenses/income passthroughs other cards write while this
-                one sits mounted — is handled INSIDE the card: commit re-emits
-                those branches from the live draft, not the mount-time copy
-                (see OverridesCard.commit). Deliberately NOT keyed by the
-                whole overrides value: that remounted the card on its own
-                every committing blur, which threw keyboard focus away
-                mid-tab-through.
+                card and the Plan card both edit. Sections are mutually
+                exclusive now, so the two cards no longer co-mount — but the
+                guard stays: it costs nothing, the panel has flipped between
+                independent and exclusive folds once already (both on
+                2026-08-30), and the stale-buffer clobber it closes is real
+                whenever they DO mount together. Same for the commit-time
+                passthrough re-read inside OverridesCard.commit. Deliberately
+                NOT keyed by the whole overrides value: that remounted the
+                card on its own every committing blur, which threw keyboard
+                focus away mid-tab-through.
               */
               key={`over:${cardKey}:${String(corporateFractionOf(draft.assumption_overrides) ?? 'unset')}`}
               overrides={draft.assumption_overrides}

@@ -55,7 +55,7 @@ describe('the ScenarioPanel Tithing tab', () => {
     // than inventing its own, which is what makes a stored 'tithing'
     // restorable through the same code the tests run.
     expect(scenarioPanel).toContain('readStoredOpenSections');
-    expect(scenarioPanel).toContain('storeOpenSections(next)');
+    expect(scenarioPanel).toContain('storeOpenSections(new Set(next === null ? [] : [next]))');
     expect(workbenchLogic).toContain("export const PANEL_OPEN_STORAGE_KEY = 'fplan-inputs-open'");
     expect(workbenchLogic).toContain("export const PANEL_TAB_LEGACY_KEY = 'fplan-inputs-tab'");
     // And deliberately NOT in the URL: no route segment for the input sections.

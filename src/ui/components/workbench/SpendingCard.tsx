@@ -62,7 +62,8 @@ import {
 // Help text — all of it behind a "?" (see fields.tsx InfoTip)
 // ---------------------------------------------------------------------------
 
-const CARD_TIP =
+/** The section-header tip (ScenarioPanel renders it beside the fold). */
+export const SPENDING_CARD_TIP =
   'Monthly, in today’s dollars. Blank means “whatever the profile says” — the placeholder shows ' +
   'that value. A number here overrides it in THIS PLAN only, leaving profile.json alone, so a ' +
   'what-if is undone by clearing the box.';
@@ -187,10 +188,8 @@ export function SpendingCard({
   const policies = profileExpenses.lifeInsurancePolicies ?? [];
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>
-        Spending
-        <InfoTip label="spending" text={CARD_TIP} />
-      </h2>
+      {/* No heading: the section header names this card (ScenarioPanel
+          carries its tip). */}
       <div className="pair-grid">
         <div className="pair-head">While working</div>
         <div className="pair-head">

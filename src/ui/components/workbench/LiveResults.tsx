@@ -116,17 +116,19 @@ export interface LiveResultsProps {
  * for exactly the iterative work they exist for.
  *
  * WorkbenchPage resolves it (it is the component holding the route) and passes
- * it down; the order and the ids are RESULTS_TAB_IDS in nav.ts, which explains
- * why Widow sits second. These are the labels.
+ * it down; the order and the ids are RESULTS_TAB_IDS in nav.ts, which carries
+ * the Summary three-way split and Widow-last decisions. These are the labels.
  */
 const TAB_LABELS: Record<ResultsTabId, string> = {
   summary: 'Summary',
-  widow: 'Widow',
+  details: 'Details',
+  withdrawals: 'Withdrawals',
   outlook: 'Outlook',
   tithing: 'Tithing',
   taxes: 'Taxes',
   cashflow: 'Cashflow',
   explore: 'Explore',
+  widow: 'Widow',
 };
 
 export function LiveResults(props: LiveResultsProps) {
@@ -210,7 +212,14 @@ export function LiveResults(props: LiveResultsProps) {
               : 'Change anything on the left and the results appear here.'}
           </div>
         ) : (
-          <div className={running ? 'wb-stale' : undefined}>
+          /*
+            data-run-key: which run these panels are drawn from, stamped on
+            the wrapper WHATEVER TAB IS OPEN. The browser lanes wait on it as
+            their "a new run landed on screen" signal — they used to read the
+            provenance line, which the Summary split (2026-08-30) moved onto
+            the Details tab, out of sight of a drive sitting on Summary.
+          */
+          <div className={running ? 'wb-stale' : undefined} data-run-key={result.meta.runKey}>
             <ResultsBody {...props} result={result} />
           </div>
         )}
@@ -266,10 +275,10 @@ function ResultsBody({
      */
     <>
       {/*
-        Summary is the answer to the question the workbench asks — does this
-        plan work, and what did the last edit do to it — and it is the tab the
-        app opens on. It is also the only tab that says what run produced the
-        numbers, so the provenance line has one home rather than five.
+        Summary is the answer to the question the Plan page asks — does this
+        plan work — and it is the tab the app opens on. What the last edit
+        did to it, and the run that produced it, live one tab over on
+        Details (the owner split the old three-panel Summary, 2026-08-30).
       */}
       {tab === 'summary' && (
         <>
@@ -358,7 +367,17 @@ function ResultsBody({
               </div>
             )}
           </div>
+        </>
+      )}
 
+      {/*
+        What the last edit did to the number: the delta chips against the
+        previous or pinned run, the baseline controls, and the provenance
+        line — the run key you would quote to reproduce it. Split off the
+        old Summary (the owner's call, 2026-08-30).
+      */}
+      {tab === 'details' && (
+        <>
           <div className="card">
             <div className="wb-metrics">
               {deltas.map((d) => (
@@ -409,17 +428,18 @@ function ResultsBody({
               {result.meta.seed} · run {result.meta.runKey.slice(0, 8)}
             </div>
           </div>
-
-          {/*
-            The shape behind the withdrawal tile: the same arithmetic
-            (withdrawalRateSeries feeds both), every fully retired year.
-            Below the tiles because the tile states the number and the chart
-            shows what it does over time. The Social Security marker reads
-            the PLAN's claim events — the claiming decision as currently
-            edited is the decision the marker exists to anchor.
-          */}
-          <WithdrawalRateCard referencePath={result.referencePath} events={plan.events} />
         </>
+      )}
+
+      {/*
+        The withdrawal-rate view, on its own tab since the Summary split: the
+        tile states the number and the chart shows what it does over time,
+        every fully retired year (withdrawalRateSeries feeds both). The
+        Social Security marker reads the PLAN's claim events — the claiming
+        decision as currently edited is the decision the marker anchors.
+      */}
+      {tab === 'withdrawals' && (
+        <WithdrawalRateCard referencePath={result.referencePath} events={plan.events} />
       )}
 
       {/*

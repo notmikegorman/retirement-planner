@@ -76,6 +76,15 @@ import {
   type HistoryRow,
 } from './planHistoryLogic';
 
+/** The section-header tip (ScenarioPanel renders it beside the fold). */
+export const HISTORY_CARD_TIP =
+  'Every version of the plan there has been. The first time you change the plan on any day, ' +
+  'the version that day began with is filed here — you never ask for a restore point and ' +
+  'cannot forget to. Click a row for its full record: when it was filed, the conditions ' +
+  'behind its numbers, and what restoring it would change. Restoring copies a stored version ' +
+  'back onto the plan; the entry itself is never consumed or changed, and neither is a score ' +
+  'once one is recorded on it.';
+
 /**
  * How often the tab asks which versions still have a simulation running.
  *
@@ -307,21 +316,8 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
 
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>
-        History
-        <InfoTip
-          label="the plan’s history"
-          text={
-            'Every version of the plan there has been. The first time you change the plan on ' +
-            'any day, the version that day began with is filed here — you never ask for a ' +
-            'restore point and cannot forget to. Click a row for its full record: when it was ' +
-            'filed, the conditions behind its numbers, and what restoring it would change. ' +
-            'Restoring copies a stored version back onto the plan; the entry itself is never ' +
-            'consumed or changed, and neither is a score once one is recorded on it.'
-          }
-        />
-      </h2>
-
+      {/* No heading: the section header names this card (ScenarioPanel
+          carries its tip). */}
       {loadError !== null && (
         <div className="error-banner">
           {loadError}{' '}

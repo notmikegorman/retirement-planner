@@ -72,7 +72,8 @@ import {
 // Help text — all of it behind a "?" (see fields.tsx InfoTip)
 // ---------------------------------------------------------------------------
 
-const CARD_TIP =
+/** The section-header tip (ScenarioPanel renders it beside the fold). */
+export const TITHING_CARD_TIP =
   'Two independent decisions: what to do with the pot of gains that were never tithed, and how ' +
   'to tithe going forward. Each section overrides the profile’s answer for THIS PLAN only — ' +
   'reset hands it back, so a what-if is undone in one click.';
@@ -410,10 +411,8 @@ export function TithingCard({ profileExpenses, overrides, onChange }: TithingCar
 
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>
-        Tithing
-        <InfoTip label="tithing" text={CARD_TIP} />
-      </h2>
+      {/* No heading: the section header names this card (ScenarioPanel
+          carries its tip). */}
 
       {/* ---------------- section 1: the pot ---------------- */}
       <div className="pair-head" style={{ marginBottom: 6 }}>
