@@ -568,20 +568,50 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
     .getByRole('tablist', { name: 'Plan inputs' })
     .getByRole('tab', { name: 'History' })
     .click();
+  // Capture which entries already carry a spend figure BEFORE scoring, so the
+  // wait below can demand a NEW one — through the seam, not the screen. The
+  // ledger redesign groups and reorders rows, so "the first .hist-score" is
+  // no longer guaranteed to be the row being scored: a predicate satisfied by
+  // some OTHER row's existing chips let a slow CI runner snapshot the folder
+  // mid-attach (the Phase-4 lesson, resurrected by reordering).
+  const preScored: string[] = await page.evaluate(async () => {
+    const api = (
+      window as unknown as {
+        __fplanApi: {
+          planHistory(): Promise<{ id: string; score?: { sustainableSpend?: number } }[]>;
+        };
+      }
+    ).__fplanApi;
+    const entries = await api.planHistory();
+    return entries.filter((e) => e.score?.sustainableSpend !== undefined).map((e) => e.id);
+  });
   await page.getByRole('button', { name: 'Score it' }).click();
+  await until(
+    () =>
+      page.evaluate(async (pre: string[]) => {
+        const api = (
+          window as unknown as {
+            __fplanApi: {
+              planHistory(): Promise<{ id: string; score?: { sustainableSpend?: number } }[]>;
+            };
+          }
+        ).__fplanApi;
+        const entries = await api.planHistory();
+        const fresh = entries.filter(
+          (e) => e.score?.sustainableSpend !== undefined && !pre.includes(e.id),
+        );
+        return fresh.length > 0 ? 'done' : '';
+      }, preScored),
+    (t) => t === 'done',
+    'the scored version’s success AND spend figures to attach (via the seam)',
+    300_000,
+  );
   const scoreLine = page.locator('.hist-score').first();
   const historyChips = (
     await until(
       () => scoreLine.innerText().catch(() => ''),
-      // Terminal state only: the success chip alone is an INTERMEDIATE render
-      // (the spend solve is still running behind it), and accepting it let a
-      // slow CI runner move on before the figure landed — permanently, since
-      // nothing re-scores a scored version. The spend chip is the proof the
-      // whole attach finished. (The ledger redesign compressed the row to
-      // "$X/yr spend"; the full sentence moved into the row detail, read
-      // next.)
       (t) => /\/yr spend/.test(t),
-      'the history version’s score AND spend chips to attach',
+      'the ledger face row to show its spend chip',
       300_000,
     )
   ).trim();
