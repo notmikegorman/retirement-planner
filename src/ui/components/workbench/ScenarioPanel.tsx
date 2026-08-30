@@ -1,5 +1,5 @@
 /**
- * The Workbench's left panel: every knob, on eight tabs.
+ * The Plan page's left panel: every knob, in eight expand/collapse sections.
  *
  * THERE IS ONE LIVE PLAN AND IT SAVES ITSELF. No scenario picker, no dirty
  * flag, no Save / Revert: every committed change re-runs the simulation AND
@@ -24,32 +24,37 @@
  * gone. A version is a version, and the only question a row answers about the
  * plan on screen is whether it IS this one.
  *
- * TABS, NOT FOLDS. Every section used to be a `<details>`, four of them open by
- * default, which made the panel a single column several screens tall: reaching
- * the assumptions meant scrolling past every spending field, and a fold you
- * collapsed to shorten the column was a fold you then forgot was there. Tabs
- * give each group the whole panel and cost exactly one click to switch. The
- * three folds nobody opened per session — assumption overrides, run settings
- * and raw JSON — collapse into ONE "Settings" tab, stacked, because they are
- * all "how the run behaves" rather than "what the plan is".
+ * SECTIONS AGAIN, EYES OPEN (the owner's call, 2026-08-30, under the module
+ * shell). The panel's history runs folds → tabs → folds: the original
+ * `<details>` era failed because FOUR sections opened by default (a column
+ * several screens tall) and a collapsed fold vanished from mind; the tab era
+ * fixed that but hid seven groups behind one visible label. These sections
+ * keep what each era got right — exactly ONE opens by default (Plan), so the
+ * column starts short, and all eight headers stay visible as a flat stack, so
+ * nothing collapsed is ever out of sight. Sections toggle independently: two
+ * open at once is allowed and useful (edit Spending while History is in
+ * view). The grouping is unchanged from the tab era — overrides, run
+ * settings and raw JSON still share the one Settings section, and History
+ * stays last because every section above it edits the plan while History
+ * looks at what it used to be.
  *
- * The selection persists in localStorage, like the results column's tabs and
- * the Profile page's, so a reload comes back to the tab you were working in.
+ * The OPEN SET persists in localStorage (the tab era's single-selection key
+ * seeds it on first load), so a reload comes back to the sections you were
+ * working in.
  *
- * THE SAVE FAILURE SITS OUTSIDE THE TABS, directly under the strip. It is the
- * only thing that would ever tell the user their edits have stopped reaching the
- * disk, and a warning that could be one tab away from the field that just
- * changed would be no warning at all. UNDER the strip rather than over it
- * because the tab row is the line the eye reads across to the results tabs
- * opposite (see the alignment note on the strip below): a banner above it would
- * push the left half of that line down on exactly the day something broke.
+ * THE SAVE FAILURE SITS ABOVE THE SECTIONS, first in the column. It is the
+ * only thing that would ever tell the user their edits have stopped reaching
+ * the disk, and a warning that could be a closed fold away from the field
+ * that just changed would be no warning at all. (The tab era pinned it UNDER
+ * the strip to keep the two tab bars reading as one line across the screen;
+ * with the strip gone there is no line to protect.)
  *
  * The cards themselves are unchanged — PlanCard / SpendingCard / IncomeCard /
  * EventsCard / OverridesCard already take props and call onChange, so this is a
  * container, not a re-implementation. HousingCard is the one new one, and it
  * edits `scenario.housing` rather than events (see HousingCard.tsx).
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type {
   Profile,
   RunMode,
@@ -57,11 +62,13 @@ import type {
   Scenario,
   SocialSecurityData,
 } from '../../../shared/types';
+import { stableStringify } from '../../../shared/util';
 import { EventsCard } from '../scenarios/EventsCard';
 import { OverridesCard } from '../scenarios/OverridesCard';
 import { PlanCard } from '../scenarios/PlanCard';
 import {
   autoSeppPatch,
+  corporateFractionOf,
   parseScenarioText,
   scenarioToText,
   type MarketDefaults,
@@ -72,7 +79,15 @@ import { IncomeCard } from './IncomeCard';
 import { PlanHistoryCard } from './PlanHistoryCard';
 import { SpendingCard } from './SpendingCard';
 import { TithingCard } from './TithingCard';
-import { saveFailureText, type RunSettings, type SaveState } from './workbenchLogic';
+import {
+  PANEL_TABS,
+  readStoredOpenSections,
+  saveFailureText,
+  storeOpenSections,
+  type PanelTabId,
+  type RunSettings,
+  type SaveState,
+} from './workbenchLogic';
 
 export interface ScenarioPanelProps {
   /** The one plan, live: edits are applied here and saved from here. */
@@ -103,97 +118,92 @@ export interface ScenarioPanelProps {
   result: RunResult | null;
 }
 
-/*
- * This one tab is deliberately NOT in the URL, unlike the results strip
- * opposite it and the Profile's tabs: /workbench/cashflow names the answer you
- * are reading, which is worth sending someone, while "which knob am I holding"
- * belongs to the machine you are typing on. nav.ts's precedence rule covers it
- * exactly as written — the URL never names it, so storage always decides.
+/**
+ * One fold: an always-visible header carrying the disclosure state, and the
+ * section's cards mounted only while open — closing a section unmounts its
+ * content exactly as leaving a tab used to, so the cards' remount-on-revision
+ * keys and mount-time field seeding behave as they always have.
  */
-const PANEL_TAB_STORAGE_KEY = 'fplan-inputs-tab';
-
-const PANEL_TABS = [
-  { id: 'plan', label: 'Plan' },
-  { id: 'spending', label: 'Spending' },
-  // Directly after Spending, whose giving row points here: the un-tithed pot
-  // and the ongoing method are two decisions that outgrew a dropdown cell.
-  { id: 'tithing', label: 'Tithing' },
-  { id: 'income', label: 'Income' },
-  { id: 'housing', label: 'Housing' },
-  { id: 'events', label: 'Events' },
-  { id: 'settings', label: 'Settings' },
-  // Last, and after Settings on purpose: every tab before it edits the plan,
-  // and this one is the only one that looks at what the plan USED to be. A
-  // history tab sitting between two groups of knobs reads as another knob.
-  { id: 'history', label: 'History' },
-] as const;
-
-type PanelTabId = (typeof PANEL_TABS)[number]['id'];
-
-function isPanelTabId(v: string | null): v is PanelTabId {
-  return v !== null && PANEL_TABS.some((t) => t.id === v);
-}
-
-function readStoredPanelTab(): PanelTabId {
-  if (typeof localStorage === 'undefined') return 'plan';
-  const stored = localStorage.getItem(PANEL_TAB_STORAGE_KEY);
-  return isPanelTabId(stored) ? stored : 'plan';
+function InputSection(props: {
+  id: PanelTabId;
+  label: string;
+  open: boolean;
+  onToggle: (id: PanelTabId) => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="wb-section">
+      <button
+        type="button"
+        className="wb-section-head"
+        id={`wb-input-head-${props.id}`}
+        aria-expanded={props.open}
+        // Only while the body EXISTS: closed sections unmount their content
+        // (deliberate — see above), and aria-controls naming an absent id is
+        // an axe violation and a broken relationship for a screen reader.
+        aria-controls={props.open ? `wb-input-panel-${props.id}` : undefined}
+        onClick={() => props.onToggle(props.id)}
+      >
+        <span className="wb-section-chevron" aria-hidden="true">
+          ▸
+        </span>
+        {props.label}
+      </button>
+      {props.open ? (
+        <div
+          className="wb-section-body"
+          role="region"
+          id={`wb-input-panel-${props.id}`}
+          aria-labelledby={`wb-input-head-${props.id}`}
+        >
+          {props.children}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 export function ScenarioPanel(props: ScenarioPanelProps) {
   const { draft, saveState, onRetrySave, profile, ssData, marketDefaults, revision, onChange } =
     props;
 
-  const [tab, setTab] = useState<PanelTabId>(readStoredPanelTab);
-  const selectTab = (id: PanelTabId) => {
-    setTab(id);
-    if (typeof localStorage !== 'undefined') localStorage.setItem(PANEL_TAB_STORAGE_KEY, id);
+  const [open, setOpen] = useState<ReadonlySet<PanelTabId>>(readStoredOpenSections);
+  const toggle = (id: PanelTabId) => {
+    const next = new Set(open);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setOpen(next);
+    storeOpenSections(next);
   };
 
   const cardKey = String(revision);
+  // Label derived from PANEL_TABS so a rename there cannot leave a call
+  // site here reading differently from the stored-order list.
+  const section = (id: PanelTabId, children: ReactNode) => (
+    <InputSection
+      id={id}
+      label={PANEL_TABS.find((t) => t.id === id)!.label}
+      open={open.has(id)}
+      onToggle={toggle}
+    >
+      {children}
+    </InputSection>
+  );
 
   return (
     <div>
-      {/*
-        FIRST IN THE COLUMN, ALWAYS. The results column opposite also opens with
-        its tab strip, and `.wb-layout` is a grid with `align-items: start`, so
-        two strips that are each their column's first child sit on one line
-        across the screen with no offset to keep in step. That is the whole
-        alignment mechanism, and it only holds while nothing is allowed to
-        render above either strip — which is why the save-failure banner below
-        sits under this one, and why the run's progress bar opposite does too.
-      */}
-      <div className="tabs" role="tablist" aria-label="Plan inputs">
-        {PANEL_TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            id={`wb-input-tab-${t.id}`}
-            aria-selected={tab === t.id}
-            aria-controls={`wb-input-panel-${t.id}`}
-            className={tab === t.id ? 'tab is-active' : 'tab'}
-            onClick={() => selectTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       {/* ---------------- did a write fail? ---------------- */}
       <SaveFailure state={saveState} onRetry={onRetrySave} />
 
-      <div
-        role="tabpanel"
-        id={`wb-input-panel-${tab}`}
-        aria-labelledby={`wb-input-tab-${tab}`}
-      >
+      <div aria-label="Plan inputs" role="group">
         {/*
           The 72(t) toggle is a plan-level field, not an event, so it commits
           through the same onChange patch path as the overrides — which is what
           makes the live loop re-run and the autosave fire for it (runInputKey
           and planSaveKey both hash the whole plan).
         */}
-        {tab === 'plan' && (
+        {section(
+          'plan',
           <PlanCard
             key={`plan:${cardKey}`}
             events={draft.events}
@@ -202,17 +212,20 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
             autoSepp={draft.autoSepp}
             ssData={ssData}
             // The "Bonds are" select edits the same override object the
-            // Settings tab's OverridesCard does; both read the draft fresh,
-            // and only one tab renders at a time, so there is exactly one
-            // writer and no copy to fall out of sync.
+            // Settings section's OverridesCard does. Sections toggle
+            // independently, so BOTH can be mounted at once now — they stay
+            // in sync because each is a controlled select reading
+            // draft.assumption_overrides fresh on every render; the draft is
+            // still the one canonical copy.
             overrides={draft.assumption_overrides}
             onChange={(events) => onChange({ events })}
             onAutoSeppChange={(on) => onChange(autoSeppPatch(on))}
             onOverridesChange={(assumption_overrides) => onChange({ assumption_overrides })}
-          />
+          />,
         )}
 
-        {tab === 'spending' && (
+        {section(
+          'spending',
           <SpendingCard
             key={`spend:${cardKey}`}
             profileExpenses={profile.expenses}
@@ -224,7 +237,7 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
             personNames={Object.fromEntries(profile.people.map((p) => [p.id, p.name]))}
             overrides={draft.assumption_overrides}
             onChange={(assumption_overrides) => onChange({ assumption_overrides })}
-          />
+          />,
         )}
 
         {/*
@@ -232,27 +245,29 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           each writing its own override through the same onChange path as
           every other card.
         */}
-        {tab === 'tithing' && (
+        {section(
+          'tithing',
           <TithingCard
             key={`tithing:${cardKey}`}
             profileExpenses={profile.expenses}
             overrides={draft.assumption_overrides}
             onChange={(assumption_overrides) => onChange({ assumption_overrides })}
-          />
+          />,
         )}
 
         {/*
           Same two-column shape as Spending and the same onChange path, so the
           retirement-income knob re-runs and autosaves like every other input.
         */}
-        {tab === 'income' && (
+        {section(
+          'income',
           <IncomeCard
             key={`income:${cardKey}`}
             profileIncome={profile.income}
             people={profile.people}
             overrides={draft.assumption_overrides}
             onChange={(assumption_overrides) => onChange({ assumption_overrides })}
-          />
+          />,
         )}
 
         {/*
@@ -261,7 +276,8 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           events, so this card patches `housing` and, when the user asks it to,
           the event list as well (to clear the events its plan supersedes).
         */}
-        {tab === 'housing' && (
+        {section(
+          'housing',
           <HousingCard
             key={`housing:${cardKey}`}
             housing={draft.housing}
@@ -273,18 +289,30 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
             result={props.result}
             onChange={(housing) => onChange({ housing })}
             onChangeEvents={(events) => onChange({ events })}
-          />
+          />,
         )}
 
-        {tab === 'events' && (
+        {section(
+          'events',
           <EventsCard
-            key={`events:${cardKey}`}
+            /*
+              Keyed by the EVENTS VALUE. The card's open editor saves by the
+              index it captured at Edit-click; the Plan card (writePlan
+              filters and reorders the whole array) and the Housing card
+              (clears superseded events) can rewrite events while it sits
+              open — a save would then land on the wrong row. Value-keyed
+              remount closes the editor on any outside write, which is
+              exactly what leaving the Events tab used to do; its own saves
+              remount too (the editor closes on save anyway), and form
+              typing writes nothing, so no remount interrupts it.
+            */
+            key={`events:${cardKey}:${stableStringify(draft.events)}`}
             events={draft.events}
             people={profile.people}
             accounts={profile.accounts}
             ssData={ssData}
             onChange={(events) => onChange({ events })}
-          />
+          />,
         )}
 
         {/*
@@ -292,10 +320,25 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           than what the plan is — the assumptions it runs against, the mechanics
           of the run itself, and the file underneath it all.
         */}
-        {tab === 'settings' && (
+        {section(
+          'settings',
           <>
             <OverridesCard
-              key={`over:${cardKey}`}
+              /*
+                Keyed by the SHARED corporate-share dial, the one field this
+                card and the Plan card both edit: with sections independently
+                open (2026-08-30), a Plan-card write must reseed this card's
+                typing buffer, or its stale text would blur-commit right back
+                over the newer value. The rest of the multi-writer hazard —
+                the expenses/income passthroughs other cards write while this
+                one sits mounted — is handled INSIDE the card: commit re-emits
+                those branches from the live draft, not the mount-time copy
+                (see OverridesCard.commit). Deliberately NOT keyed by the
+                whole overrides value: that remounted the card on its own
+                every committing blur, which threw keyboard focus away
+                mid-tab-through.
+              */
+              key={`over:${cardKey}:${String(corporateFractionOf(draft.assumption_overrides) ?? 'unset')}`}
               overrides={draft.assumption_overrides}
               marketDefaults={marketDefaults}
               onChange={(assumption_overrides) => onChange({ assumption_overrides })}
@@ -307,7 +350,7 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
               in would throw away the text you just applied from.
             */}
             <RawJsonCard draft={draft} onReplace={props.onReplace} />
-          </>
+          </>,
         )}
 
         {/*
@@ -317,12 +360,9 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           throw away the sentence saying what the restore just did, at the
           exact moment it is being read.
         */}
-        {tab === 'history' && (
-          <PlanHistoryCard
-            plan={draft}
-            profile={profile}
-            onRestored={props.onPlanRestored}
-          />
+        {section(
+          'history',
+          <PlanHistoryCard plan={draft} profile={profile} onRestored={props.onPlanRestored} />,
         )}
       </div>
     </div>

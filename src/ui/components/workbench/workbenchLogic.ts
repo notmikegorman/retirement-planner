@@ -3091,3 +3091,83 @@ export function refreshFailureNote(
     `${failed.length === 1 ? 'it' : 'those'}.`
   );
 }
+
+// ---------------------------------------------------------------------------
+// The input panel's expand/collapse sections (rendered by ScenarioPanel; the
+// storage behaviors live here so the node suite can EXECUTE them — see
+// tests/ui/inputSections.test.ts — instead of string-pinning the source)
+// ---------------------------------------------------------------------------
+
+/*
+ * The open set is deliberately NOT in the URL, unlike the results strip
+ * opposite it and the ledger's tabs: /workbench/cashflow names the answer you
+ * are reading, which is worth sending someone, while "which knobs am I
+ * holding" belongs to the machine you are typing on. nav.ts's precedence rule
+ * covers it exactly as written — the URL never names it, so storage always
+ * decides.
+ *
+ * The tab era's single-selection key ('fplan-inputs-tab') seeds the set when
+ * this key is absent, so the section someone was last working in opens on
+ * their first load after the change; main.tsx clears both keys on File > New.
+ */
+export const PANEL_OPEN_STORAGE_KEY = 'fplan-inputs-open';
+export const PANEL_TAB_LEGACY_KEY = 'fplan-inputs-tab';
+
+export const PANEL_TABS = [
+  { id: 'plan', label: 'Plan' },
+  { id: 'spending', label: 'Spending' },
+  // Directly after Spending, whose giving row points here: the un-tithed pot
+  // and the ongoing method are two decisions that outgrew a dropdown cell.
+  { id: 'tithing', label: 'Tithing' },
+  { id: 'income', label: 'Income' },
+  { id: 'housing', label: 'Housing' },
+  { id: 'events', label: 'Events' },
+  { id: 'settings', label: 'Settings' },
+  // Last, and after Settings on purpose: every section before it edits the
+  // plan, and this one is the only one that looks at what the plan USED to
+  // be. A history fold sitting between two groups of knobs reads as another
+  // knob.
+  { id: 'history', label: 'History' },
+] as const;
+
+export type PanelTabId = (typeof PANEL_TABS)[number]['id'];
+
+export function isPanelTabId(v: string | null): v is PanelTabId {
+  return v !== null && PANEL_TABS.some((t) => t.id === v);
+}
+
+/** The stored open set — or, before one exists, the tab era's selection. */
+export function readStoredOpenSections(): ReadonlySet<PanelTabId> {
+  if (typeof localStorage === 'undefined') return new Set(['plan']);
+  const stored = localStorage.getItem(PANEL_OPEN_STORAGE_KEY);
+  if (stored !== null) {
+    try {
+      const parsed: unknown = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((v) => isPanelTabId(typeof v === 'string' ? v : null));
+        // An empty stored array is a real state — every section closed on
+        // purpose stays closed. A NON-empty array whose every id is stale
+        // (a rename, version skew) is not that intent; fall through to the
+        // default rather than reading corruption as all-closed.
+        if (valid.length > 0 || parsed.length === 0) return new Set(valid);
+      }
+    } catch {
+      // Malformed JSON: fall through to the default below.
+    }
+  }
+  const legacy = localStorage.getItem(PANEL_TAB_LEGACY_KEY);
+  return new Set([isPanelTabId(legacy) ? legacy : 'plan']);
+}
+
+
+/**
+ * Persist the open set — in strip order, not click order, so the stored
+ * value is a stable function of the state.
+ */
+export function storeOpenSections(open: ReadonlySet<PanelTabId>): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(
+    PANEL_OPEN_STORAGE_KEY,
+    JSON.stringify(PANEL_TABS.filter((t) => open.has(t.id)).map((t) => t.id)),
+  );
+}

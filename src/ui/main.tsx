@@ -117,9 +117,13 @@ function resetRememberedViews(): void {
     RESULTS_TAB_STORAGE_KEY,
     SEARCH_TAB_STORAGE_KEY,
     NETWORTH_TAB_STORAGE_KEY,
-    // The Workbench input panel's key — file-local in ScenarioPanel.tsx
-    // (PANEL_TAB_STORAGE_KEY), repeated here rather than exported because
-    // tests/ui/tithingTab.test.ts pins that declaration line verbatim.
+    // The Plan input panel's keys — file-local in ScenarioPanel.tsx
+    // (PANEL_OPEN_STORAGE_KEY and its tab-era seed PANEL_TAB_LEGACY_KEY),
+    // repeated here rather than exported because tests/ui/tithingTab.test.ts
+    // pins those declaration lines verbatim. Both must go: a surviving
+    // legacy key would re-seed the open set with the old household's
+    // reading position.
+    'fplan-inputs-open',
     'fplan-inputs-tab',
   ];
   try {

@@ -16,12 +16,15 @@ const read = (rel: string): string =>
   readFileSync(new URL(rel, import.meta.url), 'utf8');
 
 const scenarioPanel = read('../../src/ui/components/workbench/ScenarioPanel.tsx');
+const workbenchLogic = read('../../src/ui/components/workbench/workbenchLogic.ts');
 const spendingCard = read('../../src/ui/components/workbench/SpendingCard.tsx');
 const tithingCard = read('../../src/ui/components/workbench/TithingCard.tsx');
 
 describe('the ScenarioPanel Tithing tab', () => {
   it('is in the strip, right after Spending, and renders the TithingCard', () => {
-    const tabIds = [...scenarioPanel.matchAll(/\{ id: '([a-z]+)', label: '[^']+' \}/g)].map(
+    // PANEL_TABS lives in workbenchLogic since the storage behaviors became
+    // executable (tests/ui/inputSections.test.ts).
+    const tabIds = [...workbenchLogic.matchAll(/\{ id: '([a-z]+)', label: '[^']+' \}/g)].map(
       (m) => m[1],
     );
     expect(tabIds).toEqual([
@@ -32,30 +35,31 @@ describe('the ScenarioPanel Tithing tab', () => {
       'housing',
       'events',
       'settings',
-      // Last, after Settings: History is the one tab that does not edit the
-      // plan. It replaced the deleted 'saved' tab, and its position is pinned
-      // here for the same reason Tithing's is — a tab quietly dropped or
-      // reordered is exactly the regression this list exists to catch.
+      // Last, after Settings: History is the one section that does not edit
+      // the plan. It replaced the deleted 'saved' tab, and its position is
+      // pinned here for the same reason Tithing's is — a section quietly
+      // dropped or reordered is exactly the regression this list exists to
+      // catch.
       'history',
     ]);
-    expect(scenarioPanel).toContain("tab === 'tithing' && (");
+    expect(scenarioPanel).toContain("section(\n          'tithing',");
     expect(scenarioPanel).toContain('<TithingCard');
   });
 
-  it('restores from localStorage like every other input tab — and only from there', () => {
-    // The left tabs are localStorage-only BY OWNER DECISION (DECISIONS.md):
-    // the URL never names them, so storage always decides. The Tithing tab
-    // must ride the existing key and validator, not invent its own — that is
-    // what makes a stored 'tithing' restorable and any stale value fall back
-    // to 'plan' instead of crashing the strip.
-    expect(scenarioPanel).toContain("const PANEL_TAB_STORAGE_KEY = 'fplan-inputs-tab'");
-    expect(scenarioPanel).toContain('localStorage.getItem(PANEL_TAB_STORAGE_KEY)');
-    expect(scenarioPanel).toContain('localStorage.setItem(PANEL_TAB_STORAGE_KEY, id)');
-    // The validator is derived from PANEL_TABS itself, so 'tithing' is legal
-    // by construction and this file cannot drift from the strip.
-    expect(scenarioPanel).toContain('PANEL_TABS.some((t) => t.id === v)');
-    // And deliberately NOT in the URL: no route segment for the input tabs.
-    expect(scenarioPanel).toContain('deliberately NOT in the URL');
+  it('restores its open set from localStorage — and only from there', () => {
+    // The input sections are localStorage-only BY OWNER DECISION
+    // (DECISIONS.md): the URL never names them, so storage always decides.
+    // The storage behaviors themselves are EXECUTED in
+    // tests/ui/inputSections.test.ts; what this scan pins is the wiring —
+    // the panel rides workbenchLogic's shared reader/writer pair rather
+    // than inventing its own, which is what makes a stored 'tithing'
+    // restorable through the same code the tests run.
+    expect(scenarioPanel).toContain('readStoredOpenSections');
+    expect(scenarioPanel).toContain('storeOpenSections(next)');
+    expect(workbenchLogic).toContain("export const PANEL_OPEN_STORAGE_KEY = 'fplan-inputs-open'");
+    expect(workbenchLogic).toContain("export const PANEL_TAB_LEGACY_KEY = 'fplan-inputs-tab'");
+    // And deliberately NOT in the URL: no route segment for the input sections.
+    expect(workbenchLogic).toContain('deliberately NOT in the URL');
   });
 });
 

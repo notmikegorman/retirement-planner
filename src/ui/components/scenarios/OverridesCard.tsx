@@ -40,10 +40,37 @@ export function OverridesCard({ overrides, marketDefaults, onChange }: Overrides
   const defaults = marketDefaults ?? { stocks: 0, bonds: 0, bills: 0, inflation: 0 };
   const errors = overrideFieldErrors(f);
 
-  /** Update local state AND push the rebuilt overrides to the draft. */
+  /**
+   * Update local state AND push the rebuilt overrides to the draft.
+   *
+   * THE PASSTHROUGH BRANCHES RE-EMIT THE DRAFT AS IT IS NOW, not the
+   * mount-time copy sitting in `f`. buildOverrides rebuilds the WHOLE
+   * overrides object, and while the input panel was tabs that was safe —
+   * exactly one card mounted at a time, so `f`'s passthrough could not go
+   * stale. Sections toggle independently now (2026-08-30): Spending,
+   * Tithing, Income and the Plan card can all write overrides while this
+   * card sits mounted, and re-emitting the mount-time expenses/income
+   * blocks would silently revert their edits on this card's next blur.
+   * The fields this card genuinely edits stay on `f` — they are typing
+   * buffers, and nothing else writes them (the shared corporate-share dial
+   * is the exception, handled by this card's key in ScenarioPanel).
+   */
   const commit = (next: OverrideFields) => {
     setF(next);
-    onChange(buildOverrides(next, defaults));
+    const fresh = overrideFieldsFrom(overrides);
+    onChange(
+      buildOverrides(
+        {
+          ...next,
+          expenses: fresh.expenses,
+          income: fresh.income,
+          spendingGuardrails: fresh.spendingGuardrails,
+          terminalFloorReal: fresh.terminalFloorReal,
+          marketPassthrough: fresh.marketPassthrough,
+        },
+        defaults,
+      ),
+    );
   };
 
   const marketField = (

@@ -205,8 +205,9 @@ describe('the panel says nothing about saving until a save fails', () => {
   it('has dropped the "Inputs" heading over the tabs', () => {
     const render = stripComments(page) + stripComments(panel);
     expect(render).not.toContain('<strong>Inputs</strong>');
-    // aria-label="Plan inputs" on the tablist is a different thing and stays:
-    // it names the strip for a screen reader, it does not occupy a row.
+    // aria-label="Plan inputs" is a different thing and stays — on the
+    // sections' group container now (a tablist in the tab era): it names the
+    // panel for a screen reader, it does not occupy a row.
     expect(panel).toContain('aria-label="Plan inputs"');
   });
 
@@ -256,9 +257,10 @@ describe('the two tab strips sit on one line, structurally', () => {
     expect(layout).toMatch(/align-items:\s*start/);
   });
 
-  it('makes the panel strip the first thing in the left column', () => {
+  it('opens the left column with the sections — a header button per fold', () => {
     // WorkbenchPage renders .wb-panel > ScenarioPanel and nothing else, and
-    // ScenarioPanel opens with its strip.
+    // ScenarioPanel stacks its expand/collapse sections (the tab strip's
+    // successor, 2026-08-30).
     const column = stripComments(page);
     const panelOpen = column.indexOf('className="wb-panel"');
     const scenario = column.indexOf('<ScenarioPanel');
@@ -269,32 +271,42 @@ describe('the two tab strips sit on one line, structurally', () => {
     // Nothing between the column and its only child.
     expect(column.slice(panelOpen, scenario)).not.toMatch(/<[A-Za-z]/);
 
-    expect(openingTags(panel, 'return (').slice(0, 2)).toEqual(['<div', '<div .tabs']);
+    // Each fold is a section opening with its always-visible header button
+    // (InputSection owns the first `return (` in the file).
+    expect(openingTags(panel, 'return (').slice(0, 2)).toEqual([
+      '<section .wb-section',
+      '<button .wb-section-head',
+    ]);
   });
 
   it('makes the results strip the first thing in the right column', () => {
     // The strip is drawn by LiveResults itself rather than by ResultsBody,
     // because ResultsBody only renders once a run has landed — and a column
-    // whose strip appeared with the first result would start life misaligned.
+    // whose strip appeared with the first result would start life shifted.
     expect(openingTags(results, 'export function LiveResults').slice(0, 2)).toEqual([
       '<div',
-      '<div .tabs',
+      '<nav .modalTabBar',
     ]);
     expect(stripComments(results)).not.toMatch(
-      /function ResultsBody[\s\S]*?className="tabs"/,
+      /function ResultsBody[\s\S]*?className="modalTabBar"/,
     );
   });
 
-  it('puts every transient banner UNDER its strip, on both sides', () => {
-    // Each of these used to sit, or would naturally sit, above the strip. Any
-    // one of them above it pushes half the bar down exactly when something is
-    // happening — which is the moment the bar is most read.
+  it('keeps the transient banners where they cannot hide', () => {
+    // LEFT: the save failure sits ABOVE the sections — the only thing that
+    // would ever say edits have stopped reaching the disk, and a warning
+    // that could sit below a closed fold would be no warning at all. (The
+    // tab era pinned it UNDER the strip to keep the two tab bars reading as
+    // one line; with the strip gone there is no line to protect.)
     const left = stripComments(panel);
-    expect(left.indexOf('className="tabs"')).toBeLessThan(left.indexOf('<SaveFailure'));
+    expect(left.indexOf('<SaveFailure')).toBeGreaterThan(-1);
+    expect(left.indexOf('<SaveFailure')).toBeLessThan(left.indexOf('aria-label="Plan inputs"'));
 
+    // RIGHT: progress and error render under the strip — the bar used to sit
+    // above it and pushed the whole column down on every debounce.
     const right = stripComments(results);
-    expect(right.indexOf('className="tabs"')).toBeLessThan(right.indexOf('wb-progress'));
-    expect(right.indexOf('className="tabs"')).toBeLessThan(right.indexOf('error-banner'));
+    expect(right.indexOf('className="modalTabBar"')).toBeLessThan(right.indexOf('wb-progress'));
+    expect(right.indexOf('className="modalTabBar"')).toBeLessThan(right.indexOf('error-banner'));
   });
 
   it('reserves the progress bar row so the results do not hop on every debounce', () => {
@@ -334,10 +346,9 @@ describe('the two tab strips sit on one line, structurally', () => {
         .map((m) => `${m[1]}${m[2] ?? ''}: ${m[3].trim()}`);
 
     expect(leading('.wb-panel')).toEqual(leading('.wb-results'));
-
-    // Same again for the strips themselves: a gap opened here would be just as
-    // invisible to the structural scans.
-    expect(leading('.wb-panel .tabs')).toEqual(leading('.wb-results .tabs'));
+    // (The per-strip comparison retired with the input strip, 2026-08-30:
+    // `.wb-panel .tabs` no longer exists to compare, and the results strip's
+    // .modalTabBar leading is the app-wide standard, owned by its own rule.)
   });
 
   it('keeps the panel a sticky scroller that cannot scroll the page sideways', () => {
@@ -365,22 +376,40 @@ describe('the panel and the results column read at one size', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('gives both tab strips the same type AND the same height', () => {
-    // Same type: one .tab font-size, no override. Same height: the panel rule
-    // must not restate vertical padding — a shorthand `padding:` here is how
-    // the two strips end up 2px apart and the one bar becomes two.
-    expect(fontSizeOf(ruleBody('.tab'))).toBe('14px');
-    const scoped = ruleBody('.wb-panel .tab');
-    expect(fontSizeOf(scoped)).toBeNull();
-    expect(scoped).not.toMatch(/padding:/);
-    expect(scoped).not.toMatch(/padding-(top|bottom):/);
-    // What it IS allowed to tighten: the horizontal room eight tabs need in a
-    // third-width column. Measured on the user's 1440px window, the strip gets
-    // 455px and the labels want 494px at 14px with the old 6px/2px — so both
-    // gave, to 4px and 0, which brings them to ~446px and one line.
-    expect(scoped).toMatch(/padding-left:\s*4px/);
-    expect(scoped).toMatch(/padding-right:\s*4px/);
-    expect(ruleBody('.wb-panel .tabs')).toMatch(/gap:\s*0/);
+  it('guards every card that copies draft state against the other open sections', () => {
+    // Sections toggle independently (2026-08-30), so cards that hold copies
+    // of draft state can no longer assume they are the only mounted writer.
+    // Three guards, each pinned:
+    // 1. OverridesCard reseeds when the SHARED corporate-share dial changes
+    //    (the Plan card edits the same value)…
+    expect(panel).toContain(
+      "key={`over:${cardKey}:${String(corporateFractionOf(draft.assumption_overrides) ?? 'unset')}`}",
+    );
+    // …2. and its commit re-emits the passthrough branches from the LIVE
+    // draft, not the mount-time copy (the card-side half of the guard).
+    const overridesCard = read('../../src/ui/components/scenarios/OverridesCard.tsx');
+    expect(overridesCard).toContain('const fresh = overrideFieldsFrom(overrides);');
+    expect(overridesCard).toContain('expenses: fresh.expenses,');
+    expect(overridesCard).toContain('income: fresh.income,');
+    // 3. EventsCard remounts on any outside rewrite of the events array —
+    // its open editor saves by a captured index, and Plan/Housing writes
+    // reorder or filter that array.
+    expect(panel).toContain('key={`events:${cardKey}:${stableStringify(draft.events)}`}');
+    // 4. The Plan card's custom-bonds buffer reseeds when the stored dial
+    // moves under it (the Settings-side field edits the same value).
+    const planCard = read('../../src/ui/components/scenarios/PlanCard.tsx');
+    expect(planCard).toContain("key={String(corporateFractionOf(overrides) ?? 'unset')}");
+  });
+
+  it('dresses the results strip as the shared modalTabBar, tab-era overrides gone', () => {
+    // The owner asked the two tab styles to stop diverging (2026-08-30): the
+    // results strip wears the same underline dress as Net worth, Settings and
+    // the rest — and the tab-era width overrides for the input strip died
+    // with the input strip.
+    expect(stripComments(results)).toContain('className="modalTabBar"');
+    expect(stripComments(results)).toContain("'modalTabBtn isActive' : 'modalTabBtn'");
+    expect(hasRule('.wb-panel .tabs')).toBe(false);
+    expect(hasRule('.wb-panel .tab')).toBe(false);
   });
 
   it('lets the panel run tighter in padding, which is a width problem', () => {

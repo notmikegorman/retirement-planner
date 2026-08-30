@@ -487,9 +487,12 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
 
   // --- The plan edit: the daily guard's one chance to fire ------------------
   const runBefore = await provenance.innerText();
+  // The inputs panel is expand/collapse sections now (2026-08-30): the
+  // header BUTTON opens Spending (Plan alone opens by default in a fresh
+  // context, so this is an open, never an accidental close).
   await page
-    .getByRole('tablist', { name: 'Plan inputs' })
-    .getByRole('tab', { name: 'Spending' })
+    .getByRole('group', { name: 'Plan inputs' })
+    .getByRole('button', { name: 'Spending', exact: true })
     .click();
   const livingBox = page.locator('#wb-input-panel-spending .pair-cell input').first();
   await livingBox.fill(String(DRIVE_LIVING_OVERRIDE));
@@ -577,10 +580,11 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   );
 
   // --- Score the day-start version, then the refusal, then restore it -------
-  await page.getByRole('button', { name: 'Plan' }).click();
+  // Sidebar-scoped: the Plan page mounts a 'Plan' section header too.
+  await page.locator('.sideNav').getByRole('button', { name: 'Plan', exact: true }).click();
   await page
-    .getByRole('tablist', { name: 'Plan inputs' })
-    .getByRole('tab', { name: 'History' })
+    .getByRole('group', { name: 'Plan inputs' })
+    .getByRole('button', { name: 'History', exact: true })
     .click();
   // Capture which entries already carry a spend figure BEFORE scoring, so the
   // wait below can demand a NEW one — through the seam, not the screen. The

@@ -1970,3 +1970,71 @@ The lesson worth keeping: when a byte-equality gate flakes only under
 load, reproduce under load (a looping node-suite made it 1-in-3) and read
 the full artifacts — the 90-char diff excerpt supported three wrong
 theories before the dumped files settled it in one glance.
+
+## The gap closes, the panel folds, and the strips stop diverging (2026-08-30, sixth pass)
+
+Three owner asks and one bug the redesign itself exposed.
+
+**The Expenses table's top margin** was the add-row toolbar holding 32px of
+empty space in view mode (buttons hide by visibility so nothing jumps, but
+the row keeps its height). Gone: "+ Add row" now lives in the banner — the
+owner's own table standard — through a new `extraActions` slot on
+ProfileFormModule (a render function over draft+doc; Expenses shows it
+only while editing an itemised budget, since a first line created from
+outside the streams view would quietly zero the other streams). The gap is
+now the standard 20px body padding, same as Accounts.
+
+**The Plan page's input panel is expand/collapse sections** — the panel's
+third era (folds → tabs → folds; ScenarioPanel's header carries the whole
+arc). Eight headers in a flat stack, each an aria-expanded disclosure
+button; exactly ONE opens by default (Plan) so the column starts short,
+and all eight stay visible so nothing collapsed is out of sight — the two
+failures that killed the first fold era. Sections toggle independently;
+the open SET persists ('fplan-inputs-open', seeded once from the tab era's
+'fplan-inputs-tab'; an empty stored array is a real all-closed state;
+File > New clears both keys). The save-failure banner moved ABOVE the
+sections — the one-line-across-the-screen alignment it used to protect
+died with the strip.
+
+**The results strip wears .modalTabBar** — the underline dress every other
+tabbed view uses — instead of its own .tabs/.tab style; the tab-era
+.wb-panel width overrides died with the input strip.
+
+**The bugs independent mounting exposed** (an adversarial review panel over
+the diff found what one reading missed — the same discipline that caught
+the round-2 batch). The tab era enforced an invariant nobody had written
+down: exactly one input card mounted at a time, so a card could copy draft
+state at mount and never watch for other writers. Sections broke it three
+ways, each with its own guard, pinned in workbenchChrome.test.ts:
+
+- OverridesCard re-emits the WHOLE overrides on every commit
+  (buildOverrides), with expenses/income passthroughs captured at mount —
+  a blur would revert edits Spending/Tithing/Income made while it sat
+  open. Fix in the card: commit re-reads the passthrough branches from the
+  live draft. Deliberately NOT a whole-value remount key — that version
+  threw keyboard focus away on every committing blur.
+- The corporate-share dial has two doors (OverridesCard's field, the Plan
+  card's Custom box), each holding a typing buffer seeded at mount; either
+  could blur a stale figure over the other's newer write. Both doors are
+  keyed by the STORED fraction now, so a write through one reseeds the
+  other; typing never commits, so no remount interrupts it.
+- EventsCard's open editor saves by the index captured at Edit-click, and
+  the Plan card (writePlan reorders the whole array) or the Housing card
+  (clears superseded events) could move the rows under it — the save would
+  land on the wrong event. EventsCard is keyed by the events VALUE: any
+  outside rewrite closes the editor, exactly what leaving the tab used to
+  do.
+
+RawJsonCard needed nothing: it mirrors the live draft until touched (a
+frozen-then-applied JSON reverting other sections' interim edits is the
+Apply button doing what it says). A stored open-set whose every id is
+stale falls back to the default instead of reading as all-closed.
+
+The review also caught a round-5 ripple: the Investing form's line writes
+(and the new banner Add) skipped applyDerivedStreams, leaving
+profile.json's cached scalars stale against the lines — invisible to the
+engine, wrong for the delete-all-rows collapse. Every line write now runs
+it, pinned. And the open-set storage moved into workbenchLogic.ts so its
+four behaviors are EXECUTED (tests/ui/inputSections.test.ts) instead of
+string-pinned; the extraActions slot renders in both banner modes, as its
+own docstring promised.

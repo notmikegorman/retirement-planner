@@ -874,8 +874,12 @@ describe('the restore question does not promise an undo it cannot give', () => {
 
 describe('the tab’s wiring (source scan)', () => {
   it('is in the panel’s strip and renders the card with the live draft', () => {
-    expect(panel).toContain("{ id: 'history', label: 'History' }");
-    expect(panel).toContain("tab === 'history' && (");
+    // The section list lives in workbenchLogic since the open-set storage
+    // became executable (tests/ui/inputSections.test.ts pins the order).
+    expect(read('../../src/ui/components/workbench/workbenchLogic.ts')).toContain(
+      "{ id: 'history', label: 'History' }",
+    );
+    expect(panel).toContain("section(\n          'history',");
     expect(panel).toContain('<PlanHistoryCard');
     // The DRAFT, not the file: the autosave is debounced 400ms, so a match
     // computed from disk would put the badge on the wrong row for that long

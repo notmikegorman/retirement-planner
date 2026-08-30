@@ -255,7 +255,7 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
       })
       .toBe(true);
     expect(await page.getByRole('button', { name: 'Take snapshot' }).count()).toBe(0);
-    await page.getByRole('button', { name: 'Plan' }).click();
+    await page.locator('.sideNav').getByRole('button', { name: 'Plan', exact: true }).click();
   }, 120_000);
 
   it('the FIRST account opens the gate: one simulation appears, its number carrying its conditions', async () => {
@@ -373,7 +373,7 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // Back to the workbench first: the reload must land where the cached-
     // final-run contract shows itself (the snapshot leg left us on Net
     // Worth, whose page has no verdict to wait for).
-    await page.getByRole('button', { name: 'Plan' }).click();
+    await page.locator('.sideNav').getByRole('button', { name: 'Plan', exact: true }).click();
     await verdict().waitFor({ state: 'visible', timeout: 240_000 });
 
     // Plant the orphans a killed mid-write tab would leave (Phase-3's known
@@ -432,7 +432,10 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // decision D7's visibility bargain and the switch-storage door came with
     // it. It sits OUTSIDE the module's view/edit form, so everything below is
     // visible without pressing Edit.
-    await page.getByRole('button', { name: 'Settings' }).click();
+    // Scoped to the sidebar: the Plan page (where the previous test ends)
+    // mounts a 'Settings' SECTION header of its own since the input panel
+    // became expand/collapse sections (2026-08-30).
+    await page.locator('.sideNav').getByRole('button', { name: 'Settings', exact: true }).click();
     // The data-folder card lives on the ADVANCED tab now (Settings grew tabs
     // 2026-08-30), alongside Appearance — both outside the view/edit form.
     await page.getByRole('tab', { name: 'Advanced' }).click();

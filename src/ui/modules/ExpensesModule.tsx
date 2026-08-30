@@ -12,7 +12,11 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { BudgetCard } from '../components/profile/BudgetCard';
-import { rentingWindowFromPlan } from '../components/profile/expensesLogic';
+import {
+  applyDerivedStreams,
+  makeExpenseLine,
+  rentingWindowFromPlan,
+} from '../components/profile/expensesLogic';
 import { ProfileFormModule } from './ProfileFormModule';
 import { usePlanFacts } from './usePlanFacts';
 
@@ -107,6 +111,37 @@ export function ExpensesModule() {
         scalar-streams empty state explains itself field by field.
       */
       after={(draft) => ((draft.expenses.lines ?? []).length > 0 ? <ExpensesIntro /> : null)}
+      /*
+        The table standard's Add, in the banner — not a toolbar row, which
+        held 32px of empty space above the table in view mode (the buttons
+        hide but their row keeps its height so nothing jumps). Itemised
+        only: before itemisation there is no table, and a first line created
+        from here would quietly make the near-empty table the truth for the
+        other streams (GivingLines documents the same hazard).
+      */
+      extraActions={(draft, doc) =>
+        doc.editing && (draft.expenses.lines ?? []).length > 0 ? (
+          <button
+            // Same in-flight guard as the Cancel/Save beside it: a row added
+            // between Save and the PUT resolving would mutate a draft the
+            // write already captured, and view mode would show a phantom row.
+            disabled={doc.saving}
+            onClick={() =>
+              doc.update((p) => {
+                const lines = p.expenses.lines ?? [];
+                p.expenses.lines = [...lines, makeExpenseLine(lines, 'living')];
+                // The new row is zeros, so today this rewrites equal values —
+                // but every line write runs it (editLinesWith's discipline),
+                // because the paths that "cannot drift the cache" are the
+                // ones that eventually do.
+                applyDerivedStreams(p.expenses);
+              })
+            }
+          >
+            + Add row
+          </button>
+        ) : null
+      }
     >
       {(draft, doc) => (
         <BudgetCard

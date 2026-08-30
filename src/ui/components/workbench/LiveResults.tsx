@@ -136,18 +136,17 @@ export function LiveResults(props: LiveResultsProps) {
     <div>
       {/*
         FIRST IN THE COLUMN, ALWAYS — and therefore drawn here rather than inside
-        ResultsBody, which only renders once a run has landed.
+        ResultsBody, which only renders once a run has landed. The progress bar
+        and the error banner render UNDER this strip: the bar used to sit above
+        it and pushed the whole right-hand column, tabs and all, 15px down and
+        back on every debounce.
 
-        The inputs panel opposite also opens with its tab strip, and `.wb-layout`
-        is a grid with `align-items: start`, so two strips that are each their
-        column's first child sit on one line across the screen. No offset, no
-        magic pixel, nothing to keep in step. It only holds while nothing may
-        render above either strip, which is why the progress bar and the error
-        banner below moved under this one — the bar used to sit above it and
-        pushed the whole right-hand column, tabs and all, 15px down and back on
-        every debounce.
+        Dressed as .modalTabBar — the underline strip every other tabbed view
+        wears (Net worth, Settings, Tithing…) — since the owner asked the two
+        styles to stop diverging (2026-08-30). The inputs panel opposite is
+        expand/collapse sections now, so there is no second strip to align with.
       */}
-      <div className="tabs" role="tablist" aria-label="Results views">
+      <nav className="modalTabBar" role="tablist" aria-label="Results views">
         {RESULTS_TAB_IDS.map((id) => (
           <button
             key={id}
@@ -155,13 +154,13 @@ export function LiveResults(props: LiveResultsProps) {
             id={`wb-tab-${id}`}
             aria-selected={tab === id}
             aria-controls={`wb-panel-${id}`}
-            className={tab === id ? 'tab is-active' : 'tab'}
+            className={tab === id ? 'modalTabBtn isActive' : 'modalTabBtn'}
             onClick={() => onSelectTab(id)}
           >
             {TAB_LABELS[id]}
           </button>
         ))}
-      </div>
+      </nav>
 
       {/*
         The bar keeps its 3px slot whether or not a run is in flight. It occupies

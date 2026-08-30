@@ -40,6 +40,14 @@ export function ProfileFormModule(props: {
    * an edit session) survives a switch because both live on the doc.
    */
   tabs?: ReactNode;
+  /**
+   * Extra banner actions, rendered BEFORE the standard set (Edit, or
+   * Cancel/Save). For module-specific verbs that belong top-right by the
+   * table standard — e.g. Expenses' "+ Add row" — instead of a toolbar row
+   * that would hold empty space in view mode. The function form gets the
+   * draft and doc; render null outside the modes where the verb applies.
+   */
+  extraActions?: (profile: Profile, doc: ProfileDoc) => ReactNode;
 }) {
   const doc = useProfileDoc();
 
@@ -82,6 +90,7 @@ export function ProfileFormModule(props: {
         actions={
           doc.editing ? (
             <>
+              {props.extraActions?.(doc.profile, doc)}
               <button disabled={doc.saving} onClick={doc.cancelEdit}>
                 Cancel
               </button>
@@ -90,7 +99,10 @@ export function ProfileFormModule(props: {
               </button>
             </>
           ) : (
-            <button onClick={doc.enterEdit}>Edit</button>
+            <>
+              {props.extraActions?.(doc.profile, doc)}
+              <button onClick={doc.enterEdit}>Edit</button>
+            </>
           )
         }
       />

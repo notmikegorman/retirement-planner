@@ -159,7 +159,20 @@ export function PlanCard({
           'the crash years, not the averages.'
         }
       >
-        <BondsAreSelect overrides={overrides} onChange={onOverridesChange} />
+        <BondsAreSelect
+          /*
+            Keyed by the STORED fraction: the Settings section's corporate-
+            share field edits the same dial, and sections can be open at once
+            (2026-08-30) — without this, the Custom box's mount-seeded typing
+            buffer survives an outside write, shows the old figure, and a
+            blur would commit it right back over the newer one. An outside
+            (or own) commit remounts the select fresh; typing in the box
+            writes nothing, so no remount can interrupt it.
+          */
+          key={String(corporateFractionOf(overrides) ?? 'unset')}
+          overrides={overrides}
+          onChange={onOverridesChange}
+        />
       </Section>
     </div>
   );

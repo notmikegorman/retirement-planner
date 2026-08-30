@@ -1046,10 +1046,31 @@ describe('the budget tabs are homogeneous', () => {
     expect(read('../../src/ui/components/profile/fields.tsx')).not.toContain('SelectCell');
   });
 
-  it('stamps each tab’s own category on the rows it creates', () => {
-    expect(budgetCard).toContain("makeExpenseLine(ls, 'living')");
+  it('stamps each surface’s own category on the rows it creates', () => {
+    // The living add moved into the Expenses banner (ExpensesModule's
+    // extraActions, 2026-08-30) — same stamp, new home; giving's stays on
+    // its Tithing-tab toolbar, and Investing's single row is created by the
+    // form's first commit (both in BudgetCard).
+    const expensesModule = read('../../src/ui/modules/ExpensesModule.tsx');
+    expect(expensesModule).toContain("makeExpenseLine(lines, 'living')");
     expect(budgetCard).toContain("makeExpenseLine(ls, 'charitable')");
     expect(budgetCard).toContain("makeExpenseLine(ls, 'investing')");
+  });
+
+  it('rewrites the scalar cache on EVERY line write, whichever door it came through', () => {
+    // editLinesWith carries applyDerivedStreams for the tables; the Investing
+    // form's two write paths (create, edit-in-place) and the banner Add carry
+    // it themselves. A line write that skips it leaves profile.json's cached
+    // scalars stale — invisible to the engine (it derives from the lines) but
+    // exactly what "delete every row and the streams keep their last totals"
+    // would then restore wrongly.
+    expect(
+      budgetCard.match(/applyDerivedStreams\(p\.expenses\);/g)?.length,
+      'BudgetCard line-write paths missing the scalar-cache rewrite',
+    ).toBeGreaterThanOrEqual(4);
+    expect(read('../../src/ui/modules/ExpensesModule.tsx')).toContain(
+      'applyDerivedStreams(p.expenses);',
+    );
   });
 
   it('renders every money column from the single column contract', () => {

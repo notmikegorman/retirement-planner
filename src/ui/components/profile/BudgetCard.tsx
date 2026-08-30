@@ -652,16 +652,10 @@ function LivingCard({
 
   return (
     <div>
-      {/* No "Expenses" heading, no card, no preamble: the banner names the
-          module, and the today's-dollars / inherited-cell rules moved to the
-          first-visit intro modal (ExpensesModule.tsx). */}
-      <div className="row inlineRow">
-        <span className="spacer" />
-        <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'living')])}>
-          + Add row
-        </button>
-      </div>
-
+      {/* No "Expenses" heading, no card, no preamble, no toolbar: the banner
+          names the module and carries + Add row (ExpensesModule's
+          extraActions); the today's-dollars / inherited-cell rules moved to
+          the first-visit intro modal (ExpensesModule.tsx). */}
       <LinesTable
         lines={lines}
         category="living"
@@ -793,6 +787,9 @@ export function InvestingFields({
         line.monthlyRetired = 0;
         mutate(line);
         p.expenses.lines = [...ls, line];
+        // Same discipline as editLinesWith: every line write rewrites the
+        // scalar cache, so the file and the run never disagree.
+        applyDerivedStreams(p.expenses);
       });
     return (
       <div className="card">
@@ -826,7 +823,10 @@ export function InvestingFields({
   const editLine = (id: string, mutate: (line: ExpenseLine) => void) =>
     update((p) => {
       const line = (p.expenses.lines ?? []).find((l) => l.id === id);
-      if (line) mutate(line);
+      if (line === undefined) return;
+      mutate(line);
+      // Same discipline as editLinesWith: the scalar cache follows the lines.
+      applyDerivedStreams(p.expenses);
     });
   return (
     <div className="card">
