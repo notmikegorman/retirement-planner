@@ -96,7 +96,7 @@ const POLICY_TIP =
   'Clearing a box hands the field back to the profile.';
 
 const POLICY_LIST_TIP =
-  'The policies the household actually holds live on the Profile; each row here decides what ' +
+  'The policies the household actually holds live on the Insurance page; each row here decides what ' +
   'THIS PLAN does with one of them — keep it to its own term, cancel it when the paychecks ' +
   'stop, or cancel it now. “As configured” hands the decision back to the profile, so an ' +
   'untouched row writes nothing into the plan. Comparing “keep” against “cancel” is what the ' +

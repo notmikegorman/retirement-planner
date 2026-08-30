@@ -43,7 +43,7 @@ import {
   rentingLivingMonthly,
   survivorLivingMonthly,
 } from '../../src/shared/expenses';
-import { PROFILE_TAB_IDS } from '../../src/ui/nav';
+import { PAGES } from '../../src/ui/nav';
 import { DEFAULT_GUARDRAILS } from '../../src/shared/types';
 import {
   SPENDING_TYPE_OPTIONS,
@@ -955,9 +955,10 @@ describe('the guardrails spending policy', () => {
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-const profilePage = read('../../src/ui/pages/ProfilePage.tsx');
+const tithingModule = read('../../src/ui/modules/TithingModule.tsx');
+const settingsModule = read('../../src/ui/modules/SettingsModule.tsx');
 const budgetCard = read('../../src/ui/components/profile/BudgetCard.tsx');
-const insuranceCard = read('../../src/ui/components/profile/InsuranceCard.tsx');
+const insuranceCard = read('../../src/ui/components/profile/InsuranceEditor.tsx');
 const css = read('../../src/ui/styles.css');
 
 /**
@@ -983,35 +984,14 @@ const DERIVED_STREAM_FIELDS =
   'livingMonthly|livingMonthlyRetired|charitableMonthly|investingMonthly|investingMonthlyRetired';
 
 describe('the Expenses / Tithing / Investing / Insurance split', () => {
-  it('offers all the tabs and keeps the id a stored preference may hold', () => {
-    // The ids live in nav.ts now, because they are also URL segments
-    // (/profile/tithing, /profile/investing). 'expenses' has to keep its id
-    // there: localStorage may hold it from before the split — and by now a
-    // link may too — and an unrecognised value would drop the reader on
-    // Household.
-    expect([...PROFILE_TAB_IDS]).toEqual([
-      'household',
-      'accounts',
-      'home',
-      'income',
-      'expenses',
-      'tithing',
-      'investing',
-      'insurance',
-      'health',
-      'settings',
-    ]);
-    // The strip maps over those ids and takes its words from this record, so
-    // every tab is named here or it is a nameless button on screen.
-    const start = profilePage.indexOf('const PROFILE_TAB_LABELS');
-    const block = profilePage.slice(start, profilePage.indexOf('};', start));
-    const labels = Object.fromEntries(
-      [...block.matchAll(/^ {2}([a-z]+): '([^']+)',$/gm)].map((m) => [m[1], m[2]]),
-    );
-    expect(Object.keys(labels)).toEqual([...PROFILE_TAB_IDS]);
-    expect(labels.tithing).toBe('Tithing');
-    expect(labels.investing).toBe('Investing');
-    expect(labels.insurance).toBe('Insurance');
+  it('keeps every split-off surface addressable as its own module', () => {
+    // The split's ids became MODULE ids when the Profile page retired
+    // (2026-08-30) — they are top-level URL segments now, and parseRoute maps
+    // the old /profile/<tab> links onto them, so a link from before the split
+    // still lands somewhere.
+    for (const id of ['expenses', 'tithing', 'investing', 'insurance']) {
+      expect([...PAGES]).toContain(id);
+    }
   });
 
   it('still reaches every control the one Expenses tab used to carry', () => {
@@ -1035,25 +1015,25 @@ describe('the Expenses / Tithing / Investing / Insurance split', () => {
     ]) {
       expect(insuranceCard, `policy control "${label}" went missing in the split`).toContain(label);
     }
-    // And the Tithing tab still carries both halves of the giving pair, each
-    // bound to its own profile field: the ongoing method through the shared
-    // editor, and the un-tithed pot through the shared pot fields.
-    expect(profilePage).toContain('<OngoingGivingEditor');
-    expect(profilePage).toContain('p.expenses.retirementGiving');
-    expect(profilePage).toContain('<PotFields');
-    expect(profilePage).toContain('p.expenses.untithedPot');
+    // And the Tithing module still carries both halves of the giving pair,
+    // each bound to its own profile field: the ongoing method through the
+    // shared editor, and the un-tithed pot through the shared pot fields.
+    expect(tithingModule).toContain('<OngoingGivingEditor');
+    expect(tithingModule).toContain('p.expenses.retirementGiving');
+    expect(tithingModule).toContain('<PotFields');
+    expect(tithingModule).toContain('p.expenses.untithedPot');
   });
 
   it('prices the giving rule off the stream the run will use', () => {
     // With rows present the scalar is a cache; pricing "same as working" off it
     // would quote a figure the rows have already replaced.
-    expect(profilePage).toContain('deriveExpenseStreams(draft.expenses).charitableMonthly');
+    expect(tithingModule).toContain('deriveExpenseStreams(draft.expenses).charitableMonthly');
   });
 
   it('offers guardrails wherever the spending policy is chosen', () => {
-    expect(profilePage).toContain("spending.type === 'guardrails'");
-    expect(profilePage).toContain('Upper rail (× starting rate)');
-    expect(profilePage).toContain('Spending floor (% of plan)');
+    expect(settingsModule).toContain("spending.type === 'guardrails'");
+    expect(settingsModule).toContain('Upper rail (× starting rate)');
+    expect(settingsModule).toContain('Spending floor (% of plan)');
   });
 });
 

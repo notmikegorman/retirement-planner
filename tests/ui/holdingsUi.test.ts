@@ -20,7 +20,7 @@ import {
 
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
-const accountsCard = read('../../src/ui/components/profile/AccountsCard.tsx');
+const accountsCard = read('../../src/ui/components/profile/AccountEditor.tsx');
 
 describe('normalizeSymbolInput', () => {
   it('uppercases and trims what a person actually types', () => {
@@ -83,9 +83,12 @@ describe('the wiring (source scan)', () => {
   });
 
   it('has a Refresh prices button that calls the refresh route', () => {
-    expect(accountsCard).toContain('Refresh prices');
-    expect(accountsCard).toContain('api.refreshQuotes');
+    // The button and the quotes state live in the module (the editor renders
+    // whatever quotes it is handed).
+    const accountsModule = read('../../src/ui/modules/AccountsModule.tsx');
+    expect(accountsModule).toContain('Refresh prices');
+    expect(accountsModule).toContain('api.refreshQuotes');
     // And the initial quotes come from the stored file, never a fetch of its own.
-    expect(accountsCard).toContain('api.getQuotes()');
+    expect(accountsModule).toContain('api.getQuotes()');
   });
 });

@@ -1,7 +1,7 @@
 /**
  * The data-folder card — where the bytes live, what they cost, and the door
  * to living somewhere else. Moved verbatim from the retired Dashboard page
- * (2026-08-30) to Profile > Settings, because settings is where you go to ask
+ * (2026-08-30) to the Settings module, because settings is where you go to ask
  * "where is my stuff?" and the rest of the Dashboard was a read-only echo of
  * pages that already exist.
  *

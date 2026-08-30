@@ -81,19 +81,25 @@ function fieldClass(error: string | null | undefined): string {
  * `align="end"` right-aligns the bubble to the "?" instead, for tips close
  * enough to the right edge of a wide page that a left-aligned bubble would run
  * past the window.
+ *
+ * A SPAN with role="button", not a <button>, since the module overhaul: the
+ * view/edit modules wrap their forms in a disabled <fieldset>, which switches
+ * every real button off — and help is not an edit. A span stays focusable and
+ * clickable in view mode, which is exactly when someone reads help.
  */
 export function InfoTip(props: { label: string; text: ReactNode; align?: 'start' | 'end' }) {
   const id = useId();
   return (
     <span className={props.align === 'end' ? 'infotip infotip-end' : 'infotip'}>
-      <button
-        type="button"
+      <span
+        role="button"
+        tabIndex={0}
         className="infotip-btn"
         aria-label={`More about ${props.label}`}
         aria-describedby={id}
-        // Safari leaves buttons unfocused on click, so :focus-within — the only
-        // thing that opens the bubble for a keyboard user — would never fire
-        // for a mouse user there. Focusing explicitly makes click work
+        // Safari leaves controls unfocused on click, so :focus-within — the
+        // only thing that opens the bubble for a keyboard user — would never
+        // fire for a mouse user there. Focusing explicitly makes click work
         // everywhere without a second (stateful) reveal mechanism.
         onClick={(e) => e.currentTarget.focus()}
         onKeyDown={(e) => {
@@ -101,7 +107,7 @@ export function InfoTip(props: { label: string; text: ReactNode; align?: 'start'
         }}
       >
         <span aria-hidden="true">?</span>
-      </button>
+      </span>
       <span className="infotip-bubble" id={id} role="tooltip">
         {props.text}
       </span>

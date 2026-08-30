@@ -127,11 +127,9 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
   });
 
   it('a real Refresh-prices click flows through the proxy and stores the quote', async () => {
-    await page.getByRole('button', { name: 'Profile' }).click();
-    await page
-      .getByRole('tablist', { name: 'Profile sections' })
-      .getByRole('tab', { name: 'Accounts' })
-      .click();
+    // The Accounts module (2026-08-30): a sidebar item, with Refresh prices
+    // in the module banner.
+    await page.getByRole('button', { name: 'Accounts' }).click();
     await page.getByRole('button', { name: 'Refresh prices' }).click();
 
     // The stored quote moves: same fixture price, a fresh fetchedAt.

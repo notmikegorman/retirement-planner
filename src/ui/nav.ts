@@ -3,16 +3,17 @@
  * grew an address bar, the URL vocabulary with it.
  *
  * THE URL IS THE NAVIGATION STATE. The page used to live in a useState and
- * every tab in localStorage, which meant a refresh on Profile > Expenses came
- * back on the Workbench, no view could be linked or bookmarked, and the back
- * button did nothing at all. Every view now has a path — /workbench/cashflow,
- * /profile/expenses, /search/report — that useRoute (bottom of this file)
+ * every tab in localStorage, which meant a refresh came back on the
+ * Workbench, no view could be linked or bookmarked, and the back button did
+ * nothing at all. Every view now has a path — /workbench/cashflow,
+ * /accounts/k401, /search/report — that useRoute (bottom of this file)
  * reads on load, writes with pushState, and re-reads on popstate.
  *
- * THE SHAPE IS /page/tab: one segment for the page, one optional segment for
- * the tab, drawn from that page's own vocabulary (PAGE_TABS). '/' is the
- * workbench, and so is anything unrecognised — an unknown path resolves rather
- * than blanking the screen.
+ * THE SHAPE IS /module/sub: one segment for the module (the sidebar's
+ * vocabulary), one optional segment for either a tab from that module's own
+ * list (PAGE_TABS) or, on the entity modules, a record id (ENTITY_PAGES).
+ * '/' is the workbench, and so is anything unrecognised — an unknown path
+ * resolves rather than blanking the screen.
  *
  * ONE TAB SEGMENT PER PAGE, which means the Workbench's LEFT panel (Plan,
  * Spending, Income, …) is deliberately NOT in the URL while its right-hand
@@ -37,20 +38,60 @@ import { useCallback, useEffect, useState } from 'react';
 // ---------------------------------------------------------------------------
 
 /**
- * Pages, in top-strip order; App.tsx says why the strip reads this way.
- * Net Worth sits directly after Profile because it is the profile's ledger:
- * the same accounts, priced and totalled on the days the user chose to look.
+ * THE MODULES, in sidebar order — which is ALPHABETICAL by label, the owner's
+ * rule (2026-08-30): the old Profile page's ten tabs each became a module,
+ * joined by Workbench and Net worth, and an alphabetized list beats a curated
+ * one the moment there are twelve entries. '/' still opens the Workbench
+ * (HOME below); the sidebar order is where things LIVE, not where you START.
  *
- * Two pages left this list on 2026-08-30 (owner's call): 'dashboard' (its
- * snapshot duplicated the Profile and Net Worth pages; its one unique card —
- * the data folder — moved to Profile > Settings) and 'methodology' (static
- * documentation nobody navigated to; it lives on in git history). Their old
- * paths resolve to HOME like any unknown path — a stale link lands on the
- * Workbench rather than a blank screen.
+ * 'search' stays addressable but draws no sidebar item — App.tsx's NAV_HIDDEN
+ * carries that rule. 'dashboard', 'methodology' and 'profile' are tombstones:
+ * the first two resolve to HOME like any unknown path; '/profile/<tab>' paths
+ * redirect to the module the tab became (parseRoute owns the mapping).
  */
-export const PAGES = ['workbench', 'search', 'profile', 'networth'] as const;
+export const PAGES = [
+  'accounts',
+  'expenses',
+  'health',
+  'home',
+  'household',
+  'income',
+  'insurance',
+  'investing',
+  'networth',
+  'search',
+  'settings',
+  'tithing',
+  'workbench',
+] as const;
 
 export type Page = (typeof PAGES)[number];
+
+/**
+ * Pages whose second URL segment names a RECORD, not a tab: /accounts is the
+ * table, /accounts/k401 is one account's detail. The segment is the record's
+ * own id (user-visible in the UI, stable by design), validated only by shape —
+ * a link to a record that has since been deleted still parses, and the module
+ * answers it with its table rather than a blank.
+ */
+export const ENTITY_PAGES = ['accounts', 'insurance'] as const;
+
+export type EntityPage = (typeof ENTITY_PAGES)[number];
+
+export function isEntityPage(page: Page): page is EntityPage {
+  return (ENTITY_PAGES as readonly string[]).includes(page);
+}
+
+/**
+ * The shape an entity segment must have. CASE IS PRESERVED, unlike the page
+ * and tab vocabulary: record ids are user data (the schema constrains them to
+ * nothing but non-emptiness, and profile.json is hand-editable), and the
+ * modules match them exactly — lowercasing 'K401' here would open the wrong
+ * record or none. The charset is still held to URL-safe id characters; an id
+ * outside it (a space, say) simply has no deep link, and its row falls back
+ * to the table rather than a mangled path.
+ */
+const ENTITY_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**
  * Tab ids are URL segments now, so they live here rather than beside the
@@ -83,46 +124,44 @@ export const RESULTS_TAB_IDS = [
 
 export const SEARCH_TAB_IDS = ['space', 'progress', 'report', 'history'] as const;
 
-/**
- * 'expenses' keeps its id from before Expenses/Tithing/Insurance were split
- * apart, so a stored tab — and now an old link — still lands somewhere.
- * 'investing' sits with the other two budget tabs: the three of them are one
- * itemised budget cut by category, and scattering them would hide that.
- */
-export const PROFILE_TAB_IDS = [
-  'household',
-  'accounts',
-  'home',
-  'income',
-  'expenses',
-  'tithing',
-  'investing',
-  'insurance',
-  'health',
-  'settings',
-] as const;
-
 export type ResultsTabId = (typeof RESULTS_TAB_IDS)[number];
 export type SearchTabId = (typeof SEARCH_TAB_IDS)[number];
-export type ProfileTabId = (typeof PROFILE_TAB_IDS)[number];
 
 /**
- * Which vocabulary each page's second segment is drawn from. Ids only have to
- * be unique WITHIN a page — /profile/tithing and /workbench/tithing are two
- * different views and both are legal, because the segment is only ever read
- * against the page in front of it.
+ * Which vocabulary each page's second segment is drawn from — for the pages
+ * whose segment IS a tab. Ids only have to be unique WITHIN a page —
+ * /tithing (the giving module) and /workbench/tithing (what the plan gives)
+ * are two different views and both are legal, because the segment is only
+ * ever read against the page in front of it. The entity pages' segments are
+ * records, not tabs (ENTITY_PAGES above), so their lists here stay empty.
  */
 export const PAGE_TABS = {
-  workbench: RESULTS_TAB_IDS,
-  search: SEARCH_TAB_IDS,
-  profile: PROFILE_TAB_IDS,
+  accounts: [],
+  expenses: [],
+  health: [],
+  home: [],
+  household: [],
+  income: [],
+  insurance: [],
+  investing: [],
   networth: [],
+  search: SEARCH_TAB_IDS,
+  settings: [],
+  tithing: [],
+  workbench: RESULTS_TAB_IDS,
 } as const satisfies Record<Page, readonly string[]>;
 
 /** The tabs a given page can name in its path; `never` for the untabbed ones. */
 export type TabFor<P extends Page> = (typeof PAGE_TABS)[P][number];
 
 export type TabId = TabFor<Page>;
+
+/**
+ * What a page's second segment may be when NAVIGATING: a tab from its own
+ * vocabulary, or — for the entity pages, whose PAGE_TABS list is empty and
+ * whose TabFor is therefore `never` — a record id.
+ */
+export type SubFor<P extends Page> = P extends EntityPage ? string : TabFor<P>;
 
 /** True when `value` is one of THIS page's tabs — the only test of a segment. */
 export function isTabOfPage(page: Page, value: string): value is TabId {
@@ -138,9 +177,6 @@ export function isSearchTabId(value: string | null): value is SearchTabId {
   return value !== null && (SEARCH_TAB_IDS as readonly string[]).includes(value);
 }
 
-export function isProfileTabId(value: string | null): value is ProfileTabId {
-  return value !== null && (PROFILE_TAB_IDS as readonly string[]).includes(value);
-}
 
 // ---------------------------------------------------------------------------
 // The base path (pure helpers + the build's answer)
@@ -195,12 +231,13 @@ export function appBase(): string {
 export interface Route {
   page: Page;
   /**
-   * The tab the PATH names, or null when it names none (a bare /profile, a
-   * stale /profile/budget, an untabbed page). Null is not "no tab" — it is
-   * "the URL has no opinion", which is what hands the choice to localStorage.
-   * See resolveTab.
+   * The second segment the PATH names, or null when it names none. For the
+   * tabbed pages this is a tab id, and null is not "no tab" — it is "the URL
+   * has no opinion", which is what hands the choice to localStorage (see
+   * resolveTab). For the entity pages it is a RECORD id (/accounts/k401), and
+   * null means the table. Untabbed pages always carry null.
    */
-  tab: TabId | null;
+  tab: TabId | string | null;
 }
 
 /** Where '/' goes, and where anything unrecognised goes. */
@@ -216,15 +253,37 @@ export const HOME: Route = { page: 'workbench', tab: null };
  * address bar to the resolved path on load, so a stale link cleans itself up.
  */
 export function parseRoute(path: string): Route {
-  const segments = path
+  // Raw segments keep their case for the entity pages; the page/tab
+  // vocabulary is matched lowercased so a hand-capitalised link resolves.
+  const rawSegments = path
     .split(/[?#]/)[0]
     .split('/')
-    .map((segment) => segment.trim().toLowerCase())
+    .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
+  const segments = rawSegments.map((segment) => segment.toLowerCase());
+
+  /*
+   * The Profile page retired 2026-08-30 and its tabs became modules, so every
+   * old /profile/<tab> path maps to the module the tab turned into — the tab
+   * ids WERE the module ids, which is what makes the mapping a rename rather
+   * than a table. A bare /profile lands on Household, the tab it used to open
+   * first. useRoute's canonical rewrite then cleans the address bar up.
+   */
+  if (segments[0] === 'profile') {
+    const legacy = PAGES.find((candidate) => candidate === segments[1]);
+    return { page: legacy ?? 'household', tab: null };
+  }
 
   const page = PAGES.find((candidate) => candidate === segments[0]);
   if (page === undefined) return HOME;
 
+  // An entity page's segment is a record id, held to shape only (and to its
+  // own case): whether the record exists is the module's question, not the
+  // parser's.
+  if (isEntityPage(page)) {
+    const raw = rawSegments.length > 1 ? rawSegments[1] : null;
+    return { page, tab: raw !== null && ENTITY_SEGMENT.test(raw) ? raw : null };
+  }
   const raw = segments.length > 1 ? segments[1] : null;
   if (raw === null || !isTabOfPage(page, raw)) return { page, tab: null };
   return { page, tab: raw };
@@ -239,24 +298,31 @@ export function routePath(route: Route): string {
  * The route a navigate() call lands on.
  *
  * An omitted tab is not the same as an explicit null: staying on the page you
- * are already on KEEPS the tab you are reading (so the top-strip button for the
- * current page is a no-op rather than a reset to Household), while leaving for
- * another page names no tab and lets that page's own memory decide.
+ * are already on KEEPS the segment you are reading (so the sidebar item for
+ * the current page is a no-op rather than a reset), while leaving for another
+ * page names no segment and lets that page's own memory — or its table —
+ * decide.
  *
- * A tab that does not belong to the page is dropped, not written — a
- * /networth/expenses would be a URL that parses back to something else.
+ * A segment that does not belong to the page is dropped, not written — a
+ * /networth/expenses would be a URL that parses back to something else. An
+ * entity page's segment is held to shape, exactly as parseRoute holds it.
  */
 export function nextRoute(current: Route, page: Page, tab?: string | null): Route {
-  const wanted = tab === undefined ? (page === current.page ? current.tab : null) : tab;
-  if (wanted === null || !isTabOfPage(page, wanted)) return { page, tab: null };
+  const named = tab === undefined ? (page === current.page ? current.tab : null) : tab ?? null;
+  if (named === null) return { page, tab: null };
+  // Entity ids keep their case (they are matched exactly against user data);
+  // tabs are a lowercase vocabulary and tolerate a capitalised caller.
+  if (isEntityPage(page)) return { page, tab: ENTITY_SEGMENT.test(named) ? named : null };
+  const wanted = named.toLowerCase();
+  if (!isTabOfPage(page, wanted)) return { page, tab: null };
   return { page, tab: wanted };
 }
 
 /**
  * Push a history entry, or replace the one that is there?
  *
- * Navigating to the URL you are already on must REPLACE. Clicking "Profile"
- * three times while on Profile would otherwise cost three presses of Back to
+ * Navigating to the URL you are already on must REPLACE. Clicking "Accounts"
+ * three times while on Accounts would otherwise cost three presses of Back to
  * leave the page, which is exactly how a hand-rolled router's back button
  * becomes useless.
  */
@@ -274,18 +340,17 @@ export function historyAction(currentPath: string, nextPath: string): 'push' | '
  */
 export const RESULTS_TAB_STORAGE_KEY = 'fplan-results-tab';
 export const SEARCH_TAB_STORAGE_KEY = 'fplan-search-tab';
-export const PROFILE_TAB_STORAGE_KEY = 'fplan-profile-tab';
 
 /**
  * THE PRECEDENCE RULE, in one function, because two sources of truth for one
  * piece of state is how this kind of code rots:
  *
  *   1. THE URL WINS whenever the path names a tab this page has. A link to
- *      /profile/expenses opens on Expenses for whoever clicks it, no matter
+ *      /workbench/cashflow opens on Cashflow for whoever clicks it, no matter
  *      what their browser remembers.
- *   2. localStorage answers only when the path names none — a bare /profile, a
- *      link to a tab that has since been renamed, or the Workbench's left-hand
- *      panel, whose tab the URL never names at all. This is what keeps an
+ *   2. localStorage answers only when the path names none — a bare /workbench,
+ *      a link to a tab that has since been renamed, or the Workbench's left-
+ *      hand panel, whose tab the URL never names at all. This is what keeps an
  *      existing session from losing its place.
  *   3. The first tab in the strip when neither answers.
  *
@@ -305,12 +370,26 @@ export function resolveTab<T extends string>(
   return ids[0];
 }
 
-/** Which key holds a page's remembered tab; null for the untabbed pages. */
+/**
+ * Which key holds a page's remembered tab; null for every page without a tab
+ * vocabulary. The entity pages are deliberately null too: a remembered RECORD
+ * would reopen a detail the user last looked at days ago, when a bare
+ * /accounts should mean the table.
+ */
 export const PAGE_TAB_STORAGE_KEY = {
-  workbench: RESULTS_TAB_STORAGE_KEY,
-  search: SEARCH_TAB_STORAGE_KEY,
-  profile: PROFILE_TAB_STORAGE_KEY,
+  accounts: null,
+  expenses: null,
+  health: null,
+  home: null,
+  household: null,
+  income: null,
+  insurance: null,
+  investing: null,
   networth: null,
+  search: SEARCH_TAB_STORAGE_KEY,
+  settings: null,
+  tithing: null,
+  workbench: RESULTS_TAB_STORAGE_KEY,
 } as const satisfies Record<Page, string | null>;
 
 /**
@@ -319,7 +398,7 @@ export const PAGE_TAB_STORAGE_KEY = {
  * Read it ONCE PER APP LOAD — useRoute does, and hands the answer down. The
  * scope matters: a page component's own mount is NOT good enough, because a
  * page unmounts every time you visit another one. On /workbench/cashflow ->
- * Profile -> Back -> Back, the Workbench remounts on the first Back and its
+ * Accounts -> Back -> Back, the Workbench remounts on the first Back and its
  * fresh read returns the 'cashflow' the tab click had written, so the second
  * Back reaches the bare /workbench and resolves right back to cashflow — the
  * URL changes and the screen does not. Snapshotting at app load pins the answer
@@ -375,7 +454,7 @@ export function setNavigationGuard(guard: NavigationGuard | null): void {
 
 export type NavigateFn = <P extends Page>(
   page: P,
-  tab?: TabFor<P> | null,
+  tab?: SubFor<P> | null,
   opts?: { replace?: boolean },
 ) => void;
 
@@ -469,7 +548,14 @@ export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: St
       else window.history.pushState(null, '', withBase(path, base));
       setRoute(next);
     };
-    if (navigationGuard !== null && navigationGuard(next, commit)) return;
+    /*
+     * The guard is only consulted for a move that actually LEAVES the current
+     * URL. Clicking the active sidebar item resolves to the path already on
+     * screen — a deliberate no-op — and a "Discard unsaved changes?" prompt
+     * for a departure that was never going to happen would destroy work over
+     * a misclick.
+     */
+    if (path !== here && navigationGuard !== null && navigationGuard(next, commit)) return;
     commit();
   }, []);
 

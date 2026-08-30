@@ -368,7 +368,7 @@ export function ProfileSetup({ onSubmit }: { onSubmit: (profile: Profile) => Pro
 
       <p className="muted">
         Nothing is saved until you press the button — reloading before then brings you back
-        here. Afterward, add your accounts on the Profile tab: the simulation starts when there
+        here. Afterward, add your accounts on the Accounts page: the simulation starts when there
         is something to simulate.
       </p>
     </div>

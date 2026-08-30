@@ -40,7 +40,7 @@ const CARD_TIP =
 
 const WORKING_TIP =
   'From your profile, and not editable here: salaries and the 401(k) are payroll facts, not ' +
-  'what-ifs. Change them on the Profile page. The one thing this plan DOES decide about them is ' +
+  'what-ifs. Change them on the Income page. The one thing this plan DOES decide about them is ' +
   'the date they stop — that is the retire event on the Plan card above.';
 
 const RETIREMENT_TIP =

@@ -1,22 +1,26 @@
 /**
- * The Insurance tab: every life-insurance policy the household holds.
+ * The INSURANCE EDITORS — one policy's fields (PolicyEditor), the legacy
+ * single-policy fields (LegacyPolicyFields), and the convert-to-list offer.
+ * The table half lives in modules/InsuranceModule.tsx (the managed-table
+ * standard); this file is what its views render.
  *
  * WHY A LIST. The single-policy fields could hold one premium, one face amount
  * and one end date — and this household has two policies with different
  * expiries. Modeling them as one that ends at retirement was wrong in both
- * directions at once: it dropped a $1,900/yr premium four years early AND
- * $2,500,000 of cover four years early, in exactly the years before Social
- * Security starts where a death hurts most.
+ * directions at once: it dropped a real premium four years early AND real
+ * cover four years early, in exactly the years before Social Security starts
+ * where a death hurts most.
  *
- * WHICH IS WHY EVERY ROW STATES ITS EXPIRY AGAINST THE RETIREMENT DATE. That
- * gap is the entire reason the policies are separate objects; a list of face
- * amounts with no dates beside them would be a list of numbers nobody can act
- * on. The date comes from the plan (the retire events), because the profile has
- * no such thing — the household holds policies, a plan decides when work stops.
+ * WHICH IS WHY EVERY POLICY STATES ITS EXPIRY AGAINST THE RETIREMENT DATE.
+ * That gap is the entire reason the policies are separate objects; a list of
+ * face amounts with no dates beside them would be a list of numbers nobody can
+ * act on. The date comes from the plan (the retire events), because the
+ * profile has no such thing — the household holds policies, a plan decides
+ * when work stops.
  *
  * The premium is a certain cost and the payout is a contingent one, so a policy
  * can only ever make the household score worse. The Widow tab is where the two
- * are weighed against each other, and this tab is what gives it something to
+ * are weighed against each other, and this module is what gives it something to
  * weigh.
  */
 import type { LifeInsurancePolicy, Person, Profile, ProfileExpenses, YearMonth } from '../../../shared/types';
@@ -44,7 +48,7 @@ type UpdateFn = (mutate: (p: Profile) => void) => void;
 
 // --- Help copy -------------------------------------------------------------
 
-const CARD_TIP =
+export const CARD_TIP =
   'Term life is INCOME REPLACEMENT: it exists so that a salary disappearing early does not take ' +
   'the household’s future with it. That is why each policy carries its own dates — a death one ' +
   'month after the term ends is worth exactly nothing to your wife, and a premium charged past ' +
@@ -129,107 +133,33 @@ const LEGACY_INSURED_HELP =
   'the policy covers the other of you: only a death of the INSURED pays out, so getting this ' +
   'wrong makes the cover invisible in exactly the death you bought it for.';
 
-export function InsuranceCard({
-  expenses,
-  people,
-  workStops,
-  update,
-}: {
-  expenses: ProfileExpenses;
-  people: Person[];
-  /** The month nobody draws a salary any more; null when the plan is silent. */
-  workStops: YearMonth | null;
-  update: UpdateFn;
-}) {
-  const policies = expenses.lifeInsurancePolicies ?? [];
-  return policies.length === 0 ? (
-    <LegacyPolicyCard expenses={expenses} people={people} update={update} />
-  ) : (
-    <PolicyListCard
-      policies={policies}
-      people={people}
-      workStops={workStops}
-      update={update}
-    />
-  );
-}
-
-function PolicyListCard({
-  policies,
-  people,
-  workStops,
-  update,
-}: {
-  policies: LifeInsurancePolicy[];
-  people: Person[];
-  workStops: YearMonth | null;
-  update: UpdateFn;
-}) {
-  const totals = policyTotals(policies);
+/**
+ * The muted line under the table banner: units, and what the expiry notes
+ * measure against. Shared so the module and the tests read one sentence.
+ */
+export function policyListIntro(workStops: YearMonth | null): string {
   return (
-    <div className="card">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>
-          Life insurance
-          <InfoTip label="life insurance" text={CARD_TIP} />
-        </h2>
-        <span className="spacer" />
-        <button
-          onClick={() =>
-            update((p) => {
-              const list = p.expenses.lifeInsurancePolicies ?? [];
-              list.push(makePolicy(list, defaultInsured(p)));
-              p.expenses.lifeInsurancePolicies = list;
-            })
-          }
-        >
-          + Add policy
-        </button>
-      </div>
-      <div className="muted" style={{ marginTop: 4 }}>
-        Premiums are $/month in today’s dollars; face amounts are NOMINAL dollars, because level
-        term does not inflate.{' '}
-        {workStops === null
-          ? 'The plan does not say when work stops yet, so the expiry notes below have nothing to ' +
-            'measure against — set a retirement date in the Workbench.'
-          : `Work stops ${formatMonth(workStops)} in the current plan, which is what each ` +
-            'policy’s expiry is measured against below.'}
-      </div>
-
-      {policies.map((policy, i) => (
-        <PolicyRow
-          key={policy.id}
-          policy={policy}
-          index={i}
-          people={people}
-          workStops={workStops}
-          update={update}
-        />
-      ))}
-
-      <div className="row" style={{ marginTop: 12 }}>
-        <strong>
-          {formatUSD(totals.premiumMonthly)}/mo (
-          {formatUSD(annualFromMonthly(totals.premiumMonthly))}/yr) buying{' '}
-          {formatUSD(totals.deathBenefit)} of cover
-        </strong>
-      </div>
-      <div className="field-help">
-        Coverage totals assume every policy is still in force; the dates above are what decide
-        whether it is on the day of a death. Only the Widow tab prices any of this — the household
-        score sees the premiums and never the payout.
-      </div>
-    </div>
+    'Premiums are $/month in today\u2019s dollars; face amounts are NOMINAL dollars, because level ' +
+    'term does not inflate. ' +
+    (workStops === null
+      ? 'The plan does not say when work stops yet, so the expiry notes have nothing to ' +
+        'measure against \u2014 set a retirement date in the Workbench.'
+      : `Work stops ${formatMonth(workStops)} in the current plan, which is what each ` +
+        'policy\u2019s expiry is measured against.')
   );
 }
 
 /** The first person drawing a salary — the life a term policy usually covers. */
-function defaultInsured(profile: Profile): string {
+export function defaultInsured(profile: Profile): string {
   const earner = profile.people.find((p) => (profile.income.salaries[p.id] ?? 0) > 0);
   return earner?.id ?? profile.people[0]?.id ?? 'p1';
 }
 
-function PolicyRow({
+/**
+ * One policy's fields — the caller (InsuranceModule) owns the surrounding
+ * chrome: banner crumb, Edit / Delete actions, and the view-mode fieldset.
+ */
+export function PolicyEditor({
   policy,
   index,
   people,
@@ -250,29 +180,11 @@ function PolicyRow({
     });
 
   return (
-    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 12 }}>
+    <div>
       <div className="row">
-        <strong>{policy.label || policy.id}</strong>
         <span className="muted" style={{ fontSize: 12 }}>
           id: {policy.id}
         </span>
-        <span className="spacer" />
-        <button
-          className="danger"
-          onClick={() =>
-            update((p) => {
-              const list = p.expenses.lifeInsurancePolicies;
-              if (!list) return;
-              list.splice(index, 1);
-              // Absent and empty mean the same thing to the engine — the
-              // single-policy fields take over again — and absent is the
-              // quieter of the two in profile.json.
-              if (list.length === 0) delete p.expenses.lifeInsurancePolicies;
-            })
-          }
-        >
-          Delete
-        </button>
       </div>
       <div className="row">
         <TextField
@@ -386,14 +298,14 @@ function PolicyRow({
 }
 
 /**
- * The four single-policy fields, exactly as they were on the old Expenses tab,
- * plus the offer to convert them into the list.
+ * The four single-policy fields, exactly as they were on the old Expenses tab.
  *
  * They stay reachable because every profile written before the list existed
  * still holds its policy in them, and deleting the last policy has to land
- * somewhere editable.
+ * somewhere editable. The convert offer renders separately
+ * (ConvertToListOffer) because converting is an immediate act, not an edit.
  */
-function LegacyPolicyCard({
+export function LegacyPolicyFields({
   expenses,
   people,
   update,
@@ -478,31 +390,37 @@ function LegacyPolicyCard({
             'and the Widow tab can price the policy against your wife’s odds.'}
       </div>
 
-      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-        <h3 style={{ margin: '0 0 4px' }}>
-          Hold more than one policy?
-          <InfoTip label="converting to a policy list" text={LEGACY_TIP} />
-        </h3>
-        <p className="field-help" style={{ marginTop: 0 }}>
-          Two policies with different end dates cannot be described by one premium and one date.
-          Converting keeps this policy exactly as it stands and lets you add the second.
-        </p>
-        <div className="row">
-          <button
-            className="primary"
-            onClick={() =>
-              update((p) => {
-                p.expenses.lifeInsurancePolicies = seedPoliciesFromFields(
-                  p.expenses,
-                  defaultInsured(p),
-                );
-              })
-            }
-          >
-            Convert to a policy list
-          </button>
-        </div>
+    </div>
+  );
+}
+
+/**
+ * The list offer, its own card OUTSIDE the legacy form's view/edit fieldset:
+ * converting restructures and saves in one move (the module wires onConvert
+ * to mutateAndSave), which must work from view mode — it is an act, not a
+ * field edit.
+ */
+export function ConvertToListOffer({ onConvert }: { onConvert: () => void }) {
+  return (
+    <div className="card">
+      <h3 style={{ margin: '0 0 4px' }}>
+        Hold more than one policy?
+        <InfoTip label="converting to a policy list" text={LEGACY_TIP} />
+      </h3>
+      <p className="field-help" style={{ marginTop: 0 }}>
+        Two policies with different end dates cannot be described by one premium and one date.
+        Converting keeps this policy exactly as it stands and lets you add the second.
+      </p>
+      <div className="row">
+        <button className="primary" onClick={onConvert}>
+          Convert to a policy list
+        </button>
       </div>
     </div>
   );
+}
+
+/** The conversion itself, shared so the module cannot drift from the offer. */
+export function convertToPolicyList(p: Profile): void {
+  p.expenses.lifeInsurancePolicies = seedPoliciesFromFields(p.expenses, defaultInsured(p));
 }

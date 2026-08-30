@@ -78,7 +78,7 @@ export interface ServerMeta {
   /**
    * Local mode only (decision D7): the runs/ cache is unbounded — exactly
    * what the Node server always did — so its cost is made VISIBLE instead:
-   * measured at ask time, shown on the Profile > Settings data card. The
+   * measured at ask time, shown on the Settings page's data card. The
    * HTTP server omits it and the card simply doesn't draw the row.
    */
   runCache?: { files: number; bytes: number };

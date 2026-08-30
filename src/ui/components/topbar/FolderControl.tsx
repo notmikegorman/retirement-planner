@@ -86,7 +86,7 @@ export function FolderControl() {
           if (!cancelled) setFacts({ mode: 'http', dataDir: m.dataDir });
         })
         .catch(() => {
-          // The label stays "…"; Profile > Settings is where meta failures speak.
+          // The label stays "…"; the Settings page is where meta failures speak.
         });
       return () => {
         cancelled = true;

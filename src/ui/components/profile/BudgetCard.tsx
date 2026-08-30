@@ -146,7 +146,7 @@ const LIVING_RETIRED_HELP =
 const CHARITABLE_HELP =
   'Your giving while anyone is still earning. It feeds the charitable tax deductions, and — ' +
   'unlike investing below — it does not stop by itself when the paychecks do: the rule on the ' +
-  'Tithing tab says what happens then.';
+  'Tithing page says what happens then.';
 const INVESTING_HELP =
   'Money moved into the taxable brokerage while working — not spending. It is capped at what’s ' +
   'left after taxes and expenses, so it can never force a withdrawal. While anyone is still ' +
@@ -272,7 +272,7 @@ function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: 
           }
         />
         <FieldNote className="muted">
-          giving after you stop working is a rule — see the Tithing tab
+          giving after you stop working is a rule — see the Tithing page
         </FieldNote>
       </div>
       <div className="row">
@@ -339,6 +339,10 @@ function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: 
             it, so seeding is the safe way in.
           </span>
         </div>
+        {/* Visible only inside a DISABLED fieldset (view mode), where the two
+            start buttons above hide: a pitch whose call to action vanished
+            reads as broken. The stylesheet owns the toggle (.editHint). */}
+        <p className="field-help editHint">Press Edit, top right, to start itemising.</p>
       </div>
     </div>
   );
@@ -754,7 +758,7 @@ export function InvestingCard({
         <h2 style={{ marginTop: 0 }}>Investing</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           The budget is not itemised yet, so investing is still a stream — edit it on the Expenses
-          tab, which is also where itemising starts. Once there are budget lines, the investing
+          page, which is also where itemising starts. Once there are budget lines, the investing
           ones live here.
         </p>
       </div>

@@ -1750,3 +1750,87 @@ the app root (main.tsx `resetRememberedViews`): the keys are per-browser,
 not per-folder, so File > New into an empty folder used to open the fresh
 plan on whatever input tab the OLD plan was last touching — the owner hit
 exactly that, landing on Housing where Plan belonged.
+
+## The app becomes a shell of modules (2026-08-30, second pass)
+
+The owner's verdict on the first chrome pass: "didn't quite hit the mark."
+The detailed instruction replaced it wholesale, and this entry records the
+standard as shipped, because it is now the app's UI constitution.
+
+**THE SHELL.** Two panels: a narrow left sidebar for navigating between
+modules, and a wide right panel showing the selected module, with a banner
+across the top of the content where titles, breadcrumbs and the module's
+actions live (ModuleBanner.tsx — every module wears it). Every tab the old
+Profile page carried became a module, joined by Workbench and Net worth,
+ALPHABETIZED: Accounts, Expenses, Health, Home, Household, Income,
+Insurance, Investing, Net worth, Settings, Tithing, Workbench. '/' still
+opens the Workbench; Search stays parked (URL works, no sidebar item); the
+folder control and the theme toggle live in the sidebar footer. Old
+/profile/<tab> links map onto the module the tab became and the address bar
+cleans itself up.
+
+**THE RULE.** One thing → show the one thing. Zero-or-more things → show a
+table. The Workbench is explicitly scoped OUT of the overhaul.
+
+**THE TABLE STANDARD** (ManagedTable.tsx enforces it): Add button top right
+inside the banner; every row a trashcan at far right behind a confirm
+modal; the first column is the primary one and looks clickable; clicking a
+row opens the detail, adds a breadcrumb for the row, and turns the main
+title into the way back; every column sortable, default first-column
+ascending; URLs carry it all (/accounts, /accounts/k401 — nav.ts's
+ENTITY_PAGES, whose second segment is a record id held to shape, not a
+vocabulary).
+
+**THE DETAIL STANDARD.** A detail opens in VIEW mode with Edit and Delete
+in the banner; Edit swaps them for Cancel and Save; Save writes (one
+get-mutate-put of the whole profile) and returns to view mode. View and
+edit are THE SAME LAYOUT: the body sits in one <fieldset>, disabled outside
+edit mode, and the stylesheet dresses disabled controls as plain values —
+transparent chrome, identical box — so nothing jumps. Edit-mode furniture
+(add row, remove, move) hides by visibility, keeping its space. The
+single-thing modules wear the same view/edit chrome (ProfileFormModule.tsx)
+so every module edits one way. Leaving with unsaved edits raises the shared
+discard prompt (useProfileDoc wires the blocker); adding a record is a
+DRAFT — the new row opens in edit mode and Save is what makes it real, so
+Cancel leaves no junk; deleting is an immediate confirmed write.
+
+**DELIBERATE DEVIATIONS, recorded here rather than discovered later:** the
+itemised budget lines (Expenses / Tithing / Investing) stay in-place
+editable grids inside their modules' one form — they are an ordered
+worksheet with a totals footer and hand-arranged row order, and sorting or
+click-through details would fight both (ExpensesModule.tsx carries the
+note). Net worth and Search keep their existing pages inside the shell,
+un-overhauled for now. Insurance keeps its legacy single-policy shape as a
+single-thing form (that IS the rule) with the convert offer beside it.
+
+Pinned by the reworked tests/ui/nav.test.ts (module vocabulary, entity
+segments, legacy mapping), tests/ui/accountsCard.test.ts (table wiring, the
+managed-table machinery, the nothing-was-lost field inventory, the
+view-mode CSS rules), and the pagesWalkthrough browser lane (Settings' data
+card, the /expenses deep link, the legacy /profile/expenses redirect).
+
+**Review-hardened before landing.** A 28-agent adversarial review of the
+diff confirmed and fixed, pre-commit: entity segments now KEEP THEIR CASE
+and accept `._` (record ids are user data matched exactly — lowercasing
+'K401' opened the wrong record, and 'My_401k' had no deep link at all); the
+navigation guard skips a move that resolves to the URL already on screen
+(clicking the active sidebar item while dirty used to raise a discard
+prompt for a departure that was never going to happen); mutateAndSave
+builds each write on a synchronously-advanced draft ref (two quick trashcan
+deletes used to resurrect the first row) and its completion no longer
+touches the edit state (a slow delete used to eject a newer edit session on
+another record); the legacy single-policy Insurance form is editable again
+(the return-to-table cancelEdit effect was firing in the branch that LIVES
+at the table's address); deleting the last policy clears the legacy scalars
+its conversion left behind, so the confirmed delete cannot resurrect a
+premium; both confirm modals take focus (Cancel/Keep first) and close on
+Escape; the InfoTip "?" became a focusable span so help stays reachable
+inside view mode's disabled fieldset; the double-counting premium warning
+returned to the policy table; a slow delete's completion only steers the
+URL if the user is still looking at the deleted record; and the view-mode
+itemise pitch grew the "Press Edit" line its hidden buttons owed it.
+Accepted, knowingly: browser Back bypasses the dirty guard (the smplkit
+original has the same gap, documented in dirtyFormBlocker.tsx), a
+cancelled add leaves one inert Back press in history, and the edit-session
+machinery still has no DOM-level test — the node suites pin sources, the
+browser lanes drive flows.

@@ -35,7 +35,7 @@ export type FolderControlFacts =
 
 /**
  * The server folder's display name: the last path segment, because the full
- * path is the Profile > Settings data card's job and the topbar has room for
+ * path is the Settings page's data card's job and the sidebar has room for
  * a name. Both separators, since the parked server may run anywhere.
  */
 export function serverFolderName(dataDir: string): string {
@@ -99,8 +99,8 @@ export const NEW_FOLDER_HINT =
 /** Shown when the current storage is OPFS and the menu offers folders. */
 export const OPFS_STAYS_NOTE =
   'Your current data lives in browser-private storage and stays there — opening a folder ' +
-  'does not move it. Reopen browser-private storage from Switch storage on the Profile’s ' +
-  'Settings tab.';
+  'does not move it. Reopen browser-private storage from Switch storage on the Settings ' +
+  'page.';
 
 /**
  * The refusal while work is in flight. Switching releases the writer guard

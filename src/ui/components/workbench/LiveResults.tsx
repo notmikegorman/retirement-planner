@@ -97,7 +97,7 @@ export interface LiveResultsProps {
    * never come true.
    */
   firstRun: boolean;
-  /** The first-run state's one action: the Profile tab's Accounts view. */
+  /** The first-run state's one action: the Accounts module. */
   onOpenAccounts: () => void;
 }
 

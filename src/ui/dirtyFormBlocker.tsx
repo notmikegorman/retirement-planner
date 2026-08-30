@@ -93,18 +93,31 @@ export function useDirtyFormBlocker(
 
 /**
  * The shared prompt — never roll a page-local variant (the standard's rule).
- * Same strictness as the smplkit original: no backdrop dismiss; the only ways
- * out are the two buttons.
+ * Same strictness as the smplkit original: no backdrop dismiss; the ways out
+ * are the two buttons and Escape (which keeps editing). Focus lands on Keep
+ * editing when the prompt opens, so a keyboard user's next keys drive the
+ * dialog — and a reflexive Enter preserves work rather than discarding it.
  */
 export function DiscardChangesPrompt({ blocker }: { blocker: DirtyFormBlocker }) {
+  const keepRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (blocker.blocked) keepRef.current?.focus();
+  }, [blocker.blocked]);
+
   if (!blocker.blocked) return null;
   return (
-    <div className="deleteConfirmOverlay" role="presentation">
+    <div
+      className="deleteConfirmOverlay"
+      role="presentation"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') blocker.reset();
+      }}
+    >
       <div className="deleteConfirmPanel" role="dialog" aria-modal="true">
         <h3>Discard unsaved changes?</h3>
         <p>You have unsaved edits. Leaving now will lose them.</p>
         <div className="deleteConfirmActions">
-          <button type="button" onClick={blocker.reset}>
+          <button ref={keepRef} type="button" onClick={blocker.reset}>
             Keep editing
           </button>
           <button type="button" className="danger" onClick={blocker.proceed}>

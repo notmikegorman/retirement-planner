@@ -233,11 +233,11 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // saying what is missing and where to add it.
     expect(await verdict().count()).toBe(0);
     const resultsText = await page.locator('.wb-results').innerText();
-    expect(resultsText).toContain('Add your accounts on the Profile tab');
+    expect(resultsText).toContain('Add your accounts on the Accounts page');
     expect(resultsText).not.toContain('%');
     expect(await page.locator('.wb-metric-value').count()).toBe(0);
 
-    // The topbar's folder control names the storage this session actually
+    // The sidebar's folder control names the storage this session actually
     // booted on — the OPFS seam boots browser-private, and the control must
     // say so by the app's one name for it (folderControlLogic).
     expect((await page.locator('.folder-name').innerText()).trim()).toBe(
@@ -246,7 +246,7 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
   }, 300_000);
 
   it('Net Worth degrades honestly too: no snapshot button, the reason in its place', async () => {
-    await page.getByRole('button', { name: 'Net Worth' }).click();
+    await page.getByRole('button', { name: 'Net worth' }).click();
     // Poll for the note first — the page shows "Loading…" until the profile
     // answers, and the button assertion would pass vacuously against it.
     await expect
@@ -333,7 +333,7 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
   }, 300_000);
 
   it('a snapshot gets its score AND its sustainable-spend figure', async () => {
-    await page.getByRole('button', { name: 'Net Worth' }).click();
+    await page.getByRole('button', { name: 'Net worth' }).click();
     await page.getByRole('button', { name: 'Take snapshot' }).click();
     const dialogInputs = page.locator('dialog input');
     await dialogInputs.first().fill(String(DRIVE_HOME_VALUE));
@@ -425,14 +425,12 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     ).toEqual({ root: false, runs: false });
   }, 600_000);
 
-  it('Profile > Settings shows the run cache (D7) and the switch-storage affordance', async () => {
+  it('the Settings module shows the run cache (D7) and the switch-storage affordance', async () => {
     // The data-folder card moved here when the Dashboard retired (2026-08-30);
-    // decision D7's visibility bargain and the switch-storage door came with it.
-    await page.getByRole('button', { name: 'Profile' }).click();
-    await page
-      .getByRole('tablist', { name: 'Profile sections' })
-      .getByRole('tab', { name: 'Settings' })
-      .click();
+    // decision D7's visibility bargain and the switch-storage door came with
+    // it. It sits OUTSIDE the module's view/edit form, so everything below is
+    // visible without pressing Edit.
+    await page.getByRole('button', { name: 'Settings' }).click();
     const card = page.locator('.card').filter({ hasText: 'Data folder' });
     await card.waitFor({ state: 'visible', timeout: 120_000 });
     // The card fills in after its meta() round trip; wait for the D7 row
@@ -450,21 +448,32 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
   }, 120_000);
 
   it('a deep link under the base reloads through the 404 trick', async () => {
-    const response = await page.goto(`${staticServer.origin}${BASE}/profile/expenses`);
+    const response = await page.goto(`${staticServer.origin}${BASE}/expenses`);
     // The status IS the proof: no file answered — the custom 404 page (a
     // copy of index.html) did, and booted the app on the deep path.
     expect(response!.status()).toBe(404);
-    await page
-      .getByRole('tablist', { name: 'Profile sections' })
-      .waitFor({ state: 'visible', timeout: 240_000 });
-    expect(
-      await page
-        .getByRole('tablist', { name: 'Profile sections' })
-        .getByRole('tab', { name: 'Expenses' })
-        .getAttribute('aria-selected'),
-    ).toBe('true');
+    await expect
+      .poll(async () => (await page.locator('.bannerTitle').first().innerText()).trim(), {
+        timeout: 240_000,
+      })
+      .toBe('Expenses');
     // The router kept the based path rather than rewriting it out of the site.
-    expect(new URL(page.url()).pathname).toBe(`${BASE}/profile/expenses`);
+    expect(new URL(page.url()).pathname).toBe(`${BASE}/expenses`);
+  }, 300_000);
+
+  it('a LEGACY /profile deep link lands on the module its tab became, and the URL cleans up', async () => {
+    // Links from before the module split (2026-08-30) still resolve: the 404
+    // trick serves the app, parseRoute maps /profile/expenses onto the
+    // Expenses module, and the canonical rewrite fixes the address bar —
+    // still under the base.
+    const response = await page.goto(`${staticServer.origin}${BASE}/profile/expenses`);
+    expect(response!.status()).toBe(404);
+    await expect
+      .poll(async () => (await page.locator('.bannerTitle').first().innerText()).trim(), {
+        timeout: 240_000,
+      })
+      .toBe('Expenses');
+    expect(new URL(page.url()).pathname).toBe(`${BASE}/expenses`);
   }, 300_000);
 
   it('no service worker registered in the lane — the walkthrough build does not opt in', async () => {

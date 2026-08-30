@@ -93,10 +93,11 @@ describe('field spacing invariants (src/ui/styles.css)', () => {
     // shared gap and reintroduces the crowding on that row alone.
     const rowGap = px(/margin-top:\s*([\d.]+px)/.exec(ruleBody('.row + .row'))![1]);
     const sources = [
-      '../../src/ui/pages/ProfilePage.tsx',
-      '../../src/ui/components/profile/AccountsCard.tsx',
+      '../../src/ui/modules/HouseholdModule.tsx',
+      '../../src/ui/modules/SettingsModule.tsx',
+      '../../src/ui/components/profile/AccountEditor.tsx',
       '../../src/ui/components/profile/BudgetCard.tsx',
-      '../../src/ui/components/profile/InsuranceCard.tsx',
+      '../../src/ui/components/profile/InsuranceEditor.tsx',
     ];
     for (const rel of sources) {
       const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');

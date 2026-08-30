@@ -693,7 +693,7 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
             tab={resultsTab}
             onSelectTab={selectResultsTab}
             firstRun={firstRun}
-            onOpenAccounts={() => navigate('profile', 'accounts')}
+            onOpenAccounts={() => navigate('accounts')}
           />
         </div>
       </div>

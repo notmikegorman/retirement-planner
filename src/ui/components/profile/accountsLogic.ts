@@ -1,22 +1,21 @@
 /**
- * The pure half of the Accounts card's two-column layout: which account is
- * showing, what each row's balance is, and what the column's total means.
+ * The pure half of the Accounts module: what each table row's balance is,
+ * and what the column's total means.
  *
  * Kept free of React/DOM so it can be unit-tested under vitest's node
- * environment, like profileLogic beside it. The two questions here are the two
- * that can go wrong silently:
+ * environment, like profileLogic beside it. The question here is the one that
+ * can go wrong silently: A ROW BALANCE THAT DISAGREES WITH THE DETAIL VIEW.
+ * The table shows a number for an account whose detail shows one too, and for
+ * a holdings-mode account the detail's is DERIVED (shares × stored price +
+ * cash). Reading `account.balance` for the row would show the IRA's last
+ * resolved figure beside a freshly derived one — two numbers for one account,
+ * on one screen, differing by whatever the market did since the last save.
+ * accountListBalance is the single answer both sides use.
  *
- * 1. A LIST BALANCE THAT DISAGREES WITH THE DETAIL PANE. The narrow column
- *    shows a number for an account whose detail pane shows one too, and for a
- *    holdings-mode account the detail pane's is DERIVED (shares × stored price
- *    + cash). Reading `account.balance` for the row would show the IRA's last
- *    resolved figure beside a freshly derived one — two numbers for one
- *    account, on one screen, differing by whatever the market did since the
- *    last save. accountListBalance is the single answer both sides use.
- * 2. A SELECTION THAT MOVES UNDER THE USER. Selection is by account ID, never
- *    by index, so committing a field on the selected account — which rebuilds
- *    the accounts array — leaves the same account selected rather than
- *    snapping back to the first one.
+ * (The selection helpers that used to live here — a localStorage-remembered
+ * account id and the delete-lands-on-a-neighbour rule — retired with the
+ * two-column card: the URL names the open account now, and deleting returns
+ * to the table.)
  */
 import type { Account, QuotesFile } from '../../../shared/types';
 import { deriveAccount, isHoldingsAccount } from '../../../shared/holdings';
@@ -127,58 +126,16 @@ export const ACCOUNTS_TOTAL_TITLE =
   'the Net Worth page counts the home value on top of these accounts.';
 
 /**
- * Where the chosen account id is remembered. Follows the app's key convention
- * ('fplan-' + what it holds — see nav.ts's PROFILE_TAB_STORAGE_KEY and
- * ScenarioPanel's 'fplan-inputs-tab').
- *
- * Persisting it at all is the same argument the profile TABS already won:
- * coming back to check one number on the Roth should not start at the 401(k)
- * every time. It also survives the remount ProfilePage forces on load/discard
- * (its `key={rev}`), which would otherwise silently reset the pane.
+ * The table row's version of the editor's unpriced warning. A balance short
+ * by a whole position looks exactly like a balance, so the row that is
+ * missing one says so where the number is, not only inside the detail you
+ * would have to open.
  */
-export const SELECTED_ACCOUNT_STORAGE_KEY = 'fplan-profile-account';
+export const ROW_UNPRICED_TITLE =
+  'This balance is missing a position: one of the account\u2019s symbols has no stored price, so ' +
+  'it counts as $0 here and in the total below. Open the account and press "Refresh prices".';
 
-/**
- * Which account the detail pane shows, given what was remembered.
- *
- * TOTAL BY DESIGN — every input produces a usable answer, because each way it
- * can fail leaves an empty pane beside a full list:
- *   - a remembered id that still exists wins;
- *   - anything else (nothing remembered, an account since deleted, a stored id
- *     from a different data folder, junk in localStorage) falls back to the
- *     first account, which is also the arrival case;
- *   - an empty list answers null, and the pane says so rather than rendering
- *     an editor for an account that is not there.
- *
- * Resolving on every render rather than repairing state in an effect is what
- * makes deletion self-healing: the id vanishes from the list and the next
- * render has already moved on.
- */
-export function resolveSelectedAccountId(
-  storedId: string | null | undefined,
-  accounts: readonly Account[],
-): string | null {
-  if (accounts.length === 0) return null;
-  if (storedId != null && accounts.some((a) => a.id === storedId)) return storedId;
-  return accounts[0]!.id;
-}
-
-/**
- * Who to select after deleting the account at `index`: the one above it, or —
- * when the first row is deleted — the one below.
- *
- * Without this, deleting the fourth of five accounts drops the selection to
- * the first (resolveSelectedAccountId's fallback) and the pane jumps to the
- * top of the list, which reads as if the wrong row was deleted. Returns null
- * when that was the last account, and the pane goes empty honestly.
- */
-export function neighborAccountId(accounts: readonly Account[], index: number): string | null {
-  const rest = accounts.filter((_, i) => i !== index);
-  if (rest.length === 0) return null;
-  return rest[Math.max(0, Math.min(index - 1, rest.length - 1))]!.id;
-}
-
-/** A row's money string. Cents, because the detail pane prints cents too. */
+/** A row's money string. Cents, because the detail view prints cents too. */
 export function formatListBalance(value: number): string {
   return formatUSD(value, { cents: true });
 }

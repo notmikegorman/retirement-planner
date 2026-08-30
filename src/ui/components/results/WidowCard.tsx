@@ -109,7 +109,7 @@ const LIVING_FRACTION_TIP =
 
 const LIVING_SHARE_BUDGET_TIP =
   'Summed from your budget\u2019s \u201cIf I die\u201d column, line by line \u2014 not a percentage ' +
-  'assumption. Edit it where it is stated: the Profile\u2019s Expenses tab. Lines with no survivor ' +
+  'assumption. Edit it where it is stated: the Expenses page. Lines with no survivor ' +
   'figure inherit their in-force amount, which is the conservative direction.';
 
 const RANGE_TIP =
@@ -408,7 +408,7 @@ export function WidowCard({ profile, plan, target, runParams, disabled }: WidowC
                 'or carries no benefit, so there is nothing to compare against. Reinstate one ' +
                 'on the Spending tab to make the comparison mean something.'
               : 'No life-insurance payout is in force in this plan, so there is nothing to ' +
-                'compare against. Add a death benefit beside the premium — on the Profile for ' +
+                'compare against. Add a death benefit beside the premium — on the Insurance page for ' +
                 'the policy you actually hold, or on the Spending tab to try one on this plan ' +
                 'only.'}
           </div>

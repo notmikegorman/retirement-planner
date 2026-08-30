@@ -1,0 +1,97 @@
+/**
+ * THE SINGLE-THING MODULE (the owner's rule, 2026-08-30: "if it is just one
+ * thing, then you show that one thing") — a banner plus one view/edit form
+ * over the profile document.
+ *
+ * VIEW MODE IS THE SAME LAYOUT AS EDIT MODE. The whole body sits in one
+ * <fieldset>, disabled outside edit mode: the browser switches every nested
+ * control off in one move — no prop-drilling a `disabled` through the cards
+ * — and the stylesheet then dresses disabled controls as plain values
+ * (transparent border and background, full text color) so entering edit
+ * mode changes nothing but the affordances. The fieldset is keyed by the
+ * doc's rev so Cancel remounts the blur-committed field primitives, whose
+ * local text would otherwise survive the restore.
+ *
+ * Banner actions are the standard set: [Edit] in view mode, [Cancel] [Save]
+ * in edit mode, with the unsaved-changes pill beside the title. Deleting is
+ * absent by construction — a single thing has nothing to delete.
+ */
+import type { ReactNode } from 'react';
+import type { Profile } from '../../shared/types';
+import { DiscardChangesPrompt } from '../dirtyFormBlocker';
+import { ModuleBanner } from './ModuleBanner';
+import { useProfileDoc, type ProfileDoc } from './useProfileDoc';
+
+export function ProfileFormModule(props: {
+  title: string;
+  /** The form body, bound to the draft. Rendered inside the fieldset. */
+  children: (profile: Profile, doc: ProfileDoc) => ReactNode;
+  /** Content below the form, OUTSIDE the fieldset — always-active cards. */
+  after?: ReactNode;
+}) {
+  const doc = useProfileDoc();
+
+  if (doc.loading) {
+    return (
+      <>
+        <ModuleBanner title={props.title} />
+        <div className="moduleBody">
+          <div className="muted">Loading…</div>
+        </div>
+      </>
+    );
+  }
+
+  if (doc.loadError !== null || doc.profile === null) {
+    return (
+      <>
+        <ModuleBanner title={props.title} />
+        <div className="moduleBody">
+          <div className="error-banner">
+            Failed to load the profile: {doc.loadError ?? 'missing data'}
+          </div>
+          <button onClick={() => void doc.reload()}>Retry</button>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ModuleBanner
+        title={props.title}
+        pill={
+          doc.editing ? (
+            <span className={doc.dirty ? 'statusPill isDirty' : 'statusPill isSaved'}>
+              {doc.dirty ? 'Unsaved changes' : 'Editing'}
+            </span>
+          ) : null
+        }
+        actions={
+          doc.editing ? (
+            <>
+              <button disabled={doc.saving} onClick={doc.cancelEdit}>
+                Cancel
+              </button>
+              <button className="primary" disabled={doc.saving} onClick={() => void doc.save()}>
+                {doc.saving ? 'Saving…' : 'Save'}
+              </button>
+            </>
+          ) : (
+            <button onClick={doc.enterEdit}>Edit</button>
+          )
+        }
+      />
+      <div className="moduleBody">
+        {doc.saveError !== null ? (
+          <div className="error-banner">Save failed: {doc.saveError}</div>
+        ) : null}
+        <fieldset key={doc.rev} disabled={!doc.editing} className="moduleFieldset">
+          {props.children(doc.profile, doc)}
+        </fieldset>
+        {props.after}
+      </div>
+      <DiscardChangesPrompt blocker={doc.blocker} />
+    </>
+  );
+}

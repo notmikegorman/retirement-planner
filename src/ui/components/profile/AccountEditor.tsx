@@ -1,36 +1,27 @@
 /**
- * Accounts editor (test-drive notes 6, 8, 9, 10).
- *
- * Split out of ProfilePage because one account row now carries a display
- * name, an ownership rule ("Joint" only where it is legal), a target-date-fund
- * editor, and a full Roth-funding editor.
+ * The ACCOUNT EDITOR — everything there is to say about one account (name,
+ * type, owner, balance or holdings, target-date fund, Roth funding, notes),
+ * plus the sub-editors those fields carry. The list/table half lives in
+ * modules/AccountsModule.tsx (the managed-table standard); this file is the
+ * detail form it opens, shared between view mode (disabled fieldset) and
+ * edit mode.
  *
  * The internal `id` stays visible but muted: events (start_72t) and the
  * results tables reference it, so it must be discoverable — but it is not the
  * name.
- *
- * TWO COLUMNS, NOT ONE STACK. Those same editors are why: five accounts, each
- * carrying a positions table or a Roth's conversion buckets, ran to several
- * screens, and every question about one account ("what is the Roth worth?")
- * meant scrolling past the answer to a different one. The narrow column is the
- * whole list — a name, a balance, and their sum — and the wide one is the
- * account you picked. What each account HOLDS is now a click, not a scroll,
- * and what they add up to is on screen the entire time.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   Account,
   AccountType,
   AssetClass,
   Person,
   Profile,
-  QuoteRefreshOutcome,
   QuotesFile,
   RothBasis,
 } from '../../../shared/types';
 import { formatUSD } from '../../../shared/util';
 import { deriveAccount } from '../../../shared/holdings';
-import { api } from '../../api';
 import {
   AllocationEditor,
   CheckboxField,
@@ -51,28 +42,14 @@ import {
   formatQuoteAsOf,
   isPlaceholder,
   isPretaxAccount,
-  makeNewAccount,
   normalizeAccountForType,
   normalizeSymbolInput,
   ownerOptions,
   removeConversion,
   rothBasisTotal,
   setTargetDateFund,
-  uniqueAccountId,
   updateConversion,
 } from './profileLogic';
-import {
-  ACCOUNTS_TOTAL_LABEL,
-  ACCOUNTS_TOTAL_TITLE,
-  SELECTED_ACCOUNT_STORAGE_KEY,
-  accountListBalance,
-  accountMissingQuotes,
-  accountsTotal,
-  accountsTotalNote,
-  formatListBalance,
-  neighborAccountId,
-  resolveSelectedAccountId,
-} from './accountsLogic';
 
 const ACCOUNT_TYPE_OPTIONS = (Object.keys(ACCOUNT_TYPE_LABELS) as AccountType[]).map((value) => ({
   value,
@@ -115,15 +92,6 @@ const CASH_HELP = 'Uninvested sweep money beside the positions; counts as bills'
 const NO_QUOTE_TITLE =
   'No stored price for this symbol yet. The derived balance treats it as $0 and a ' +
   'simulation will refuse to run until it is priced — press "Refresh prices".';
-
-/**
- * The list row's version of the same warning. A balance short by a whole
- * position looks exactly like a balance, so the row that is missing one says
- * so where the number is, not only inside the editor you would have to open.
- */
-const ROW_UNPRICED_TITLE =
-  'This balance is missing a position: one of the account’s symbols has no stored price, so ' +
-  'it counts as $0 here and in the total below. Open the account and press "Refresh prices".';
 
 const ASSET_CLASS_OPTIONS: Array<{ value: AssetClass; label: string }> = [
   { value: 'stocks', label: 'Stocks' },
@@ -472,28 +440,23 @@ function HoldingsEditor({
 }
 
 /**
- * The wide column: everything there is to say about ONE account.
- *
- * This is the old full-width AccountRow unchanged in content — the same
- * fields, in the same order, under the same conditions. Only its neighbours
- * moved: it renders for the selected account instead of once per account, so
- * the type/owner/balance row is not repeated five times down the page.
+ * Everything there is to say about ONE account — the same fields, in the same
+ * order, under the same conditions the old two-column card showed them. Its
+ * caller (AccountsModule) owns the surrounding chrome: the banner crumb, the
+ * Edit / Delete actions, and the view-mode fieldset this renders inside.
  */
-function AccountDetail({
+export function AccountEditor({
   account,
   index,
   people,
   update,
   quotes,
-  onDelete,
 }: {
   account: Account;
   index: number;
   people: Person[];
   update: UpdateFn;
   quotes: QuotesFile;
-  /** Deletion moves the selection too, so the card owns it — see deleteAccount. */
-  onDelete: () => void;
 }) {
   const fallbackPerson = people[0]?.id ?? 'p1';
   const isTdf = account.targetDateFund != null;
@@ -502,15 +465,10 @@ function AccountDetail({
   return (
     <div className="acct-detail">
       <div className="row">
-        <strong>{accountDisplayName(account)}</strong>
         <span className="muted" style={{ fontSize: 12 }}>
           id: {account.id}
         </span>
         {isPlaceholder(account.notes) ? <PlaceholderChip /> : null}
-        <span className="spacer" />
-        <button className="danger" onClick={onDelete}>
-          Delete
-        </button>
       </div>
       <div className="row">
         <TextField
@@ -692,269 +650,6 @@ function AccountDetail({
           })
         }
       />
-    </div>
-  );
-}
-
-/**
- * The narrow column: one row per account, and what they add up to.
- *
- * A row says two things and no more — the name, and the balance. Not the type,
- * not the user, not the id: this column's job is "which account do I mean",
- * and the fastest answer to that is the shortest line. Everything else is one
- * click away in the pane beside it.
- *
- * It is a vertical tab strip, wired as one (role=tablist / tab / tabpanel,
- * aria-orientation="vertical"), because that is exactly what it does — picks
- * which panel the wide column shows — and the app already speaks that pattern
- * on the Profile, Search and Workbench tab strips.
- */
-function AccountList({
-  accounts,
-  quotes,
-  selectedId,
-  onSelect,
-}: {
-  accounts: Account[];
-  quotes: QuotesFile;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="acct-list-col">
-      <div
-        className="acct-list"
-        role="tablist"
-        aria-orientation="vertical"
-        aria-label="Accounts"
-      >
-        {accounts.map((account) => {
-          // DERIVED for a holdings account, as typed for a manual one — the
-          // same figure, from the same call, the detail pane prints. See
-          // accountsLogic.accountListBalance.
-          const balance = accountListBalance(account, quotes);
-          const unpriced = accountMissingQuotes(account, quotes);
-          const selected = account.id === selectedId;
-          return (
-            <button
-              key={account.id}
-              role="tab"
-              id={`account-tab-${account.id}`}
-              aria-selected={selected}
-              aria-controls="account-panel"
-              className={selected ? 'acct-row is-active' : 'acct-row'}
-              onClick={() => onSelect(account.id)}
-            >
-              <span className="acct-row-name" title={accountDisplayName(account)}>
-                {accountDisplayName(account)}
-              </span>
-              {unpriced.length > 0 ? (
-                <span className="flag" title={ROW_UNPRICED_TITLE}>
-                  unpriced
-                </span>
-              ) : null}
-              <span className="acct-row-balance">{formatListBalance(balance)}</span>
-            </button>
-          );
-        })}
-      </div>
-      {/*
-        THE SUM SITS UNDER THE ROWS IT SUMS, the way a ledger's total does —
-        above them it would read as a heading for the list rather than an
-        arithmetic result of it. It stays outside the scrolling list (see
-        .acct-list-col) so a long list scrolls under a total that does not move.
-
-        An empty list has no total: "$0.00" for no accounts is arithmetic, not
-        information, and the pane beside it already says the card is empty.
-      */}
-      {accounts.length > 0 ? (
-        <div className="acct-total">
-          <div className="acct-total-line">
-            <span>{ACCOUNTS_TOTAL_LABEL}</span>
-            <span className="acct-total-value" title={ACCOUNTS_TOTAL_TITLE}>
-              {formatListBalance(accountsTotal(accounts, quotes))}
-            </span>
-          </div>
-          <div className="field-help">{accountsTotalNote(accounts, quotes)}</div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-export function AccountsCard({
-  accounts,
-  people,
-  update,
-}: {
-  accounts: Account[];
-  people: Person[];
-  update: UpdateFn;
-}) {
-  /**
-   * The stored quotes, loaded once and replaced by each refresh. The card
-   * prices the DRAFT accounts against these client-side (deriveAccount — the
-   * same shared function the server resolves runs with), so an unsaved
-   * holdings row previews with exactly the figures a save-then-run would use.
-   * A failed initial load leaves {} — every symbol then shows "no stored
-   * quote", which is the truthful display for a folder never refreshed too.
-   */
-  const [quotes, setQuotes] = useState<QuotesFile>({});
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshFailures, setRefreshFailures] = useState<QuoteRefreshOutcome[]>([]);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
-
-  /**
-   * The chosen account, by ID and never by index.
-   *
-   * That is the whole reason a field commit does not throw you back to the
-   * first account: `update` rebuilds the profile (structuredClone + mutate),
-   * so every account object and the array holding them is new on every
-   * keystroke committed — an index would still point at a row, but a stale
-   * one the moment an account is added, deleted or retyped, and an object
-   * reference would point at nothing at all. The id survives all of it.
-   *
-   * Seeded from localStorage, which is what carries the choice across a visit
-   * to another tab and across the remount ProfilePage forces on load/discard.
-   * The stored value is NOT trusted: resolveSelectedAccountId re-checks it
-   * against the accounts actually present on every render, so a deleted
-   * account (or a stored id from another data folder) falls back to the first
-   * one instead of leaving an empty pane.
-   */
-  const [storedSelection, setStoredSelection] = useState<string | null>(() =>
-    typeof localStorage === 'undefined'
-      ? null
-      : localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY),
-  );
-  const selectedId = resolveSelectedAccountId(storedSelection, accounts);
-  const selectedIndex = accounts.findIndex((a) => a.id === selectedId);
-
-  const select = useCallback((id: string | null) => {
-    setStoredSelection(id);
-    // Written on the press, like SearchPage's watch id — an effect would write
-    // the FALLBACK too, quietly overwriting a remembered account with the
-    // first one during the render after a delete.
-    if (typeof localStorage === 'undefined') return;
-    if (id === null) localStorage.removeItem(SELECTED_ACCOUNT_STORAGE_KEY);
-    else localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, id);
-  }, []);
-
-  useEffect(() => {
-    api.getQuotes().then(setQuotes, () => {});
-  }, []);
-
-  // Symbols from the DRAFT, not the saved profile: the refresh must price the
-  // rows on screen, including ones not saved yet.
-  const draftSymbols = [
-    ...new Set(accounts.flatMap((a) => (a.holdings ?? []).map((h) => h.symbol))),
-  ]
-    .filter((s) => s !== '')
-    .sort();
-
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    setRefreshError(null);
-    try {
-      const res = await api.refreshQuotes(draftSymbols);
-      setQuotes(res.quotes);
-      // Failures are per-symbol data, shown per symbol; the eight that landed
-      // still reprice everything on screen.
-      setRefreshFailures(res.results.filter((r) => !r.ok));
-    } catch (e) {
-      setRefreshError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [draftSymbols.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /**
-   * Add an account and OPEN it. Without the select, the press would push a row
-   * to the bottom of a list the eye is not on while the pane kept showing the
-   * previous account — a button that appears to do nothing.
-   *
-   * The id is decided out here rather than read back from makeNewAccount's
-   * result: `update` hands the mutation a clone, so nothing inside it comes
-   * back. Overriding the id with the one selected is what makes the row that
-   * appears and the row that opens the same row by construction, instead of by
-   * two calls to uniqueAccountId agreeing.
-   */
-  const addAccount = () => {
-    const id = uniqueAccountId(accounts);
-    update((p) => {
-      p.accounts.push({ ...makeNewAccount(p), id });
-    });
-    select(id);
-  };
-
-  /**
-   * Delete the shown account and land on the one beside it. Falling through to
-   * resolveSelectedAccountId's first-account fallback instead would jump the
-   * pane to the top of the list, which reads as though the wrong row went.
-   */
-  const deleteAccount = (index: number) => {
-    select(neighborAccountId(accounts, index));
-    update((p) => {
-      p.accounts.splice(index, 1);
-    });
-  };
-
-  return (
-    <div className="card">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>Accounts</h2>
-        <span className="spacer" />
-        {draftSymbols.length > 0 ? (
-          <button disabled={refreshing} onClick={() => void refresh()}>
-            {refreshing ? 'Refreshing…' : 'Refresh prices'}
-          </button>
-        ) : null}
-        <button onClick={addAccount}>+ Add account</button>
-      </div>
-      <div className="muted" style={{ marginTop: 4 }}>
-        Names are yours to choose; the muted id is the internal key that plan events (72(t))
-        and the results tables reference, so it never changes on its own.
-      </div>
-      {refreshError ? <div className="error-banner">Refresh failed: {refreshError}</div> : null}
-      {refreshFailures.map((f) =>
-        f.ok ? null : (
-          <div key={f.symbol} className="field-help warn" style={{ marginTop: 4 }}>
-            {f.symbol}: {f.error}
-          </div>
-        ),
-      )}
-      <div className="acct-layout" style={{ marginTop: 12 }}>
-        <AccountList
-          accounts={accounts}
-          quotes={quotes}
-          selectedId={selectedId}
-          onSelect={select}
-        />
-        <div
-          role="tabpanel"
-          id="account-panel"
-          aria-labelledby={selectedId === null ? undefined : `account-tab-${selectedId}`}
-        >
-          {selectedIndex >= 0 ? (
-            <AccountDetail
-              // Keyed by id so switching accounts REMOUNTS the editor: the
-              // number and symbol fields keep local text state, and reusing
-              // one instance would leave a half-typed balance sitting in the
-              // next account's box.
-              key={accounts[selectedIndex]!.id}
-              account={accounts[selectedIndex]!}
-              index={selectedIndex}
-              people={people}
-              update={update}
-              quotes={quotes}
-              onDelete={() => deleteAccount(selectedIndex)}
-            />
-          ) : (
-            <div className="muted">
-              No accounts yet — “+ Add account” starts one, and it opens here.
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

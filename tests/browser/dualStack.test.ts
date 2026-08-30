@@ -525,7 +525,7 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
     .isVisible();
 
   // --- The snapshot: row now, score + spend when the simulations land -------
-  await page.getByRole('button', { name: 'Net Worth' }).click();
+  await page.getByRole('button', { name: 'Net worth' }).click();
   await page.getByRole('button', { name: 'Take snapshot' }).click();
   const dialogInputs = page.locator('dialog input');
   await dialogInputs.first().fill(String(DRIVE_HOME_VALUE));

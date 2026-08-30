@@ -64,7 +64,7 @@ export function simulationReadiness(profile: Profile): SimulationReadiness {
 /** The Workbench results column's first-run state. */
 export const FIRST_RUN_HEADLINE = 'Nothing to simulate yet';
 export const FIRST_RUN_BODY =
-  'Add your accounts on the Profile tab — the simulation starts when there is ' +
+  'Add your accounts on the Accounts page — the simulation starts when there is ' +
   'something to simulate. No number appears here before then, because a ' +
   'simulation of zero accounts would be a statement about a household that ' +
   'does not exist.';
@@ -74,17 +74,17 @@ export const ZERO_SPEND_CONDITION =
   'Recorded spending is $0/month, so the only dollars any simulated future spends ' +
   'are the ones the law charges anyway — taxes, and Medicare premiums from 65. ' +
   'This number is a fact about the inputs as entered, not about your retirement; ' +
-  'record your expenses on the Profile tab and it becomes one.';
+  'record your expenses on the Expenses page and it becomes one.';
 
 /** Net Worth's snapshot affordance, gated. */
 export const NET_WORTH_FIRST_RUN =
-  'Add your accounts on the Profile tab first — a snapshot records their balances ' +
+  'Add your accounts on the Accounts page first — a snapshot records their balances ' +
   'at today’s prices, and there is nothing to record yet.';
 
 /** The Search page, gated whole: a search is thousands of simulations. */
 export const SEARCH_FIRST_RUN =
   'Search sweeps your plan across thousands of simulations, and a simulation ' +
-  'needs something to simulate. Add your accounts on the Profile tab first.';
+  'needs something to simulate. Add your accounts on the Accounts page first.';
 
 /** The History tab's scoring offers, gated. */
 export const HISTORY_FIRST_RUN =

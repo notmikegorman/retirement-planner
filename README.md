@@ -46,7 +46,7 @@ ask again with a single **Reconnect** click. Installing the page as an app
 (the install icon in Chrome's address bar — "Add to Dock" on a Mac) makes the
 grant stick so it stops asking.
 
-Picked the wrong folder? **Profile → Settings → Switch storage** returns to the
+Picked the wrong folder? **Settings → Switch storage** returns to the
 question so you can pick a different one; it never touches the folder or the
 files in it.
 
@@ -129,7 +129,7 @@ unaffected. Never refresh, and the app never connects to anything at all.
 - **Updates announce themselves.** When a new version is deployed, a small
   "Reload to update" card appears; nothing swaps out from under a running
   session.
-- **Caches grow.** `runs/` is unbounded by design; Profile → Settings shows
+- **Caches grow.** `runs/` is unbounded by design; the Settings page shows
   its size, and deleting it costs only recomputation.
 
 ## It is not financial advice

@@ -277,7 +277,7 @@ export async function bootLocalBackend(): Promise<Api> {
    * Decision D7, made visible: the runs/ cache stays UNBOUNDED (exactly what
    * the Node server did — picked-folder writes are quota-exempt real disk),
    * and in exchange its size is measured at every meta() ask and shown on
-   * Profile > Settings. Measured straight off the handle (getFile().size — no
+   * the Settings page. Measured straight off the handle (getFile().size — no
    * bytes read) rather than through the FileStore seam, which deliberately
    * has no stat call: this is a metric about the folder, not a record read.
    */
