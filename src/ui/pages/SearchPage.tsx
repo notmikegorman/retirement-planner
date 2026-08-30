@@ -418,7 +418,7 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
   const openInWorkbench = async (scenario: Scenario) => {
     try {
       await loadPlanIntoWorkbench(scenario);
-      showToast('Loaded into the workbench');
+      showToast('Loaded as the plan');
       navigate('workbench');
     } catch (err) {
       setStartError(errorText(err));

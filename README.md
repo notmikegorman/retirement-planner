@@ -106,7 +106,7 @@ on past days, and nothing reconstructs it.
 
 Simulations, tax math, file IO: all local, always. The single thing that ever
 touches the network is the **price refresh** (the Refresh button on the
-Accounts card, and Run now on the Workbench), which sends your holdings'
+Accounts table, and Run now on the Plan page), which sends your holdings'
 **ticker symbols** — nothing else — through a tiny Cloudflare Worker proxy to
 Yahoo Finance's public quote endpoint. The proxy exists because browsers
 cannot call Yahoo directly; it validates the symbol, relays the JSON, and
@@ -145,7 +145,7 @@ the whole picture.
 
 A first boot on an empty folder starts **from zero**: a one-page setup step
 collects who the plan is for and which state, and then everything the app
-shows is your own data. With no accounts entered yet, the Workbench shows
+shows is your own data. With no accounts entered yet, the Plan page shows
 what is missing and where to add it rather than a success percentage — a
 simulation of zero accounts would be a statement about a household that does
 not exist — and once accounts exist but recorded spending is still $0, the

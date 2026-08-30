@@ -27,12 +27,12 @@ import {
 import { ProfileFormModule } from './ProfileFormModule';
 
 const GIVING_RULE_HELP =
-  'The household default. The plan can override it on the Workbench’s Tithing tab ' +
+  'The household default. The plan can override it on the Plan page’s Tithing tab ' +
   'without changing this answer.';
 
 const POT_PROFILE_HELP =
   'The household default for the pot. The plan can override it — or switch it off for one ' +
-  'what-if — on the Workbench’s Tithing tab without changing this answer.';
+  'what-if — on the Plan page’s Tithing tab without changing this answer.';
 
 const TITHING_TABS = [
   { id: 'working', label: 'While working' },

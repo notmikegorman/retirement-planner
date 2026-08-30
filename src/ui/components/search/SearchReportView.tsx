@@ -223,7 +223,7 @@ function Answer({
 
       <div className="row">
         <SaveFinalist report={report} finalist={winner} primary />
-        <button onClick={() => void onOpenInWorkbench(winner.scenario)}>Open in the workbench</button>
+        <button onClick={() => void onOpenInWorkbench(winner.scenario)}>Open on the Plan page</button>
       </div>
     </div>
   );
@@ -454,7 +454,7 @@ function SaveFinalist({
       });
       setSaved(true);
       setOpen(false);
-      showToast('Kept — it is in the workbench’s History tab');
+      showToast('Kept — it is in the Plan page’s History tab');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

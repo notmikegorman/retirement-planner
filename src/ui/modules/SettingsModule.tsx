@@ -108,7 +108,7 @@ export function SettingsModule() {
                 pct
                 value={settings.successTarget}
                 width={130}
-                tip="The share of simulated futures you want to survive to the horizon. The verdict on the Workbench is measured against this number."
+                tip="The share of simulated futures you want to survive to the horizon. The verdict on the Plan page is measured against this number."
                 onCommit={(v) =>
                   doc.update((p) => {
                     p.settings.successTarget = v ?? settings.successTarget;
@@ -132,7 +132,7 @@ export function SettingsModule() {
                 int
                 value={settings.mcPathsFinal}
                 width={130}
-                tip="Path count used when you tick “final quality” in the Workbench run settings — slower, but the success percentage stops wobbling between runs."
+                tip="Path count used when you tick “final quality” in the Plan page’s run settings — slower, but the success percentage stops wobbling between runs."
                 onCommit={(v) =>
                   doc.update((p) => {
                     p.settings.mcPathsFinal = v ?? settings.mcPathsFinal;

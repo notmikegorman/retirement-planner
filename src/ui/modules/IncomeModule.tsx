@@ -11,7 +11,7 @@ const RETIREMENT_INCOME_HELP =
   'Recurring money you expect AFTER you stop working — part-time work, consulting, a rental, a ' +
   'pension — in today’s dollars per month. The mirror image of a salary: it starts in the first ' +
   'year nobody draws one, the retirement year is prorated by the months nobody worked, and it ' +
-  'inflates with CPI and runs for life. Empty means none. The Workbench can override it per plan, ' +
+  'inflates with CPI and runs for life. Empty means none. The plan can override it on the Plan page, ' +
   'which is where “what if I consulted two days a week?” belongs.';
 const RETIREMENT_INCOME_TAXABLE_HELP =
   'On by default, which is the honest answer for anything earned: it is ordinary income, so it ' +

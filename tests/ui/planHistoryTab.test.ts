@@ -525,7 +525,7 @@ describe('the warnings that survived the cabinet, re-worded for a restore', () =
     // said on that day, and nothing overwrites it. What is left is the thing
     // that still works — restore it and the workbench runs it under this one.
     expect(warning.message).not.toMatch(/re-score/i);
-    expect(warning.message).toContain('the workbench runs the plan on screen live');
+    expect(warning.message).toContain('the Plan page runs the plan on screen live');
   });
 
   it('says nothing when the score was taken by the engine that is running', () => {

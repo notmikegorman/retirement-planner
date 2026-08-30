@@ -129,7 +129,7 @@ const ITEMISE_TIP =
 const EXPENSE_SPLIT_NOTE =
   'These three streams replace the old single “annual baseline spending” number — re-enter your ' +
   'living expenses with giving and investing carved out, or you will double-count them. Each has ' +
-  'a value in play while working and a value in play afterwards; the Workbench’s Spending card ' +
+  'a value in play while working and a value in play afterwards; the Plan page’s Spending card ' +
   'shows the same pairs side by side and can override either of them for one plan.';
 const RETIRED_SWITCH_NOTE =
   'Living, investing and giving all switch on ONE signal: the first year in which nobody in the ' +

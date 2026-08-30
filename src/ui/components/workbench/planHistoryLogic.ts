@@ -349,7 +349,7 @@ export function planVersionWarnings(
         `Scored by engine ${entry.score.engineVersion}; this app runs ${opts.engineVersion}. ` +
         'The engine version is part of the run key precisely because two engines do not agree, ' +
         'so that figure is not comparable with anything scored since. Restoring is safe — the ' +
-        'plan is unchanged — and restoring is how to read it under this engine: the workbench ' +
+        'plan is unchanged — and restoring is how to read it under this engine: the Plan page ' +
         'runs the plan on screen live. The recorded number stays as it is, because it is a ' +
         'record of what that engine said on that day.',
     });

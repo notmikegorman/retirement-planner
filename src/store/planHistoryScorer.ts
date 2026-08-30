@@ -311,6 +311,6 @@ function alreadyScoredMessage(entry: PlanHistoryEntry): string {
     `${which} already has a score, measured on ${when} against that day's balances and ` +
     'prices. A recorded score is not rewritten — a second number on the same row would ' +
     'report two different days as if they were one. To see what this plan would do today, ' +
-    'restore it: the workbench runs the plan on screen live.'
+    'restore it: the Plan page runs the plan on screen live.'
   );
 }
