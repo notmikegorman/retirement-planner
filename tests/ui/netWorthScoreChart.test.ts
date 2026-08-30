@@ -607,7 +607,9 @@ describe('what the scores on this page are scores OF (source scan)', () => {
     // Never "your plan right now": a recorded score is of the plan as it stood
     // when it was taken, and a reader who forgets that reads the chart wrong.
     expect(page).toContain('The plan, as scored');
-    expect(page).toContain('not as it stands now');
+    // The header card that spelled this out retired with the tab redesign
+    // (2026-08-30); the row titles and the table footer carry it now.
+    expect(page).toContain('the plan is scored once, when the snapshot is taken');
     expect(page).toContain('<th style={{ textAlign: \'right\' }}>Plan score</th>');
   });
 
@@ -632,7 +634,7 @@ describe('what the scores on this page are scores OF (source scan)', () => {
     // `.table-scroll` is the app's answer to exactly this, and every other wide
     // table here already uses it. (It was the removed "Add the spend figure"
     // button that first made the table overflow; the fix outlived the cause.)
-    expect(page).toContain('<div className="table-scroll">');
+    expect(page).toContain('<div className="table-scroll managedTableWrap">');
   });
 });
 
@@ -816,7 +818,8 @@ describe('spendDomain — a dollar axis that cannot invent movement', () => {
 
 describe('the spend chart’s wiring (source scan)', () => {
   it('is a THIRD plot, not a second axis on either of the other two', () => {
-    expect(page).toContain('SPEND_AXIS_LABEL');
+    // (The axis-label heading retired with the tab redesign — the Spend tab
+    // names the plot now; the separation pins below are the load-bearing ones.)
     // The spec is completed per render (its tooltip needs the LIVE in-flight
     // registry — the Phase-4 wording-quirk fix), but it is still the spend
     // spec on its own third plot.

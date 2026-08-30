@@ -28,6 +28,13 @@ export function ProfileFormModule(props: {
   children: (profile: Profile, doc: ProfileDoc) => ReactNode;
   /** Content below the form, OUTSIDE the fieldset — always-active cards. */
   after?: ReactNode;
+  /**
+   * A view-switching strip, rendered ABOVE the fieldset and outside it —
+   * tabs are navigation, not edits, and inside the fieldset view mode would
+   * disable them. The caller owns the strip and the state; the draft (and
+   * an edit session) survives a switch because both live on the doc.
+   */
+  tabs?: ReactNode;
 }) {
   const doc = useProfileDoc();
 
@@ -86,6 +93,7 @@ export function ProfileFormModule(props: {
         {doc.saveError !== null ? (
           <div className="error-banner">Save failed: {doc.saveError}</div>
         ) : null}
+        {props.tabs}
         <fieldset key={doc.rev} disabled={!doc.editing} className="moduleFieldset">
           {props.children(doc.profile, doc)}
         </fieldset>

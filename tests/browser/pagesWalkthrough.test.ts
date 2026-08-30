@@ -341,6 +341,8 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     await dialogInputs.nth(1).fill(DRIVE_NOTE);
     await dialogInputs.nth(1).press('Tab');
     await page.locator('dialog button.primary').click();
+    // The table lives on the Snapshots tab since the ledger grew tabs.
+    await page.getByRole('tab', { name: 'Snapshots' }).click();
     const scoreCell = page.locator('tbody tr').first().locator('td').nth(4);
     await expect
       .poll(async () => scoreCell.innerText().catch(() => ''), { timeout: 300_000 })

@@ -125,8 +125,16 @@ export const RESULTS_TAB_IDS = [
 
 export const SEARCH_TAB_IDS = ['space', 'progress', 'report', 'history'] as const;
 
+/**
+ * The Net worth ledger's four views (2026-08-30): the stacked-bar trend, the
+ * two score plots, and the snapshots table — one tab per panel, 'trend'
+ * first because the picture is what the page exists to show.
+ */
+export const NETWORTH_TAB_IDS = ['trend', 'score', 'spend', 'snapshots'] as const;
+
 export type ResultsTabId = (typeof RESULTS_TAB_IDS)[number];
 export type SearchTabId = (typeof SEARCH_TAB_IDS)[number];
+export type NetWorthTabId = (typeof NETWORTH_TAB_IDS)[number];
 
 /**
  * Which vocabulary each page's second segment is drawn from — for the pages
@@ -145,7 +153,7 @@ export const PAGE_TABS = {
   income: [],
   insurance: [],
   investing: [],
-  networth: [],
+  networth: NETWORTH_TAB_IDS,
   search: SEARCH_TAB_IDS,
   settings: [],
   tithing: [],
@@ -341,6 +349,7 @@ export function historyAction(currentPath: string, nextPath: string): 'push' | '
  */
 export const RESULTS_TAB_STORAGE_KEY = 'fplan-results-tab';
 export const SEARCH_TAB_STORAGE_KEY = 'fplan-search-tab';
+export const NETWORTH_TAB_STORAGE_KEY = 'fplan-networth-tab';
 
 /**
  * THE PRECEDENCE RULE, in one function, because two sources of truth for one
@@ -386,7 +395,7 @@ export const PAGE_TAB_STORAGE_KEY = {
   income: null,
   insurance: null,
   investing: null,
-  networth: null,
+  networth: NETWORTH_TAB_STORAGE_KEY,
   search: SEARCH_TAB_STORAGE_KEY,
   settings: null,
   tithing: null,

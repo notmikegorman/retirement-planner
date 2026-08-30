@@ -26,13 +26,11 @@ export function HealthModule() {
     <ProfileFormModule title="Health">
       {(draft, doc) => (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>
-            Health
-            <InfoTip label="the health quote" text={ACA_INTRO} />
-          </h2>
+          {/* No "Health" heading: the banner already says where you are. */}
           <p className="muted" style={{ marginTop: 0 }}>
             Only matters if the plan retires before 65 — employer coverage runs until you retire,
             Medicare takes over at 65.
+            <InfoTip label="the health quote" text={ACA_INTRO} />
             <InfoTip label="how to get the ACA quote" text={ACA_STEPS} />
           </p>
           <div className="row">

@@ -163,14 +163,8 @@ export function App() {
                 </div>
               </>
             )}
-            {page === 'networth' && (
-              <>
-                <ModuleBanner title="Net worth" />
-                <div className="moduleBody">
-                  <NetWorthPage {...props} />
-                </div>
-              </>
-            )}
+            {/* Net worth wears its own banner (snapshot action, tabs). */}
+            {page === 'networth' && <NetWorthPage {...props} />}
             {page === 'accounts' && <AccountsModule {...props} />}
             {page === 'expenses' && <ExpensesModule />}
             {page === 'health' && <HealthModule />}

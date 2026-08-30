@@ -11,7 +11,13 @@ import {
   loadFolderHandle,
   profileSetupNeeded,
 } from './local/storageChoice';
-import { RESULTS_TAB_STORAGE_KEY, SEARCH_TAB_STORAGE_KEY, appBase, withBase } from './nav';
+import {
+  NETWORTH_TAB_STORAGE_KEY,
+  RESULTS_TAB_STORAGE_KEY,
+  SEARCH_TAB_STORAGE_KEY,
+  appBase,
+  withBase,
+} from './nav';
 import './styles.css';
 
 /**
@@ -110,6 +116,7 @@ function resetRememberedViews(): void {
   const keys = [
     RESULTS_TAB_STORAGE_KEY,
     SEARCH_TAB_STORAGE_KEY,
+    NETWORTH_TAB_STORAGE_KEY,
     // The Workbench input panel's key — file-local in ScenarioPanel.tsx
     // (PANEL_TAB_STORAGE_KEY), repeated here rather than exported because
     // tests/ui/tithingTab.test.ts pins that declaration line verbatim.

@@ -13,7 +13,6 @@ export function HomeModule() {
     <ProfileFormModule title="Home">
       {(draft, doc) => (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Home</h2>
           <div className="row">
             <NumberField
               label="Value ($)"

@@ -24,6 +24,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ENTITY_PAGES,
   HOME,
+  NETWORTH_TAB_IDS,
+  NETWORTH_TAB_STORAGE_KEY,
   PAGES,
   PAGE_TABS,
   RESULTS_TAB_IDS,
@@ -97,7 +99,7 @@ describe('the vocabulary', () => {
     expect(Object.keys(PAGE_TABS).sort()).toEqual([...PAGES].sort());
     expect([...PAGE_TABS.workbench]).toEqual([...RESULTS_TAB_IDS]);
     expect([...PAGE_TABS.search]).toEqual([...SEARCH_TAB_IDS]);
-    expect([...PAGE_TABS.networth]).toEqual([]);
+    expect([...PAGE_TABS.networth]).toEqual([...NETWORTH_TAB_IDS]);
     expect([...PAGE_TABS.household]).toEqual([]);
   });
 
@@ -114,6 +116,7 @@ describe('the vocabulary', () => {
       'explore',
     ]);
     expect([...SEARCH_TAB_IDS]).toEqual(['space', 'progress', 'report', 'history']);
+    expect([...NETWORTH_TAB_IDS]).toEqual(['trend', 'score', 'spend', 'snapshots']);
   });
 
   it('is URL-safe and free of duplicates within a page', () => {
@@ -141,6 +144,8 @@ describe('the vocabulary', () => {
     // would drop every reader back on the first tab of every page.
     expect(RESULTS_TAB_STORAGE_KEY).toBe('fplan-results-tab');
     expect(SEARCH_TAB_STORAGE_KEY).toBe('fplan-search-tab');
+    // Newer than the URL (2026-08-30), so its name follows the convention.
+    expect(NETWORTH_TAB_STORAGE_KEY).toBe('fplan-networth-tab');
   });
 });
 
@@ -262,8 +267,8 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 13 pages + 7 results tabs + 4 search tabs = 24.
-    expect(paths.length).toBe(24);
+    // 13 pages + 7 results tabs + 4 search tabs + 4 net-worth tabs = 28.
+    expect(paths.length).toBe(28);
   });
 });
 
@@ -693,11 +698,12 @@ describe('useRoute wires the History API', () => {
     expect(Object.keys(PAGE_TAB_STORAGE_KEY).sort()).toEqual([...PAGES].sort());
     expect(PAGE_TAB_STORAGE_KEY.workbench).toBe(RESULTS_TAB_STORAGE_KEY);
     expect(PAGE_TAB_STORAGE_KEY.search).toBe(SEARCH_TAB_STORAGE_KEY);
+    expect(PAGE_TAB_STORAGE_KEY.networth).toBe(NETWORTH_TAB_STORAGE_KEY);
     // The untabbed pages have nothing to remember, and the entity pages
     // deliberately none either: a remembered RECORD would reopen a detail
     // the user last looked at days ago, when a bare /accounts should mean
     // the table.
-    expect(PAGE_TAB_STORAGE_KEY.networth).toBeNull();
+    expect(PAGE_TAB_STORAGE_KEY.household).toBeNull();
     expect(PAGE_TAB_STORAGE_KEY.accounts).toBeNull();
     expect(PAGE_TAB_STORAGE_KEY.insurance).toBeNull();
   });

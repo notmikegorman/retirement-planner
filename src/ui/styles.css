@@ -2123,6 +2123,9 @@ dialog.modal::backdrop {
   gap: 0;
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
+  /* Standalone strips breathe; inside .detailsTabHeader the header rules
+     zero this again. */
+  margin-bottom: 16px;
 }
 
 /* Underline tabs. Element-qualified (button.…) so these outrank the global
@@ -2299,6 +2302,26 @@ fieldset.moduleFieldset:disabled button:not(.infotip-btn) {
 
 .managedTable {
   font-size: 14px;
+}
+
+/* Any table inside the wrap wears the header band; the sortable managed
+   table's own th rule (below) then zeroes the padding its buttons supply. */
+.managedTableWrap th {
+  background: var(--bg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 13px 16px;
+}
+
+.managedTableWrap td {
+  padding: 12px 16px;
+}
+
+.managedTableWrap tbody tr:last-child td {
+  border-bottom: 1px solid var(--border);
 }
 
 .managedTable th {

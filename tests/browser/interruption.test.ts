@@ -254,6 +254,8 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
     expect(intents.intents[0].kind).toBe('snapshot');
 
     await page2.getByRole('button', { name: 'Net worth' }).click();
+    // The table lives on the Snapshots tab since the ledger grew tabs.
+    await page2.getByRole('tab', { name: 'Snapshots' }).click();
     const scoreCell = page2.locator('tbody tr').first().locator('td').nth(4);
     await scoreCell.locator('.flag', { hasText: 'interrupted' }).waitFor({ timeout: 60_000 });
 
@@ -343,6 +345,8 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
     // On screen: the permanent no-score reading with the reason in full — and
     // no Finish button anywhere, because finishing would be dishonest.
     await page2.getByRole('button', { name: 'Net worth' }).click();
+    // The table lives on the Snapshots tab since the ledger grew tabs.
+    await page2.getByRole('tab', { name: 'Snapshots' }).click();
     const scoreCell = page2.locator('tbody tr').first().locator('td').nth(4);
     await scoreCell.locator('.flag', { hasText: 'no score' }).waitFor({ timeout: 60_000 });
     expect(await page2.getByRole('button', { name: 'Finish scoring' }).count()).toBe(0);

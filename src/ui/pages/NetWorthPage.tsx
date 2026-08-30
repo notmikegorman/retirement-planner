@@ -69,7 +69,15 @@ import type { NetWorthSnapshot, SnapshotScore } from '../../shared/types';
 import { formatPct, formatUSD } from '../../shared/util';
 import { api } from '../api';
 import { NET_WORTH_FIRST_RUN, simulationReadiness } from '../firstRun';
-import type { PageProps } from '../nav';
+import {
+  NETWORTH_TAB_IDS,
+  NETWORTH_TAB_STORAGE_KEY,
+  resolveTab,
+  writeStoredTab,
+  type NetWorthTabId,
+  type PageProps,
+} from '../nav';
+import { ModuleBanner } from '../modules/ModuleBanner';
 import { useChartTheme, type ChartPalette } from '../theme';
 import { useToast } from '../toast';
 import { NumberField, TextField } from '../components/profile/fields';
@@ -87,8 +95,6 @@ import {
 import {
   BREAK_CHIP_LABEL,
   COMPARABILITY_CAPTION,
-  SCORE_AXIS_LABEL,
-  SPEND_AXIS_LABEL,
   UNKNOWN_CHIP_LABEL,
   scoreChartEmptyNote,
   spendChartEmptyNote,
@@ -671,7 +677,20 @@ function TrendChart({
  */
 const SCORING_POLL_MS = 2500;
 
-export function NetWorthPage(_props: PageProps) {
+/**
+ * The four views, one per panel (the owner's reorganisation, 2026-08-30).
+ * The ids live in nav.ts because they are URL segments (/networth/trend);
+ * this record supplies the words, and a tab without a label fails to
+ * compile.
+ */
+const NETWORTH_TAB_LABELS: Record<NetWorthTabId, string> = {
+  trend: 'Trend',
+  score: 'Score',
+  spend: 'Spend',
+  snapshots: 'Snapshots',
+};
+
+export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
   const chart = useChartTheme();
   const { showToast } = useToast();
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[] | null>(null);
@@ -747,6 +766,27 @@ export function NetWorthPage(_props: PageProps) {
   const [pointer, setPointer] = useState<ChartPoint | null>(null);
   const [plotSize, measurePlot] = useMeasuredSize();
   const [cardSize, measureCard] = useMeasuredSize();
+
+  // The URL's opinion first, storage's second, 'trend' third — the same
+  // precedence every tabbed page uses (nav.ts resolveTab).
+  const tab = resolveTab(route.tab, NETWORTH_TAB_IDS, storedTab);
+  const selectTab = (id: NetWorthTabId) => {
+    writeStoredTab(NETWORTH_TAB_STORAGE_KEY, id);
+    navigate('networth', id);
+  };
+
+  /**
+   * AUTO-SNAPSHOT (the owner's rule, 2026-08-30): arriving at the ledger
+   * takes today's snapshot if none exists yet — the record the page exists
+   * to keep should not depend on remembering to press the button. Once per
+   * mount (the ref), never while the zero-start gate is up, and with the
+   * same home value the dialog would have offered (the last snapshot's
+   * figure, the profile's only for the very first). The manual button stays
+   * for a second snapshot in a day, or a different home value.
+   */
+  const autoTried = useRef(false);
+  const [autoTaking, setAutoTaking] = useState(false);
+  const [autoError, setAutoError] = useState<string | null>(null);
 
   /**
    * Memoised, and that is a FIX, not a micro-optimisation. Rebuilt inline, this
@@ -841,6 +881,37 @@ export function NetWorthPage(_props: PageProps) {
     return () => clearInterval(timer);
   }, [idle, pollScoring]);
 
+  useEffect(() => {
+    if (autoTried.current) return;
+    // Not before the load has answered, and never while the gate is up.
+    if (snapshots === null || homeValue === null || snapshotGated) return;
+    const now = new Date();
+    const takenToday = snapshots.some((s) => {
+      const d = new Date(s.takenAt);
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    });
+    autoTried.current = true;
+    if (takenToday) return;
+    setAutoTaking(true);
+    setAutoError(null);
+    void (async () => {
+      try {
+        const snapshot = await api.takeNetWorthSnapshot({ homeValue });
+        setSnapshots((prev) => [...(prev ?? []), snapshot]);
+        setScoringIds([...scoringRef.current, snapshot.id]);
+        showToast(`Snapshot recorded: ${formatUSD(snapshot.total)}`);
+      } catch (e) {
+        setAutoError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setAutoTaking(false);
+      }
+    })();
+  }, [snapshots, homeValue, snapshotGated, setScoringIds, showToast]);
+
   const openDialog = () => {
     setTakeError(null);
     setDialogOpen(true);
@@ -920,13 +991,25 @@ export function NetWorthPage(_props: PageProps) {
 
   if (loadError) {
     return (
-      <div>
-        <div className="error-banner">Failed to load net worth: {loadError}</div>
-        <button onClick={() => void load()}>Retry</button>
-      </div>
+      <>
+        <ModuleBanner title="Net worth" />
+        <div className="moduleBody">
+          <div className="error-banner">Failed to load net worth: {loadError}</div>
+          <button onClick={() => void load()}>Retry</button>
+        </div>
+      </>
     );
   }
-  if (snapshots === null || homeValue === null) return <div className="muted">Loading…</div>;
+  if (snapshots === null || homeValue === null) {
+    return (
+      <>
+        <ModuleBanner title="Net worth" />
+        <div className="moduleBody">
+          <div className="muted">Loading…</div>
+        </div>
+      </>
+    );
+  }
 
   // Nothing hovered draws nothing; before the plot has been measured there is
   // no edge to flip against, so the card stays with recharts' own anchor for
@@ -937,38 +1020,48 @@ export function NetWorthPage(_props: PageProps) {
       : undefined;
 
   return (
-    <div>
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>Net worth</h2>
-        {snapshotGated ? (
-          /* Zero-start: no button, and the reason in its place — an empty
-             state, never a $0 row pretending to be a measurement. */
-          <div className="muted">{NET_WORTH_FIRST_RUN}</div>
-        ) : (
-          <>
-            <div className="row">
-              <button className="primary" onClick={openDialog}>
-                Take snapshot
-              </button>
-              <span className="muted">
-                Records every account at today&rsquo;s prices, plus the home value you type, and
-                scores the plan behind it.
-              </span>
-            </div>
-
-            {/* WHAT THE SCORES ON THIS PAGE ARE SCORES OF. Stated here, next to
-                the button that records one: the plan as it stood when the row
-                was scored, which the plan's History remembers even after the
-                plan has moved on. */}
-            <div className="field-help" style={{ marginTop: 10 }}>
-              Every score below is the plan&rsquo;s own, run at final quality on the
-              profile&rsquo;s seed — the plan as it stood at that moment, not as it stands now.
-              It is computed once, when the snapshot is taken, and never again: a row is a
-              record of a day, and a number measured on a later one would not belong to it.
-            </div>
-          </>
-        )}
-      </div>
+    <>
+      <ModuleBanner
+        title="Net worth"
+        actions={
+          snapshotGated ? undefined : (
+            <button className="primary" disabled={autoTaking || taking} onClick={openDialog}>
+              Take snapshot
+            </button>
+          )
+        }
+      />
+      <div className="moduleBody">
+      {snapshotGated ? (
+        /* Zero-start: no button in the banner, and the reason here — an empty
+           state, never a $0 row pretending to be a measurement. */
+        <div className="muted" style={{ marginBottom: 12 }}>
+          {NET_WORTH_FIRST_RUN}
+        </div>
+      ) : null}
+      {autoError === null ? null : (
+        <div className="error-banner">Today&rsquo;s automatic snapshot failed: {autoError}</div>
+      )}
+      <nav
+        className="modalTabBar"
+        role="tablist"
+        aria-label="Net worth views"
+        style={{ marginBottom: 16 }}
+      >
+        {NETWORTH_TAB_IDS.map((id) => (
+          <button
+            key={id}
+            role="tab"
+            id={`networth-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls={`networth-panel-${id}`}
+            className={tab === id ? 'modalTabBtn isActive' : 'modalTabBtn'}
+            onClick={() => selectTab(id)}
+          >
+            {NETWORTH_TAB_LABELS[id]}
+          </button>
+        ))}
+      </nav>
 
       <SnapshotDialog
         open={dialogOpen}
@@ -982,16 +1075,13 @@ export function NetWorthPage(_props: PageProps) {
         onConfirm={take}
       />
 
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>Total over time, piece by piece</h2>
+      {tab === 'trend' && (
+      <div role="tabpanel" id="networth-panel-trend" aria-labelledby="networth-tab-trend">
         {bars.length === 0 ? (
-          /* Condition-aware: with the zero-start gate up, the card above holds
-             the no-accounts note INSTEAD of a Take-snapshot button, and "yours
-             to take, above" would point at a button that is not there. */
           <div className="muted">
             {snapshotGated
               ? 'No snapshots yet — the first becomes possible once the profile has accounts.'
-              : 'No snapshots yet — the first one is yours to take, above.'}
+              : 'No snapshots yet.'}
           </div>
         ) : (
           <>
@@ -1197,16 +1287,18 @@ export function NetWorthPage(_props: PageProps) {
           </>
         )}
       </div>
+      )}
 
-      {/* THE SCORE, ON ITS OWN PLOT, DIRECTLY UNDER THE BARS. Not overlaid:
-          millions of dollars and a probability need two scales, and two scales
-          make the eye read a crossing point that means nothing — move either
-          axis and it moves. Same x axis, same order, so reading straight down
-          from a bar lands on that day's score. */}
-      {bars.length > 0 && (
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>{SCORE_AXIS_LABEL}, snapshot by snapshot</h2>
-          {scoreSeries.scored === 0 ? (
+      {/* THE SCORE, ON ITS OWN PLOT. Not overlaid on the bars: millions of
+          dollars and a probability need two scales, and two scales make the
+          eye read a crossing point that means nothing — move either axis and
+          it moves. Same x axis, same order, so a tab switch keeps the days
+          lined up. */}
+      {tab === 'score' && (
+        <div role="tabpanel" id="networth-panel-score" aria-labelledby="networth-tab-score">
+          {bars.length === 0 ? (
+            <div className="muted">No snapshots yet.</div>
+          ) : scoreSeries.scored === 0 ? (
             <div className="muted">{scoreChartEmptyNote()}</div>
           ) : (
             <>
@@ -1245,10 +1337,11 @@ export function NetWorthPage(_props: PageProps) {
           whose success rate saturates near the ceiling cannot read its own
           progress off the probability at all. Every version of this plan scores
           96-point-something; what separates them is what they could afford. */}
-      {bars.length > 0 && (
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>{SPEND_AXIS_LABEL}, snapshot by snapshot</h2>
-          {scoreSeries.spendScored === 0 ? (
+      {tab === 'spend' && (
+        <div role="tabpanel" id="networth-panel-spend" aria-labelledby="networth-tab-spend">
+          {bars.length === 0 ? (
+            <div className="muted">No snapshots yet.</div>
+          ) : scoreSeries.spendScored === 0 ? (
             <div className="muted">{spendChartEmptyNote()}</div>
           ) : (
             <>
@@ -1292,8 +1385,8 @@ export function NetWorthPage(_props: PageProps) {
         </div>
       )}
 
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>Snapshots</h2>
+      {tab === 'snapshots' && (
+      <div role="tabpanel" id="networth-panel-snapshots" aria-labelledby="networth-tab-snapshots">
         {deleteError === null ? null : <div className="error-banner">{deleteError}</div>}
         {finishError === null ? null : <div className="error-banner">{finishError}</div>}
         {snapshots.length === 0 ? (
@@ -1304,7 +1397,7 @@ export function NetWorthPage(_props: PageProps) {
              its own card on a narrow window — and a page that scrolls sideways
              scrolls its heading and its charts too. Sideways scrolling belongs
              inside the box the wide thing is in. */
-          <div className="table-scroll">
+          <div className="table-scroll managedTableWrap">
           <table>
             <thead>
               <tr>
@@ -1453,6 +1546,24 @@ export function NetWorthPage(_props: PageProps) {
           there is one.
         </div>
       </div>
-    </div>
+      )}
+
+      {/* The automatic snapshot's moment: a strict little overlay that closes
+          itself when the record lands (or fails, whose message shows above). */}
+      {autoTaking ? (
+        <div className="deleteConfirmOverlay" role="presentation">
+          <div
+            className="deleteConfirmPanel"
+            role="alertdialog"
+            aria-modal="true"
+            aria-busy="true"
+            aria-label="Taking a snapshot"
+          >
+            <h3>Taking a snapshot…</h3>
+          </div>
+        </div>
+      ) : null}
+      </div>
+    </>
   );
 }

@@ -31,7 +31,7 @@ export function HouseholdModule() {
       {(draft, doc) => (
         <>
           <div className="card">
-            <h2 style={{ marginTop: 0 }}>Household &amp; filing</h2>
+            <h2 style={{ marginTop: 0 }}>Filing</h2>
             <div className="row">
               <label className="field" style={{ width: 170 }}>
                 {/* Uses .field-label like every other field so the control lines up

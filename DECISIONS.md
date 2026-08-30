@@ -1871,3 +1871,41 @@ Settings moved to the sidebar footer, where the theme toggle used to live —
 and the theme itself became an Appearance card inside Settings (applied on
 change, outside the view/edit form), so the footer is Settings + the folder
 control and nothing else.
+
+## The banner speaks once, and the ledger runs itself (2026-08-30, fourth pass)
+
+Owner feedback, applied:
+
+**A heading that repeats the banner is noise.** The banner names the module,
+so the content stops saying it again: the Expenses/Investing tables and the
+Health, Home, Income, Settings and Tithing forms lost their echo headings
+("Household & filing" tightened to "Filing"). The budget tables dropped
+their cards too and wear the managed-table treatment — header band,
+bordered wrap, full width — like the Accounts table; the Net worth
+snapshots table wears it as well.
+
+**Tithing is two tabs** — While working (the charitable budget lines) and
+Going forward (the pot and the ongoing rule). The tab is LOCAL state, not a
+URL segment: two halves of one editing surface, one Save, the same
+where-your-hands-are reasoning as the Workbench's input panel.
+ProfileFormModule grew a `tabs` slot for exactly this — rendered OUTSIDE
+the view-mode fieldset, because tabs are navigation and a disabled fieldset
+would switch them off.
+
+**Net worth reorganised around its four panels** — Trend (né "Total over
+time, piece by piece"), Score, Spend, Snapshots — as URL tabs
+(/networth/trend; nav.ts NETWORTH_TAB_IDS, remembered under
+fplan-networth-tab), with Take snapshot in the banner and the header card
+deleted along with its explanations (the scores-are-of-that-day and
+records-every-account paragraphs — the row titles and the table footer
+still carry the conditions).
+
+**The ledger takes today's snapshot itself.** Arriving at Net worth records
+a snapshot automatically when none exists for the current day — behind a
+self-closing "Taking a snapshot…" overlay — using the same home value the
+dialog would offer (the last snapshot's figure, the profile's for the very
+first). Never while the zero-start gate is up; once per visit; a failure
+reports in a banner and does not retry until the next arrival. The manual
+button remains for a second snapshot or a changed home value. The one new
+invariant worth naming: api.takeNetWorthSnapshot now has exactly two call
+sites — the dialog's confirm and this effect — and the tests pin the count.

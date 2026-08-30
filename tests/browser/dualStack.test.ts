@@ -533,6 +533,8 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   await dialogInputs.nth(1).fill(DRIVE_NOTE);
   await dialogInputs.nth(1).press('Tab');
   await page.locator('dialog button.primary').click();
+  // The table lives on the Snapshots tab since the ledger grew tabs.
+  await page.getByRole('tab', { name: 'Snapshots' }).click();
   const scoreCell = page.locator('tbody tr').first().locator('td').nth(4);
   const snapshotScoreCell = (
     await until(

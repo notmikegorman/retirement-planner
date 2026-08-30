@@ -226,13 +226,11 @@ export function BudgetCard({
 function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: UpdateFn }) {
   return (
     <div className="card">
-      <h2 style={{ marginTop: 0 }}>
-        Expenses
-        <InfoTip label="the expense streams" text={EXPENSE_SPLIT_NOTE} />
-      </h2>
+      {/* No "Expenses" heading: the banner already says where you are. */}
       <p className="muted" style={{ marginTop: 0 }}>
         Three monthly streams in today’s dollars, each modeled differently, and each with a value in
         play while working and a value in play afterwards.
+        <InfoTip label="the expense streams" text={EXPENSE_SPLIT_NOTE} />
         <InfoTip label="the working/after-work switch" text={RETIRED_SWITCH_NOTE} />
       </p>
       <div className="row">
@@ -397,7 +395,7 @@ function LinesTable(props: {
   const members = lines.filter((line) => line.category === category);
   const totals = categoryTotals(lines, category);
   return (
-    <div className="table-scroll">
+    <div className="table-scroll managedTableWrap">
       <table className="budget-table">
         <thead>
           <tr>
@@ -657,18 +655,19 @@ function LivingCard({
   const totals = categoryTotals(lines, 'living');
 
   return (
-    <div className="card">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>Expenses</h2>
+    <div>
+      {/* No "Expenses" heading and no card: the banner names the module, and
+          the table stands on its own like the Accounts table. */}
+      <div className="row inlineRow">
+        <p className="muted" style={{ margin: 0 }}>
+          {TODAYS_DOLLARS_NOTE} A blank cell in the last three columns is INHERITED — it shows the
+          figure it inherits in grey italics, and typing over it makes the number yours.
+        </p>
         <span className="spacer" />
         <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'living')])}>
           + Add row
         </button>
       </div>
-      <p className="muted" style={{ marginTop: 4, marginBottom: 10 }}>
-        {TODAYS_DOLLARS_NOTE} A blank cell in the last three columns is INHERITED — it shows the
-        figure it inherits in grey italics, and typing over it makes the number yours.
-      </p>
 
       <LinesTable
         lines={lines}
@@ -721,21 +720,20 @@ export function GivingLines({
   const editLines = editLinesWith(update);
   return (
     <>
-      <div className="row">
-        <h3 style={{ margin: 0 }}>Giving while working</h3>
+      {/* The asymmetry with the other budget tabs is deliberate, and this
+          sentence is where the tab says so — without it, one money column
+          reads as an editor somebody forgot to finish. */}
+      <div className="row inlineRow">
+        <p className="muted" style={{ margin: 0 }}>
+          Every figure is $/month in today’s dollars, and there is only a Now column: giving after
+          the last paycheck follows the rule on the Going-forward tab, and
+          the plan never reads an after-work or survivor figure off a giving line.
+        </p>
         <span className="spacer" />
         <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'charitable')])}>
           + Add row
         </button>
       </div>
-      {/* The asymmetry with the other budget tabs is deliberate, and this
-          sentence is where the tab says so — without it, one money column
-          reads as an editor somebody forgot to finish. */}
-      <p className="muted" style={{ marginTop: 4, marginBottom: 10 }}>
-        Every figure is $/month in today’s dollars, and there is only a Now column: giving after
-        the last paycheck follows the rule below, and the plan never reads an after-work or
-        survivor figure off a giving line.
-      </p>
       <LinesTable lines={lines} category="charitable" editLines={editLines} />
     </>
   );
@@ -755,7 +753,6 @@ export function InvestingCard({
     // truth, and the first row added from here would quietly zero the rest.
     return (
       <div className="card">
-        <h2 style={{ marginTop: 0 }}>Investing</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           The budget is not itemised yet, so investing is still a stream — edit it on the Expenses
           page, which is also where itemising starts. Once there are budget lines, the investing
@@ -767,18 +764,18 @@ export function InvestingCard({
   const editLines = editLinesWith(update);
   const streams = deriveExpenseStreams(expenses);
   return (
-    <div className="card">
-      <div className="row">
-        <h2 style={{ margin: 0 }}>Investing</h2>
+    <div>
+      {/* No "Investing" heading and no card: the banner names the module. */}
+      <div className="row inlineRow">
+        <p className="muted" style={{ margin: 0 }}>
+          {TODAYS_DOLLARS_NOTE} A blank cell in the last column is INHERITED — it shows the Now
+          figure in grey italics, and typing over it (a 0 to stop, say) makes the number yours.
+        </p>
         <span className="spacer" />
         <button onClick={() => editLines((ls) => [...ls, makeExpenseLine(ls, 'investing')])}>
           + Add row
         </button>
       </div>
-      <p className="muted" style={{ marginTop: 4, marginBottom: 10 }}>
-        {TODAYS_DOLLARS_NOTE} A blank cell in the last column is INHERITED — it shows the Now
-        figure in grey italics, and typing over it (a 0 to stop, say) makes the number yours.
-      </p>
 
       <LinesTable
         lines={lines}

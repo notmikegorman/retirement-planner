@@ -26,7 +26,6 @@ export function IncomeModule() {
     <ProfileFormModule title="Income">
       {(draft, doc) => (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Income</h2>
           <div className="row">
             {draft.people.map((person) => (
               <NumberField

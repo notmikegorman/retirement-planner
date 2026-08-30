@@ -90,7 +90,6 @@ export function SettingsModule() {
         const order = settings.withdrawalPolicy.order;
         return (
           <div className="card">
-            <h2 style={{ marginTop: 0 }}>Settings</h2>
             <div className="row">
               <NumberField
                 label="Horizon age"

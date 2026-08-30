@@ -465,7 +465,7 @@ describe('the chart type (source scan)', () => {
   it('legends every segment in the app’s chip idiom, and keeps the caption honest', () => {
     expect(page).toContain('className="chip-list"');
     expect(page).toMatch(/segments\.map\(\(seg\) => \(\s*<span className="wb-chip"/);
-    expect(page).toContain('No snapshots yet — the first one is yours to take, above.');
+    expect(page).toContain('No snapshots yet.');
     expect(page).toContain('a record of what you saw, not a projection');
   });
 
@@ -607,7 +607,11 @@ describe('the snapshot dialog (source scan)', () => {
     // showModal(), not open=true: focus trapping, Escape and the inert backdrop
     // are the platform's, and this app owns no code for any of them.
     expect(page).toContain('dialog.showModal()');
-    expect(page).toContain('<button className="primary" onClick={openDialog}>');
+    // In the banner now (the owner's relocation), and held while a snapshot
+    // — automatic or manual — is already in flight.
+    expect(page).toContain(
+      '<button className="primary" disabled={autoTaking || taking} onClick={openDialog}>',
+    );
     // The number is typed in exactly one place, and that place is the dialog.
     expect(page.match(/<NumberField/g)).toHaveLength(1);
     expect(dialog).toContain('<NumberField');
@@ -616,7 +620,10 @@ describe('the snapshot dialog (source scan)', () => {
   });
 
   it('takes a snapshot from confirm only — never from Cancel or Escape', () => {
-    expect(page.match(/api\.takeNetWorthSnapshot/g)).toHaveLength(1);
+    // Two call sites since 2026-08-30: the dialog's confirm, and the once-a-
+    // day automatic snapshot on arrival. Nothing else may record a row.
+    expect(page.match(/api\.takeNetWorthSnapshot/g)).toHaveLength(2);
+    expect(page).toContain('const takenToday = snapshots.some((s) => {');
     expect(take).toContain('api.takeNetWorthSnapshot');
     expect(page).toContain('onConfirm={take}');
     expect(page).toContain('onDismiss={closeDialog}');
