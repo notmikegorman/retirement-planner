@@ -118,6 +118,7 @@ describe('the vocabulary', () => {
       'cashflow',
       'explore',
       'widow',
+      'history',
     ]);
     expect([...SEARCH_TAB_IDS]).toEqual(['space', 'progress', 'report', 'history']);
     expect([...NETWORTH_TAB_IDS]).toEqual(['trend', 'score', 'spend', 'snapshots']);
@@ -287,8 +288,8 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 12 pages + 9 results tabs + 4 search tabs + 4 net-worth tabs = 29.
-    expect(paths.length).toBe(29);
+    // 12 pages + 10 results tabs + 4 search tabs + 4 net-worth tabs = 30.
+    expect(paths.length).toBe(30);
   });
 });
 

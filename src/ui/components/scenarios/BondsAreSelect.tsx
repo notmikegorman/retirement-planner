@@ -36,8 +36,9 @@ import {
  * dial keeps its own section on the card.
  *
  * The fund names are parenthetical anchors, never the primary vocabulary:
- * the model names compositions, not products, and the mapping is
- * approximate — which the help line says out loud.
+ * the model names compositions, not products, and the option labels carry
+ * the approximate-mapping caveat themselves (the explanatory footer died
+ * under the fluff rule, 2026-08-31).
  */
 export function BondsAreSelect({
   overrides,
@@ -111,11 +112,7 @@ export function BondsAreSelect({
           />
         )}
       </div>
-      <div className="field-help" style={{ marginTop: 4 }}>
-        One setting for the whole plan: it says what every bond sleeve is made of, in every
-        account and every year. The fund mapping is approximate. Saved with the plan the
-        moment it changes, like every plan input.
-      </div>
+      {/* No explanatory footer (the owner's fluff rule, 2026-08-31). */}
     </div>
   );
 }

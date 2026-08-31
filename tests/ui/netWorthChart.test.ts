@@ -462,11 +462,14 @@ describe('the chart type (source scan)', () => {
     expect(page).toContain('maxBarSize=');
   });
 
-  it('legends every segment in the app’s chip idiom, and keeps the caption honest', () => {
+  it('legends every segment in the app’s chip idiom, with no caption paragraph', () => {
     expect(page).toContain('className="chip-list"');
     expect(page).toMatch(/segments\.map\(\(seg\) => \(\s*<span className="wb-chip"/);
     expect(page).toContain('No snapshots yet.');
-    expect(page).toContain('a record of what you saw, not a projection');
+    // The explanatory footer under the bars is GONE (the owner's fluff rule,
+    // 2026-08-31) — the chips and each bar's tooltip say everything it said.
+    expect(page).not.toContain('a record of what you saw, not a projection');
+    expect(page).not.toContain('Portfolio = total minus the home value');
   });
 
   it('the empty-chart caption is condition-aware under the zero-start gate', () => {

@@ -20,8 +20,10 @@
  * 9c. paired streams + retirement income (note 19): the owner-shaped profile
  *     reproducing the PRE-CHANGE reference path bit for bit (two pinned
  *     digests), retired living taking over with the retirement year prorated,
- *     retired investing capped by surplus, the 'amount' giving rule, and the
- *     retirement income stream's cash and tax effects (taxable and not)
+ *     investing STOPPING at retirement whatever the old retired field says
+ *     (the app's standing rule, 1.24.0), the 'amount' giving rule, and the
+ *     retirement income stream's cash and tax effects (always ordinary
+ *     income — the old taxable flag is pinned parsed-and-ignored)
  * 10. 72(t)/SEPP (note 16): amortization golden, lock window, cap, forced
  *     stream, and the no-extra-draw rule
  * 10b. the AUTOMATIC 72(t) bridge (scenario.autoSepp, absent = ON): when it
@@ -2101,23 +2103,23 @@ describe('paired investing transfer (note 19)', () => {
 
   const retireMidYear: Scenario['events'] = [{ type: 'retire', person: 'p1', date: '2028-07' }];
 
-  it('keeps investing after retirement, prorating the retirement year', () => {
+  it('stops investing at retirement, prorating the retirement year to its worked months', () => {
     /*
-     * Working 1,000/mo, retired 500/mo:
-     *   2026 (12 worked): 1,000 x 12 x 1            = 12,000.00
-     *   2027 (12 worked): 12,000 x 1.025            = 12,300.00
-     *   2028 ( 6 worked): (1,000 x 6 + 500 x 6) x 1.025^2
-     *                   = 9,000 x 1.050625          =  9,455.625
-     *   2029 ( 0 worked): 500 x 12 x 1.025^3        =  6,461.34375
-     * Every one of those is below the year's surplus, so none is capped.
+     * The app's standing rule (2026-08-31, ENGINE_VERSION 1.24.0): investing
+     * out of a paycheck ends with the paycheck. Working 1,000/mo:
+     *   2026 (12 worked): 1,000 x 12 x 1     = 12,000.00
+     *   2027 (12 worked): 12,000 x 1.025     = 12,300.00
+     *   2028 ( 6 worked): 1,000 x 6 x 1.025^2 =  6,303.75
+     *   2029 ( 0 worked):                        0
+     * Every transfer is below the year's surplus, so none is capped.
      */
     const rows = runSimulation(
-      simInput(investProfile(500), { name: 'investing-pair', events: retireMidYear }),
+      simInput(investProfile(undefined), { name: 'investing-stops', events: retireMidYear }),
     ).referencePath;
     expect(rows[0].investing).toBeCloseTo(12000, 6);
     expect(rows[1].investing).toBeCloseTo(12300, 6);
-    expect(rows[2].investing).toBeCloseTo(9455.625, 6);
-    expect(rows[3].investing).toBeCloseTo(6461.34375, 6);
+    expect(rows[2].investing).toBeCloseTo(6303.75, 6);
+    expect(rows[3].investing).toBe(0);
     // Still a transfer, not consumption: never in expenses.total, and the
     // brokerage took the cash as balance AND basis (100% bills, so no growth
     // and no realized gain muddies it).
@@ -2131,50 +2133,38 @@ describe('paired investing transfer (note 19)', () => {
         8,
       );
     }
-    expect(rows[3].withdrawals.cash).toBe(0); // funded from surplus, never a draw
-
-    // Absent = 0: the stream still ends with the paycheck.
-    const stops = runSimulation(
-      simInput(investProfile(undefined), { name: 'investing-default', events: retireMidYear }),
-    ).referencePath;
-    expect(stops[2].investing).toBeCloseTo(6303.75, 6); // 1,000 x 6 x 1.025^2
-    expect(stops[3].investing).toBe(0);
+    expect(rows[2].withdrawals.cash).toBe(0); // funded from surplus, never a draw
   });
 
-  it('is capped by the surplus in retirement, exactly like the working stream', () => {
-    // 5,000/mo retired wants 60,000 x 1.025^3 = 64,613.4375 in 2029 — far more
-    // than the year's surplus. The engine may never borrow to invest, so the
-    // transfer is the surplus itself and not a dollar more.
-    const rows = runSimulation(
-      simInput(investProfile(5000), { name: 'investing-capped', events: retireMidYear }),
-    ).referencePath;
-    const y2029 = rows[3];
-    expect(y2029.investing).toBeGreaterThan(0);
-    expect(y2029.investing).toBeLessThan(60000 * 1.025 ** 3);
-    // No withdrawal at all, and the whole surplus went into the transfer:
-    // surplus = income - (expenses.total + taxes), with no draws in the year.
-    expect(y2029.withdrawals.cash).toBe(0);
-    expect(y2029.withdrawals.taxable).toBe(0);
-    const surplus =
-      y2029.income.taxableInterest +
-      y2029.income.dividends -
-      (y2029.expenses.total + y2029.taxes.totalTax);
-    expect(y2029.investing).toBeCloseTo(surplus, 6);
+  it('ignores a profile investingMonthlyRetired: parsed for old files, never dollars', () => {
+    // A profile written while the retired stream existed still loads, and its
+    // figure changes NOTHING: the run is bit-for-bit the run without it.
+    const withField = runSimulation(
+      simInput(investProfile(500), { name: 'investing-ignored', events: retireMidYear }),
+    );
+    const without = runSimulation(
+      simInput(investProfile(undefined), { name: 'investing-ignored', events: retireMidYear }),
+    );
+    expect(JSON.stringify(withField.referencePath)).toBe(JSON.stringify(without.referencePath));
+    expect(withField.referencePath[3].investing).toBe(0);
   });
 
-  it('is overridable per plan, identically to the profile edit', () => {
+  it('ignores a plan-level investingMonthlyRetired override the same way', () => {
+    // Old plan files may carry the override (the schema still parses it — it
+    // is strict, so dropping the key would refuse the whole file). It, too,
+    // never becomes dollars.
     const profile = investProfile(undefined);
     const overridden = runSimulation(
       simInput(profile, {
         name: 'investing-retired-override',
-        assumption_overrides: { expenses: { investingMonthlyRetired: 500 } },
+        assumption_overrides: { expenses: { investingMonthlyRetired: 5000 } },
         events: retireMidYear,
       }),
     );
-    const edited = runSimulation(
-      simInput(investProfile(500), { name: 'investing-retired-profile', events: retireMidYear }),
+    const plain = runSimulation(
+      simInput(investProfile(undefined), { name: 'investing-retired-plain', events: retireMidYear }),
     );
-    expect(JSON.stringify(overridden.referencePath)).toBe(JSON.stringify(edited.referencePath));
+    expect(JSON.stringify(overridden.referencePath)).toBe(JSON.stringify(plain.referencePath));
     expect(profile.expenses.investingMonthlyRetired).toBeUndefined();
   });
 });
@@ -2375,26 +2365,20 @@ describe('retirement income stream (note 19)', () => {
     }
   });
 
-  it('retirementIncomeTaxable false raises neither AGI nor any MAGI', () => {
-    // C — 60,000/yr of NON-taxable cash (a return of capital, a gift): the
-    // withdrawal falls by exactly 60,000 and no tax figure moves at all.
+  it('ignores retirementIncomeTaxable: the income is ordinary income either way', () => {
+    // The app's standing rule (2026-08-31, ENGINE_VERSION 1.24.0):
+    // post-retirement income is ALWAYS ordinary income. A profile written
+    // while the toggle existed still loads, and its `false` changes nothing —
+    // the run is bit-for-bit the run with the flag absent.
+    const flagged = run({ retirementMonthly: 5000, retirementIncomeTaxable: false });
+    const plain = run({ retirementMonthly: 5000 });
+    expect(JSON.stringify(flagged)).toBe(JSON.stringify(plain));
+    // And it genuinely is ordinary income: against the no-income baseline it
+    // raises AGI and every MAGI variant by the full 60,000.
     const a = run();
-    const c = run({ retirementMonthly: 5000, retirementIncomeTaxable: false });
-
-    expect(c[0].income.retirement).toBeCloseTo(60000, 8);
-    expect(c[0].withdrawals.cash).toBeCloseTo(23950, 6); // 83,950 - 60,000
-    expect(c[0].withdrawals.cash).toBeCloseTo(a[0].withdrawals.cash - 60000, 6);
-    expect(c[0].taxes.totalTax).toBe(0);
-    expect(c[0].taxes.federal.agi).toBeCloseTo(a[0].taxes.federal.agi, 8);
-    expect(c[0].taxes.federal.taxableIncome).toBeCloseTo(a[0].taxes.federal.taxableIncome, 8);
-    // Every MAGI variant: ACA (the subsidy cliff), IRMAA, NIIT.
-    expect(c[0].taxes.magi.acaMagi).toBeCloseTo(a[0].taxes.magi.acaMagi, 8);
-    expect(c[0].taxes.magi.irmaaMagi).toBeCloseTo(a[0].taxes.magi.irmaaMagi, 8);
-    expect(c[0].taxes.magi.niitMagi).toBeCloseTo(a[0].taxes.magi.niitMagi, 8);
-    // The taxable twin moves all of them.
-    const b = run({ retirementMonthly: 5000 });
-    expect(b[0].taxes.magi.acaMagi - c[0].taxes.magi.acaMagi).toBeCloseTo(60000, 6);
-    expect(b[0].taxes.magi.irmaaMagi - c[0].taxes.magi.irmaaMagi).toBeCloseTo(60000, 6);
+    expect(flagged[0].income.retirement).toBeCloseTo(60000, 8);
+    expect(flagged[0].taxes.magi.acaMagi - a[0].taxes.magi.acaMagi).toBeCloseTo(60000, 6);
+    expect(flagged[0].taxes.magi.irmaaMagi - a[0].taxes.magi.irmaaMagi).toBeCloseTo(60000, 6);
   });
 
   it('starts the first year nobody earns, prorated in the retirement year, for life', () => {
@@ -2500,7 +2484,7 @@ describe('retirement income stream (note 19)', () => {
     );
   });
 
-  it('is overridable per plan — the amount and its taxability', () => {
+  it('is overridable per plan — the amount; the old taxability override is inert', () => {
     const profile = incomeProfile();
     const overridden = runSimulation(
       simInput(profile, {
@@ -2517,7 +2501,8 @@ describe('retirement income stream (note 19)', () => {
     );
     expect(JSON.stringify(overridden.referencePath)).toBe(JSON.stringify(edited.referencePath));
 
-    // Taxability is overridable on its own, on top of a profile amount.
+    // A plan-level taxability override is parsed (the strict schema keeps the
+    // key so old plan files load) and IGNORED — the income stays ordinary.
     const taxFree = runSimulation(
       simInput(incomeProfile({ retirementMonthly: 5000 }), {
         name: 'income-taxfree-override',
@@ -2525,8 +2510,13 @@ describe('retirement income stream (note 19)', () => {
         events: [],
       }),
     ).referencePath;
-    expect(taxFree[0].income.retirement).toBeCloseTo(60000, 8);
-    expect(taxFree[0].taxes.totalTax).toBe(0);
+    const taxed = runSimulation(
+      simInput(incomeProfile({ retirementMonthly: 5000 }), {
+        name: 'income-taxfree-plain',
+        events: [],
+      }),
+    ).referencePath;
+    expect(JSON.stringify(taxFree)).toBe(JSON.stringify(taxed));
 
     // The caller's profile is untouched, and an empty income override is a no-op.
     expect(profile.income.retirementMonthly).toBeUndefined();

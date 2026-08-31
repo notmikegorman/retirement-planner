@@ -663,7 +663,10 @@ export function restorePrompt(
   // says "the version taken …" rather than quoting a fallback label — the
   // ledger killed "Unnamed version" everywhere a user reads.
   const what = row.named ? `“${row.label}”, taken ${row.moment}` : `the version taken ${row.moment}`;
-  const opening = `Restore ${what}? It becomes the current plan; the Plan page runs it the next time you open it.`;
+  // In-place since 2026-08-31 (History is a results tab on the mounted Plan
+  // page again): the workbench takes the restored plan the moment the call
+  // returns and re-runs it — no "next time you open it".
+  const opening = `Restore ${what}? It becomes the current plan and runs right away.`;
   return dayIsCovered(entries, now)
     ? `${opening} Today's restore point already exists and holds the plan as this morning began — so the plan on screen now will NOT be filed, and any change you have made today would have to be made again.`
     : `${opening} The plan being replaced is filed first, so this is undoable.`;

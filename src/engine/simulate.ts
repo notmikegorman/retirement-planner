@@ -194,11 +194,10 @@
  *   image of a salary — part-time work, consulting, a rental, a pension — in
  *   today's dollars per month, inflation-adjusted, starting the first year
  *   nobody draws a salary (prorated in the retirement year) and continuing for
- *   life. It is spendable cash (it reduces the year's required withdrawal and
- *   can therefore fund the retired investing stream), it is ordinary income
- *   unless retirementIncomeTaxable is false (then it raises neither AGI nor any
- *   MAGI — no ACA cliff, IRMAA or NIIT effect), and it is reported in
- *   YearRow.income.retirement. The automatic-72(t) estimator counts a full
+ *   life. It is spendable cash (it reduces the year's required withdrawal),
+ *   it is ALWAYS ordinary income (the app's standing rule, 2026-08-31 — it
+ *   raises AGI and every MAGI test; the old retirementIncomeTaxable flag is
+ *   parsed but ignored), and it is reported in YearRow.income.retirement. The automatic-72(t) estimator counts a full
  *   retired year of it, so part-time work shrinks the series and locks up less
  *   of the IRA.
  *   DOCUMENTED SIMPLIFICATION: the Social Security EARNINGS TEST is not
@@ -797,8 +796,6 @@ export interface PreparedSim {
   investingWindowRealByYear: number[];
   /** Retirement income, $/month in start-year dollars (0 when the profile has none). */
   retirementIncomeMonthly: number;
-  /** Whether that income is ordinary income (ProfileIncome: absent means true). */
-  retirementIncomeTaxable: boolean;
   /** Untargeted allocation mix per year (all non-savings accounts), or null. */
   mixByYear: Array<AssetMix | null>;
   /** Account-targeted allocation mixes per year. */
@@ -940,9 +937,7 @@ function profileWithOverrides(
       e.lifeInsurancePolicyPlans !== undefined ||
       e.retirementGiving !== undefined ||
       e.untithedPot !== undefined);
-  const hasIncome =
-    i !== undefined &&
-    (i.retirementMonthly !== undefined || i.retirementIncomeTaxable !== undefined);
+  const hasIncome = i !== undefined && i.retirementMonthly !== undefined;
   // An itemised budget is itself a reason to rebuild: its totals, not the
   // stored scalars, are what this run must spend. No lines and no override and
   // nothing has changed — the pre-budget profile takes the same object it
@@ -1008,11 +1003,12 @@ function profileWithOverrides(
     };
   }
   if (hasIncome && i !== undefined) {
+    // (retirementIncomeTaxable is parsed but ignored since 2026-08-31 —
+    // post-retirement income is always ordinary income — so the spread's
+    // untouched copy of it is enough.)
     next.income = {
       ...profile.income,
       retirementMonthly: i.retirementMonthly ?? profile.income.retirementMonthly,
-      retirementIncomeTaxable:
-        i.retirementIncomeTaxable ?? profile.income.retirementIncomeTaxable,
     };
   }
   return next;
@@ -1311,7 +1307,6 @@ export function prepareSim(input: SimulationInput): PreparedSim {
       // is built from this same rebuilt profile, and the in-window slice must be
       // a slice of exactly that stream. Windows are disjoint, so += per window
       // never double-counts a month.
-      const investingRetiredMonthly = profile.expenses.investingMonthlyRetired ?? 0;
       for (let yi = 0; yi < horizonYears; yi++) {
         const y0 = (startYear + yi) * 12;
         const inWindow = Math.max(0, Math.min(buyAbs, y0 + 12) - Math.max(sellAbs, y0));
@@ -1323,9 +1318,9 @@ export function prepareSim(input: SimulationInput): PreparedSim {
         const w = household.employerMonthsByYear[yi];
         const workedIn = Math.max(0, Math.min(buyAbs, y0 + w) - Math.max(sellAbs, y0));
         betweenHomesWorkedMonthsByYear[yi] += workedIn;
-        investingWindowRealByYear[yi] +=
-          profile.expenses.investingMonthly * workedIn +
-          investingRetiredMonthly * (inWindow - workedIn);
+        // Worked months only: investing stops at retirement (household.ts's
+        // rule), so the in-window slice has no retired term either.
+        investingWindowRealByYear[yi] += profile.expenses.investingMonthly * workedIn;
       }
     }
   }
@@ -1389,7 +1384,6 @@ export function prepareSim(input: SimulationInput): PreparedSim {
     betweenHomesWorkedMonthsByYear,
     investingWindowRealByYear,
     retirementIncomeMonthly: profile.income.retirementMonthly ?? 0,
-    retirementIncomeTaxable: profile.income.retirementIncomeTaxable !== false,
     mixByYear: alloc.global,
     targetedMixByYear: alloc.targeted,
     tdfMixByYear,
@@ -1938,11 +1932,10 @@ interface BridgeNeedArgs {
   /**
    * A FULLY RETIRED year's retirement income (monthly x 12 x CPI), not this
    * year's prorated figure: the estimator prices a retired year, and the
-   * payment it fixes runs for the whole bridge. Ordinary income when
-   * `retirementIncomeTaxable`.
+   * payment it fixes runs for the whole bridge. Always ordinary income (the
+   * app's standing rule, 2026-08-31).
    */
   retirementIncomeFullYear: number;
-  retirementIncomeTaxable: boolean;
   /** Full-year ACA benchmark quote for this year (nominal). */
   acaBenchmarkAnnual: number;
   /** ACA months a FULLY RETIRED household would enroll for (12 minus Medicare). */
@@ -2006,7 +1999,7 @@ function estimateBridgeAnnualNeed(ctx: PreparedSim, yi: number, a: BridgeNeedArg
       : null;
   const nonIraIncome =
     a.ssGross + a.taxableInterest + a.dividends + a.oneTimeIncome + a.retirementIncomeFullYear;
-  const retirementOrdinary = a.retirementIncomeTaxable ? a.retirementIncomeFullYear : 0;
+  const retirementOrdinary = a.retirementIncomeFullYear;
   let forcedTotal = 0;
   for (const d of a.forcedPretax) forcedTotal += d.amount;
   let need = 0;
@@ -2434,10 +2427,11 @@ export function simulatePath(
     const wagesNet = wagesAfterDeferral - premiumShare;
     const ssGross = ctx.household.ssGrossRealByYear[yi] * idx; // COLA = simulated CPI
     // Retirement income (the retired counterpart of a salary): monthly x the
-    // months nobody worked, x CPI. Spendable cash either way; ordinary income
-    // unless the profile says it is not (a return of capital, a gift).
+    // months nobody worked, x CPI. Spendable cash, and ALWAYS ordinary income
+    // (the app's standing rule, 2026-08-31 — the profile's old
+    // retirementIncomeTaxable flag is parsed but ignored).
     const retirementIncome = ctx.household.retirementIncomeRealByYear[yi] * idx;
-    const retirementOrdinaryIncome = ctx.retirementIncomeTaxable ? retirementIncome : 0;
+    const retirementOrdinaryIncome = retirementIncome;
     let savingsInterest = 0;
     let bondBillInterest = 0;
     let dividends = 0;
@@ -3330,7 +3324,6 @@ export function simulatePath(
         oneTimeTaxable: oti.taxable,
         // Likewise a full retired year's worth of retirement income.
         retirementIncomeFullYear: ctx.retirementIncomeMonthly * 12 * idx,
-        retirementIncomeTaxable: ctx.retirementIncomeTaxable,
         acaBenchmarkAnnual: benchmark,
         acaMonths: retiredAcaMonths,
         medicare: medicareInput,
@@ -4565,11 +4558,11 @@ export function simulatePath(
     const surplus = incomeCash + plan.total - (outflowFixed + health + taxes.totalTax);
     if (surplus > 0) {
       // Investing stream (notes 12 and 19): move up to
-      // investingMonthly x worked months + investingMonthlyRetired x the
-      // months nobody worked, x CPI, into the first taxable brokerage —
+      // investingMonthly x worked months (investing stops at retirement —
+      // the app's standing rule), x CPI, into the first taxable brokerage —
       // balance AND basis, since cash entering a brokerage is basis. Capped at
-      // the surplus on BOTH sides of the pair, so it can never force a
-      // withdrawal: the household invests only what its income, forced
+      // the surplus, so it can never force a withdrawal: the household
+      // invests only what its income, forced
       // distributions and Social Security actually left over. With no
       // brokerage account it simply doesn't happen (documented limitation).
       //

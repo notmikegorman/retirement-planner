@@ -1,8 +1,9 @@
 /**
- * Investing — the budget's transfer into the brokerage, as the two numbers it
- * is (InvestingFields owns the content and the scalar-vs-line binding), plus
- * the "What the bonds are" dial (the owner's relocation, 2026-08-30 — it
- * lived on the Plan page, twice, through its two-door era).
+ * Investing — the budget's transfer into the brokerage, as the ONE number it
+ * is since investing stops at retirement (the app's standing rule,
+ * 2026-08-31; InvestingFields owns the content and the scalar-vs-line
+ * binding), plus the "What the bonds are" dial (the owner's relocation,
+ * 2026-08-30 — it lived on the Plan page, twice, through its two-door era).
  */
 import { useEffect, useState } from 'react';
 import type { AssumptionOverrides, Scenario } from '../../shared/types';

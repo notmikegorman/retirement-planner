@@ -51,8 +51,7 @@ export function simulationReadiness(profile: Profile): SimulationReadiness {
     streams.livingMonthly === 0 &&
     streams.charitableMonthly === 0 &&
     streams.investingMonthly === 0 &&
-    (streams.livingMonthlyRetired ?? 0) === 0 &&
-    (streams.investingMonthlyRetired ?? 0) === 0;
+    (streams.livingMonthlyRetired ?? 0) === 0;
   return { state: 'ready', zeroSpend };
 }
 

@@ -176,8 +176,11 @@ function backfillMissingKeys(
  * expenses.investingMonthlyRetired, income.retirementMonthly,
  * income.retirementIncomeTaxable). Nothing here writes them, because every one
  * is OPTIONAL and its absence already carries the right meaning: living stays
- * at the working figure, investing stops with the paycheck, giving keeps its
- * 'continue' rule, retirement income is 0 — which is exactly what the engine
+ * at the working figure, investing stops with the paycheck (since 2026-08-31
+ * it does so whatever the file says — the retired-side investing field and
+ * the retirement-income taxable flag are both parsed but ignored), giving
+ * keeps its 'continue' rule, retirement income is 0 — which is exactly what
+ * the engine
  * did before the fields existed. Writing them in would add noise to the
  * user's file, and writing a WRONG one (livingMonthlyRetired: 0, say) would
  * silently rewrite their plan. A field whose default is correct needs no

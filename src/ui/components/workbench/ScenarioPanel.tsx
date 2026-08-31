@@ -291,7 +291,8 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
         )}
 
         {/*
-          Same two-column shape as Spending and the same onChange path, so the
+          One knob since 2026-08-31 (the read-only working column and the
+          taxable select are gone) — same onChange path as Spending, so the
           retirement-income knob re-runs and autosaves like every other input.
         */}
         {section(
@@ -299,7 +300,6 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           <IncomeCard
             key={`income:${cardKey}`}
             profileIncome={profile.income}
-            people={profile.people}
             overrides={draft.assumption_overrides}
             onChange={(assumption_overrides) => onChange({ assumption_overrides })}
           />,

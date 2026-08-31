@@ -873,25 +873,33 @@ describe('the restore question does not promise an undo it cannot give', () => {
 });
 
 describe('the tab’s wiring (source scan)', () => {
-  it('is the Settings module’s LAST tab, fed the loaded plan', () => {
-    // History left the Plan page for the Settings module (the owner's
-    // relocation, 2026-08-30) — last tab, because every tab before it edits
-    // the profile and this one looks at what the PLAN used to be. The tab
-    // fetches the plan itself (there is no draft on that page); a restore
-    // updates the local copy, and the Plan page loads the restored plan.json
-    // fresh on its next mount.
+  it('is the Plan page’s LAST results tab, fed the live draft', () => {
+    // History came back from its one-day stay in the Settings module (the
+    // owner's relocation, 2026-08-31) as the results strip's last tab: every
+    // tab before it views the CURRENT run; this one views what the plan used
+    // to be. On this page the plan is the workbench's own draft — no fetch,
+    // no pending-save gate — and it renders OUTSIDE the waiting-for-a-result
+    // branch, because the version list exists before the first run lands.
+    const liveResults = read('../../src/ui/components/workbench/LiveResults.tsx');
+    expect(liveResults).toContain("history: 'History'");
+    expect(liveResults).toMatch(/tab === 'history' \? \([\s\S]*?<PlanHistoryCard/);
+    expect(liveResults).toContain('plan={props.plan}');
+    expect(liveResults).toContain('onRestored={props.onPlanRestored}');
+    // nav.ts places it last, after widow.
+    const nav = read('../../src/ui/nav.ts');
+    expect(nav).toMatch(/'widow',[\s\S]*?'history',\n\] as const/);
+    // The restore hook lives on WorkbenchPage: replace the draft (re-keying
+    // the input cards) and drop the pinned baseline — it was pinned from the
+    // plan the restore just replaced.
+    const workbench = read('../../src/ui/pages/WorkbenchPage.tsx');
+    expect(workbench).toMatch(
+      /const onPlanRestored = \(plan: Scenario\) => \{\s*replaceDraft\(plan\);\s*setBaseline\(null\);/,
+    );
+    // And it is GONE from the Settings module.
     const settingsModule = read('../../src/ui/modules/SettingsModule.tsx');
-    expect(settingsModule).toContain("{ id: 'history', label: 'History' }");
-    expect(settingsModule).toMatch(/'advanced', label: 'Advanced' \},[\s\S]*?'history'/);
-    expect(settingsModule).toContain('<PlanHistoryCard');
-    expect(settingsModule).toContain('plan={plan}');
-    expect(settingsModule).toContain('profile={profile}');
-    // The restore callback also forgets the pinned baseline — it was pinned
-    // from the plan the restore just replaced (the workbench's own old rule,
-    // carried across the move).
-    expect(settingsModule).toContain('forgetPlanComparisons()');
-    expect(settingsModule).toContain('awaitPendingPlanSave()');
-    // And it is GONE from the Plan page's fold list.
+    expect(settingsModule).not.toContain("'history'");
+    expect(settingsModule).not.toContain('PlanHistoryCard');
+    // Still absent from the Plan page's left-panel fold list.
     expect(read('../../src/ui/components/workbench/workbenchLogic.ts')).not.toContain(
       "{ id: 'history', label: 'History' }",
     );
@@ -907,10 +915,14 @@ describe('the tab’s wiring (source scan)', () => {
     // actually exist is a fact about the list (see restorePrompt).
     expect(card).toContain('restorePrompt(row, entries ?? [], new Date())');
     expect(card).toContain('Keep the plan on screen');
-    expect(card).toContain('api.restorePlan(row.entry.id)');
+    // The call goes through the restorePlan PROP — WorkbenchPage's ordered
+    // restore, which flushes the in-window edit and rides the page's own
+    // write chain (the tenth-pass panel's race finding) — never bare api.
+    expect(card).toContain('await restorePlan(row.entry.id)');
+    expect(card).not.toContain('api.restorePlan(');
     // One call site, and it is `restore`, which is only reachable from the
     // confirmed button.
-    expect(card.match(/api\.restorePlan\(/g)).toHaveLength(1);
+    expect(card.match(/restorePlan\(row\.entry\.id\)/g)).toHaveLength(1);
   });
 
   it('re-reads the list before saying what the restore did', () => {
@@ -956,14 +968,29 @@ describe('the tab’s wiring (source scan)', () => {
     expect(card).toContain('if (idle) return;');
   });
 
-  it('restores without any workbench hand-off — the page loads the file fresh', () => {
-    // The old in-place restore chain (restoredPlan/onPlanRestored, with its
-    // save-queue choreography) died with the move: a restore happens on the
-    // Settings page while the Plan page is unmounted, the server writes
-    // plan.json during it, and the Plan page's next mount loads that file.
-    // Nothing must resurrect a second hand-off path.
+  it('orders the restore against the page’s own writes', () => {
+    // The race the tenth-pass panel confirmed: a bare api.restorePlan beside
+    // a mounted workbench lets an already-fired autosave PUT land AFTER the
+    // restore and silently put the pre-restore plan back on disk. The page's
+    // restorePlanOrdered (1) flushes any in-window edit first — the filed
+    // undo must include what the user sees — and (2) rides saveChain, the
+    // same serialized chain every autosave PUT goes through.
+    expect(workbench).toContain('const restorePlanOrdered');
+    expect(workbench).toContain('await savePlan(current);');
+    expect(workbench).toContain('saveChain.current.then(() => api.restorePlan(id))');
+    expect(workbench).toContain('restorePlan={restorePlanOrdered}');
+  });
+
+  it('restores in place, with no save-queue choreography', () => {
+    // The Settings-era restore relied on the page being unmounted (fetch the
+    // file, gate on the pending flush). Back on the Plan page the workbench
+    // is MOUNTED during the restore, so the hand-off is direct: the server
+    // has already written plan.json when onRestored fires, and the hook only
+    // replaces the draft — no restoredPlan mailbox, no queued-save dance, and
+    // the left panel never touches the history card.
     expect(workbench).not.toContain('restoredPlan');
-    expect(workbench).not.toContain('onPlanRestored');
+    // define + the prop pass (`onPlanRestored={onPlanRestored}` is two).
+    expect(workbench.match(/onPlanRestored/g)?.length).toBe(3);
     expect(panel).not.toContain('onPlanRestored');
   });
 

@@ -143,4 +143,24 @@ describe('the module checkbox collapse and its inlineRow restore stay each other
       ruleBody('.moduleFieldset .row.inlineRow .field-checkbox > .field-label'),
     ).toMatch(/display:\s*block/);
   });
+
+  it('applies the SAME collapse to .row.checkRow — the copy outside the module forms', () => {
+    // The Plan page's cards live outside .moduleFieldset, so checkbox-only
+    // rows there opt into the identical collapse per row (the owner's
+    // Tithing-panel screenshot, 2026-08-31). Compared value-for-value with
+    // the module block so the two copies cannot drift apart.
+    const moduleRule = ruleBody('.moduleFieldset .field-checkbox');
+    const rowRule = ruleBody('.row.checkRow .field-checkbox');
+    const track = /grid-template-rows:\s*([^;]+);/;
+    const gap = /row-gap:\s*([^;]+);/;
+    expect(track.exec(rowRule)![1].trim()).toBe(track.exec(moduleRule)![1].trim());
+    expect(gap.exec(rowRule)![1].trim()).toBe(gap.exec(moduleRule)![1].trim());
+    expect(ruleBody('.row.checkRow .field-checkbox > .field-label')).toMatch(/display:\s*none/);
+    expect(ruleBody('.row.checkRow .field-checkbox > .field-control')).toMatch(/min-height:\s*0/);
+    // Every member of the collapse, including the help line's breathing room.
+    const help = /margin-top:\s*([^;]+);/;
+    expect(help.exec(ruleBody('.row.checkRow .field-checkbox > .field-help'))![1].trim()).toBe(
+      help.exec(ruleBody('.moduleFieldset .field-checkbox > .field-help'))![1].trim(),
+    );
+  });
 });

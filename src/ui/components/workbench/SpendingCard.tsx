@@ -1,13 +1,15 @@
 /**
  * Spending, in the plan — three streams, each as ONE row with two cells.
  *
- * Every stream the household runs has a value in play WHILE WORKING and a
- * value in play AFTER nobody works, and the two belong side by side: that is
- * the actual decision ("we spend 8,000 now and expect to spend 7,000 then"),
- * and reading it as one line is what makes the retired side impossible to
- * forget. A blank right-hand cell says what the default is in words — "same as
- * working" for living, "stops" for investing — so the behavior is obvious
- * without anything being set.
+ * LIVING is the one true pair: a value in play WHILE WORKING and a value in
+ * play AFTER nobody works, side by side, because that is the actual decision
+ * ("we spend 8,000 now and expect to spend 7,000 then") and reading it as one
+ * line is what makes the retired side impossible to forget. A blank
+ * right-hand cell says the default in words — "same as working".
+ *
+ * INVESTING's right-hand cell is a NOTE, not a control, since 2026-08-31:
+ * investing stops at retirement (the app's standing rule), so there is no
+ * retired stream to override and a box would be a knob wired to nothing.
  *
  * Giving's right-hand cell is a POINTER, not a control: what happens to giving
  * once the paychecks stop is two decisions (the un-tithed pot, and the ongoing
@@ -55,7 +57,6 @@ import {
   retiredPlaceholder,
   setExpenseOverride,
   type ExpenseKey,
-  type RetiredDefault,
 } from './workbenchLogic';
 
 // ---------------------------------------------------------------------------
@@ -69,9 +70,10 @@ export const SPENDING_CARD_TIP =
   'what-if is undone by clearing the box.';
 
 const RETIRED_COLUMN_TIP =
-  'All three streams switch on one signal: the first year in which nobody in the household earns ' +
-  'a salary. The retirement year itself is split — the working figure for the months worked, this ' +
-  'one for the rest.';
+  'Everything switches on one signal: the first year in which nobody in the household earns a ' +
+  'salary. The retirement year itself is split — the working figure for the months worked, the ' +
+  'after-work behavior for the rest. Living takes the figure in this column; investing stops at ' +
+  'retirement outright; giving follows the Tithing rule.';
 
 const LIVING_TIP =
   'Everyday consumption: excludes health premiums, housing (property tax, insurance, maintenance, ' +
@@ -81,9 +83,8 @@ const LIVING_TIP =
 
 const INVESTING_TIP =
   'A transfer into the taxable brokerage, not consumption — it moves money between accounts and is ' +
-  'capped at what is left after taxes and expenses, so it can never force a withdrawal. An empty ' +
-  'right-hand cell stops it, because investing out of a paycheck ends with the paycheck; put a ' +
-  'figure there if you expect to keep investing (a forced RMD you do not spend, say).';
+  'capped at what is left after taxes and expenses, so it can never force a withdrawal. It stops ' +
+  'at retirement: investing out of a paycheck ends with the paycheck.';
 
 const GIVING_TIP =
   'Your giving while anyone is still earning — its own stream, and it drives the charitable tax ' +
@@ -136,28 +137,24 @@ const TERM_END_TIP =
 
 interface StreamRow {
   /** The working-side override key (and the profile field of the same name). */
-  key: Extract<ExpenseKey, 'livingMonthly' | 'investingMonthly'>;
-  retiredKey: Extract<ExpenseKey, 'livingMonthlyRetired' | 'investingMonthlyRetired'>;
+  key: Extract<ExpenseKey, 'livingMonthly'>;
+  retiredKey: Extract<ExpenseKey, 'livingMonthlyRetired'>;
   label: string;
-  /** What an empty retired cell means for THIS stream. */
-  fallback: RetiredDefault;
   tip: string;
 }
 
+/*
+ * ONE paired row now: living. Investing lost its retired cell when the app
+ * adopted "investing stops at retirement" as a standing rule (the owner's,
+ * 2026-08-31) — its row below is a working-side override plus a pointer,
+ * the same shape giving has always had.
+ */
 const STREAMS: readonly StreamRow[] = [
   {
     key: 'livingMonthly',
     retiredKey: 'livingMonthlyRetired',
     label: 'Living',
-    fallback: 'same_as_working',
     tip: LIVING_TIP,
-  },
-  {
-    key: 'investingMonthly',
-    retiredKey: 'investingMonthlyRetired',
-    label: 'Investing → brokerage',
-    fallback: 'stops',
-    tip: INVESTING_TIP,
   },
 ];
 
@@ -205,6 +202,11 @@ export function SpendingCard({
             onChange={onChange}
           />
         ))}
+        <InvestingPair
+          profileExpenses={profileExpenses}
+          overrides={overrides}
+          onChange={onChange}
+        />
         <GivingPair
           profileExpenses={profileExpenses}
           overrides={overrides}
@@ -517,7 +519,7 @@ function StreamPair({
   const working = effectiveMonthly(profileWorking, workingOverride);
   // Priced off the value THIS run uses: "same as working" has to follow the
   // working cell's override, not the profile's untouched number.
-  const retired = effectiveRetiredMonthly(row.fallback, working, profileRetired, retiredOverride);
+  const retired = effectiveRetiredMonthly(working, profileRetired, retiredOverride);
 
   return (
     <>
@@ -541,7 +543,7 @@ function StreamPair({
       <div className="pair-cell">
         <MoneyBox
           value={retiredOverride}
-          placeholder={retiredPlaceholder(row.fallback, profileRetired)}
+          placeholder={retiredPlaceholder(profileRetired)}
           onCommit={(v) => onChange(setExpenseOverride(overrides, row.retiredKey, v))}
         />
         <AnnualNote monthly={retired} />
@@ -549,11 +551,56 @@ function StreamPair({
           override={retiredOverride}
           profileText={
             profileRetired === undefined
-              ? retiredPlaceholder(row.fallback, undefined)
+              ? retiredPlaceholder(undefined)
               : `${formatUSD(profileRetired)}/mo`
           }
           onReset={() => onChange(setExpenseOverride(overrides, row.retiredKey, undefined))}
         />
+      </div>
+    </>
+  );
+}
+
+/**
+ * Investing, as the giving row's shape: a number on the left, a NOTE on the
+ * right. There is no retired cell to override because there is no retired
+ * stream — investing stops at retirement, the app's standing rule
+ * (2026-08-31), and a cell here would be a knob wired to nothing.
+ */
+function InvestingPair({
+  profileExpenses,
+  overrides,
+  onChange,
+}: {
+  profileExpenses: ProfileExpenses;
+  overrides: AssumptionOverrides | undefined;
+  onChange: (overrides: AssumptionOverrides | undefined) => void;
+}) {
+  const workingOverride = expenseOverride(overrides, 'investingMonthly');
+  const profileWorking = deriveExpenseStreams(profileExpenses).investingMonthly;
+  const working = effectiveMonthly(profileWorking, workingOverride);
+
+  return (
+    <>
+      <div className="pair-label">
+        Investing → brokerage
+        <InfoTip label="investing → brokerage" text={INVESTING_TIP} />
+      </div>
+      <div className="pair-cell">
+        <MoneyBox
+          value={workingOverride}
+          placeholder={String(profileWorking)}
+          onCommit={(v) => onChange(setExpenseOverride(overrides, 'investingMonthly', v))}
+        />
+        <AnnualNote monthly={working} />
+        <OverrideStatus
+          override={workingOverride}
+          profileText={`${formatUSD(profileWorking)}/mo`}
+          onReset={() => onChange(setExpenseOverride(overrides, 'investingMonthly', undefined))}
+        />
+      </div>
+      <div className="pair-cell">
+        <span className="pair-note">Stops at retirement.</span>
       </div>
     </>
   );

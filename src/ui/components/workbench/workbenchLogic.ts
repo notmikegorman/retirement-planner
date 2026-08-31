@@ -1481,24 +1481,24 @@ export function comparisonNote(
 // ---------------------------------------------------------------------------
 
 /**
- * Every monthly figure a plan can override — BOTH sides of each pair. Living
- * and investing have a plain retired counterpart; giving's retired side is a
- * rule (`retirementGiving`, below) rather than a number, which is why it has no
- * `charitableMonthlyRetired` here.
+ * Every monthly figure a plan can override. Living is the one PAIR — its
+ * retired side is a plain second number. Investing has no retired side at all
+ * (investing stops at retirement — the app's standing rule, 2026-08-31; an
+ * `investingMonthlyRetired` override in an old plan file still parses and is
+ * ignored). Giving's retired side is a rule (`retirementGiving`, below)
+ * rather than a number, which is why it has no `charitableMonthlyRetired`.
  */
 export type ExpenseKey =
   | 'livingMonthly'
   | 'livingMonthlyRetired'
   | 'charitableMonthly'
-  | 'investingMonthly'
-  | 'investingMonthlyRetired';
+  | 'investingMonthly';
 
 export const EXPENSE_KEYS: readonly ExpenseKey[] = [
   'livingMonthly',
   'livingMonthlyRetired',
   'charitableMonthly',
   'investingMonthly',
-  'investingMonthlyRetired',
 ];
 
 export function expenseOverride(
@@ -1922,31 +1922,25 @@ export function coverageCaption(bands: readonly CoverageBand[]): string {
 // ---------------------------------------------------------------------------
 //
 // Living, investing and giving each have a value in play WHILE WORKING and a
-// value in play AFTER nobody works, and all three switch on one signal (the
-// months anyone earned). What an ABSENT retired value means differs per stream
-// because the honest default differs per stream — living keeps the working
-// figure, investing falls to nothing — so the two cases are named rather than
-// both being written as a bare `?? something`.
-
-/** What an absent retired value means for a stream (the engine's own default). */
-export type RetiredDefault = 'same_as_working' | 'stops';
+// value in play AFTER nobody works, switching on one signal (the months
+// anyone earned). Living is the only stream that still HAS a retired value —
+// investing stops at retirement outright (the app's standing rule,
+// 2026-08-31) and giving's retired side is a rule — so these helpers carry
+// living's semantics: an absent retired value means "same as working".
 
 /**
- * The retired-side monthly the run will actually use: the plan's override, else
- * the profile's own retired figure, else the stream's default — the working
- * figure for living, nothing for investing. `workingEffective` must already
- * include the working side's override, because "same as working" means the
- * value THIS run uses, not the one profile.json happens to hold.
+ * The retired-side living monthly the run will actually use: the plan's
+ * override, else the profile's own retired figure, else the working figure.
+ * `workingEffective` must already include the working side's override,
+ * because "same as working" means the value THIS run uses, not the one
+ * profile.json happens to hold.
  */
 export function effectiveRetiredMonthly(
-  fallback: RetiredDefault,
   workingEffective: number,
   profileRetired: number | undefined,
   override: number | undefined,
 ): number {
-  const set = override ?? profileRetired;
-  if (set !== undefined) return set;
-  return fallback === 'same_as_working' ? workingEffective : 0;
+  return override ?? profileRetired ?? workingEffective;
 }
 
 /**
@@ -1955,12 +1949,8 @@ export function effectiveRetiredMonthly(
  * profile that doesn't shows the default in words, so the behavior is obvious
  * without anything being set.
  */
-export function retiredPlaceholder(
-  fallback: RetiredDefault,
-  profileRetired: number | undefined,
-): string {
-  if (profileRetired !== undefined) return String(profileRetired);
-  return fallback === 'same_as_working' ? 'same as working' : 'stops';
+export function retiredPlaceholder(profileRetired: number | undefined): string {
+  return profileRetired !== undefined ? String(profileRetired) : 'same as working';
 }
 
 // ---------------------------------------------------------------------------
@@ -2610,12 +2600,6 @@ export function retirementIncomeOverride(
   return overrides?.income?.retirementMonthly;
 }
 
-export function retirementTaxableOverride(
-  overrides: AssumptionOverrides | undefined,
-): boolean | undefined {
-  return overrides?.income?.retirementIncomeTaxable;
-}
-
 /**
  * Reattach an `income` block, pruning upward exactly like `withExpenses`: an
  * empty block takes the key with it so a plan back on the profile's income says
@@ -2642,17 +2626,6 @@ export function setRetirementIncomeOverride(
   return withIncome(overrides, income);
 }
 
-/** Set (or clear, with `undefined`) the plan's taxable/not-taxable answer. Never mutates. */
-export function setRetirementTaxableOverride(
-  overrides: AssumptionOverrides | undefined,
-  taxable: boolean | undefined,
-): AssumptionOverrides | undefined {
-  const income: NonNullable<AssumptionOverrides['income']> = { ...overrides?.income };
-  if (taxable === undefined) delete income.retirementIncomeTaxable;
-  else income.retirementIncomeTaxable = taxable;
-  return withIncome(overrides, income);
-}
-
 /** The retirement income the run will use: the plan's, else the profile's, else 0. */
 export function effectiveRetirementIncome(
   profileMonthly: number | undefined,
@@ -2661,57 +2634,10 @@ export function effectiveRetirementIncome(
   return override ?? profileMonthly ?? 0;
 }
 
-/** Whether that income is taxed as ordinary income: the plan's, else the profile's, else true. */
-export function effectiveRetirementTaxable(
-  profileTaxable: boolean | undefined,
-  override: boolean | undefined,
-): boolean {
-  return override ?? profileTaxable ?? true;
-}
-
-/**
- * Commit a taxable/not-taxable CHOICE. The control shows the effective answer
- * (two options, no third "inherit" entry to explain), so choosing the value the
- * profile already implies clears the override instead of writing a redundant
- * one — the same "blank means whatever the profile says" contract the number
- * boxes have, expressed for a control that cannot be blank.
- */
-export function setRetirementTaxableChoice(
-  overrides: AssumptionOverrides | undefined,
-  profileTaxable: boolean | undefined,
-  choice: boolean,
-): AssumptionOverrides | undefined {
-  const profileEffective = profileTaxable ?? true;
-  return setRetirementTaxableOverride(overrides, choice === profileEffective ? undefined : choice);
-}
 
 /** What an empty retirement-income box says: the profile's figure, or the default. */
 export function retirementIncomePlaceholder(profileMonthly: number | undefined): string {
   return profileMonthly === undefined ? 'none' : String(profileMonthly);
-}
-
-/**
- * The read-only working-income summary: what the household earns now, in the
- * order the panel shows it. Pure so the strings are testable — the panel only
- * lays them out.
- */
-export interface WorkingIncomeLine {
-  label: string;
-  /** Annual dollars. */
-  amount: number;
-}
-
-export function workingIncomeLines(
-  income: Pick<ProfileIncome, 'salaries' | 'contribution401k' | 'employerMatch401k'>,
-  people: ReadonlyArray<{ id: string; name: string }>,
-): WorkingIncomeLine[] {
-  const lines: WorkingIncomeLine[] = people.map((p) => ({
-    label: `${p.name} salary`,
-    amount: income.salaries[p.id] ?? 0,
-  }));
-  lines.push({ label: '401(k) deferral', amount: income.contribution401k });
-  lines.push({ label: 'Employer match', amount: income.employerMatch401k });
-  return lines;
 }
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,7 @@ import { WithdrawalRateCard } from '../results/WithdrawalRateCard';
 import { WorstDecileCard } from '../results/WorstDecileCard';
 import { formatElapsed, runVerdict, successClass } from '../results/resultsData';
 import { DeltaChip } from './DeltaChip';
+import { PlanHistoryCard, type PlanHistoryCardProps } from './PlanHistoryCard';
 import {
   alignBaselineP50,
   comparableRun,
@@ -99,6 +100,20 @@ export interface LiveResultsProps {
   firstRun: boolean;
   /** The first-run state's one action: the Accounts module. */
   onOpenAccounts: () => void;
+  /**
+   * The History tab's restore, handed a plan the server has already written:
+   * WorkbenchPage replaces its draft with it (re-keying the input cards) and
+   * drops the pinned baseline, which was pinned from the plan the restore
+   * just replaced.
+   */
+  onPlanRestored: (plan: Scenario) => void;
+  /**
+   * The restore CALL itself, supplied by WorkbenchPage so it is ordered
+   * against the page's own serialized plan writes — a bare api.restorePlan
+   * beside a mounted workbench races the autosave debounce (the tenth-pass
+   * review panel's finding; see restorePlanOrdered).
+   */
+  restorePlan: PlanHistoryCardProps['restorePlan'];
 }
 
 /**
@@ -129,6 +144,7 @@ const TAB_LABELS: Record<ResultsTabId, string> = {
   cashflow: 'Cashflow',
   explore: 'Explore',
   widow: 'Widow',
+  history: 'History',
 };
 
 export function LiveResults(props: LiveResultsProps) {
@@ -188,7 +204,22 @@ export function LiveResults(props: LiveResultsProps) {
       )}
 
       <div role="tabpanel" id={`wb-panel-${tab}`} aria-labelledby={`wb-tab-${tab}`}>
-        {props.firstRun ? (
+        {tab === 'history' ? (
+          /*
+            NOT a view of the run — checked BEFORE the first-run gate as well
+            as before the waiting-for-a-result one: the plan's version history
+            exists with zero accounts and before the first result lands, so
+            neither state may hide it (and Restore must stay reachable from
+            the zero-start world — it is how a wrong File > New comes back).
+            No data-run-key stamp either: no run drew this panel.
+          */
+          <PlanHistoryCard
+            plan={props.plan}
+            profile={props.profile}
+            onRestored={props.onPlanRestored}
+            restorePlan={props.restorePlan}
+          />
+        ) : props.firstRun ? (
           /*
            * The first-run state, on EVERY tab: each of these views is a view
            * of a simulation, and there is deliberately none. No percentage,

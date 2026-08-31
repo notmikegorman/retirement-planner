@@ -108,12 +108,6 @@ const SURVIVOR_TIP =
   'whichever state is in force, so it shows the after-work figure here and says when a death ' +
   'while still working would inherit something different.';
 
-const INVESTING_RETIRED_TIP =
-  'What the transfer becomes once NOBODY in the household earns a salary. LEAVE IT EMPTY and it ' +
-  'stays at the Now figure — a blank cell inherits here like everywhere else in the budget — so ' +
-  'type a 0 to say the transfer ends with the paycheck. Whatever the column says, the plan caps ' +
-  'it at the year’s surplus, so it can never force a withdrawal.';
-
 const ITEMISE_TIP =
   'One row per stream to start with, holding exactly the numbers above, so nothing changes on the ' +
   'day you itemise. From then on THE TABLE IS THE TRUTH: these three figures become a sum of it ' +
@@ -124,13 +118,15 @@ const ITEMISE_TIP =
 
 const EXPENSE_SPLIT_NOTE =
   'These three streams replace the old single “annual baseline spending” number — re-enter your ' +
-  'living expenses with giving and investing carved out, or you will double-count them. Each has ' +
-  'a value in play while working and a value in play afterwards; the Plan page’s Spending card ' +
-  'shows the same pairs side by side and can override either of them for one plan.';
+  'living expenses with giving and investing carved out, or you will double-count them. Living ' +
+  'has a value in play while working and a value afterwards; investing stops at retirement, and ' +
+  'giving’s afterwards is a rule on the Tithing page. The Plan page’s Spending card shows the ' +
+  'same figures and can override them for one plan.';
 const RETIRED_SWITCH_NOTE =
-  'Living, investing and giving all switch on ONE signal: the first year in which nobody in the ' +
-  'household earns a salary. The retirement year itself is split — the working figure for the ' +
-  'months worked, the after-work figure for the rest.';
+  'Every stream switches on ONE signal: the first year in which nobody in the household earns a ' +
+  'salary. The retirement year itself is split — the working figure for the months worked, the ' +
+  'after-work behavior for the rest (living’s after-work figure; investing stops; giving follows ' +
+  'the Tithing rule).';
 const LIVING_HELP =
   'Everyday consumption only: excludes health premiums, housing (property tax, insurance, ' +
   'maintenance, rent, mortgage), charitable giving and investing — all modeled separately.';
@@ -149,36 +145,34 @@ const INVESTING_HELP =
   'earning, this is the ONLY thing the plan assumes you accumulate: whatever the paycheck leaves ' +
   'over beyond it is treated as spent (the living figure is a budget, and it does not carry the ' +
   'new air conditioner), and the cashflow table shows it as “Unbudgeted / not invested”.';
-const INVESTING_RETIRED_HELP =
-  'What the transfer becomes once nobody is earning. LEAVE IT EMPTY and it stops, which is the ' +
-  'honest default — investing out of a paycheck ends with the paycheck. Put a figure here if you ' +
-  'expect to keep investing anyway (a forced RMD you do not spend, say); it stays capped at the ' +
-  'year’s surplus.';
+
 
 /**
- * The retired half of a paired stream, as the household's own baseline.
+ * The retired half of the LIVING pair, as the household's own baseline —
+ * living is the only stream that still has one (investing stops at
+ * retirement, the app's standing rule; giving's retired side is a rule on
+ * the Tithing page).
  *
  * It is OPTIONAL on purpose: an empty box leaves the field absent from
- * profile.json, and absence already carries the right meaning per stream —
- * living stays at the working figure, investing stops. So the placeholder says
- * which of those it is, and the annual note prices whichever value the engine
- * will actually use, rather than showing a hopeful $0.
+ * profile.json, and absence already carries the right meaning — living stays
+ * at the working figure. The placeholder says so, and the annual note prices
+ * whichever value the engine will actually use, rather than showing a
+ * hopeful $0.
  */
 function RetiredMonthlyField(props: {
   label: string;
-  fallback: 'same_as_working' | 'stops';
   working: number;
   value: number | undefined;
   tip: string;
   onCommit: (value: number | undefined) => void;
 }) {
-  const effective = effectiveRetiredMonthly(props.fallback, props.working, props.value, undefined);
+  const effective = effectiveRetiredMonthly(props.working, props.value, undefined);
   return (
     <>
       <NumberField
         label={props.label}
         allowEmpty
-        placeholder={retiredPlaceholder(props.fallback, undefined)}
+        placeholder={retiredPlaceholder(undefined)}
         value={props.value}
         width={230}
         tip={props.tip}
@@ -224,8 +218,9 @@ function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: 
     <div className="card">
       {/* No "Expenses" heading: the banner already says where you are. */}
       <p className="muted" style={{ marginTop: 0 }}>
-        Three monthly streams in today’s dollars, each modeled differently, and each with a value in
-        play while working and a value in play afterwards.
+        Three monthly streams in today’s dollars, each modeled differently. Living has a value in
+        play while working and a value afterwards; investing stops at retirement; giving’s
+        afterwards is the Tithing page’s rule.
         <InfoTip label="the expense streams" text={EXPENSE_SPLIT_NOTE} />
         <InfoTip label="the working/after-work switch" text={RETIRED_SWITCH_NOTE} />
       </p>
@@ -242,7 +237,6 @@ function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: 
         />
         <RetiredMonthlyField
           label="Living after you stop working ($/mo)"
-          fallback="same_as_working"
           working={expenses.livingMonthly}
           value={expenses.livingMonthlyRetired}
           tip={LIVING_RETIRED_HELP}
@@ -280,19 +274,7 @@ function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: 
             })
           }
         />
-        <RetiredMonthlyField
-          label="Investing after you stop working ($/mo)"
-          fallback="stops"
-          working={expenses.investingMonthly}
-          value={expenses.investingMonthlyRetired}
-          tip={INVESTING_RETIRED_HELP}
-          onCommit={(v) =>
-            update((p) => {
-              if (v == null) delete p.expenses.investingMonthlyRetired;
-              else p.expenses.investingMonthlyRetired = v;
-            })
-          }
-        />
+        <FieldNote className="muted">investing stops at retirement</FieldNote>
       </div>
 
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
@@ -660,10 +642,6 @@ function LivingCard({
   rentingWindow: RentingWindow | null;
 }) {
   const editLines = editLinesWith(update);
-  // The engine's own derivation, not a second copy of the sums: what this
-  // card says the rows set is exactly what the run will spend.
-  const streams = deriveExpenseStreams(expenses);
-  const totals = categoryTotals(lines, 'living');
 
   return (
     <div>
@@ -681,21 +659,15 @@ function LivingCard({
         editLines={editLines}
       />
 
+      {/* The two explanatory footers are gone (the owner's fluff rule,
+          2026-08-31). What stays is the one actionable list he asked for:
+          the categories the engine already prices from its own page, which
+          must NOT be typed in as living rows or they are double-counted. */}
       <div className="field-help" style={{ marginTop: 8 }}>
-        The “if I die” total assumes the death comes AFTER work has stopped, because that is the
-        state an empty cell inherits there.
-        {totals.survivorWhileWorking === totals.survivorAfterRetiring
-          ? ''
-          : ` A death while a salary is still coming in costs ${formatUSD(
-              totals.survivorWhileWorking,
-            )}/mo of living spending instead.`}
-      </div>
-      <div className="field-help" style={{ marginTop: 4 }}>
-        These rows SET the plan’s living stream: {formatUSD(streams.livingMonthly)}/mo
-        {streams.livingMonthlyRetired === undefined
-          ? ' (unchanged after work stops)'
-          : ` (${formatUSD(streams.livingMonthlyRetired)} after work stops)`}
-        . The rest of the budget lives on its own tabs: giving on Tithing, investing on Investing.
+        Do not enter here — the plan already prices these from their own pages: charitable
+        giving (Tithing), investing (Investing), life-insurance premiums (Insurance), health
+        premiums (Settings &gt; Health), home costs — mortgage, property tax, home insurance,
+        maintenance (Home) — and rent between homes (the plan&rsquo;s Housing).
       </div>
     </div>
   );
@@ -804,11 +776,13 @@ export function GivingFields({
 }
 
 /**
- * The Investing page — the transfer into the brokerage as the two numbers it
- * is (the owner's call, 2026-08-30: a form, not a table). Before itemisation
- * the two scalars are the truth and are edited directly; after itemisation
- * the budget's investing line carries the same pair, and these fields edit
- * that line in place — one pair per line in the rare budget holding several.
+ * The Investing page — the transfer into the brokerage as the ONE number it
+ * is (the owner's calls, 2026-08-30 and -31: a form, not a table; and no
+ * after-retirement field — investing stops at retirement, the app's standing
+ * rule). Before itemisation the scalar is the truth and is edited directly;
+ * after itemisation the budget's investing line carries the figure, and these
+ * fields edit that line in place — one per line in the rare budget holding
+ * several.
  */
 export function InvestingFields({
   expenses,
@@ -823,9 +797,9 @@ export function InvestingFields({
       <div className="card">
         <div className="row">
           <NumberField
-            label="While working ($/mo)"
+            label="Investing / savings ($/mo)"
             value={expenses.investingMonthly}
-            width={170}
+            width={200}
             min={0}
             tip={INVESTING_HELP}
             onCommit={(v) =>
@@ -834,21 +808,7 @@ export function InvestingFields({
               })
             }
           />
-          <NumberField
-            label="After the last paycheck ($/mo)"
-            allowEmpty
-            placeholder="0"
-            value={expenses.investingMonthlyRetired}
-            width={210}
-            min={0}
-            tip={INVESTING_RETIRED_HELP}
-            onCommit={(v) =>
-              update((p) => {
-                if (v == null) delete p.expenses.investingMonthlyRetired;
-                else p.expenses.investingMonthlyRetired = v;
-              })
-            }
-          />
+          <FieldNote className="muted">stops at retirement</FieldNote>
         </div>
       </div>
     );
@@ -856,9 +816,9 @@ export function InvestingFields({
   const investingLines = lines.filter((l) => l.category === 'investing');
   if (investingLines.length === 0) {
     // An itemised budget with no investing row: the first commit creates the
-    // row, with an EXPLICIT 0 in the other cell — on a line, an absent retired
-    // figure means "same as now" and would quietly carry the transfer thirty
-    // years into retirement.
+    // row, with an EXPLICIT 0 in the retired cell so the FILE says what the
+    // engine now assumes everywhere — investing stops at retirement (the
+    // app's standing rule, 2026-08-31; the engine ignores the cell either way).
     const createWith = (mutate: (line: ExpenseLine) => void) =>
       update((p) => {
         const ls = p.expenses.lines ?? [];
@@ -874,9 +834,9 @@ export function InvestingFields({
       <div className="card">
         <div className="row">
           <NumberField
-            label="While working ($/mo)"
+            label="Investing / savings ($/mo)"
             value={0}
-            width={170}
+            width={200}
             min={0}
             tip={INVESTING_HELP}
             onCommit={(v) => {
@@ -888,19 +848,7 @@ export function InvestingFields({
               });
             }}
           />
-          <NumberField
-            label="After the last paycheck ($/mo)"
-            value={0}
-            width={210}
-            min={0}
-            tip={INVESTING_RETIRED_HELP}
-            onCommit={(v) => {
-              if (v == null || v === 0) return;
-              createWith((line) => {
-                line.monthlyRetired = v;
-              });
-            }}
-          />
+          <FieldNote className="muted">stops at retirement</FieldNote>
         </div>
       </div>
     );
@@ -916,10 +864,10 @@ export function InvestingFields({
           ) : null}
           <div className="row">
             <NumberField
-              label="While working ($/mo)"
+              label="Investing / savings ($/mo)"
               value={line.monthlyNow}
-              width={170}
-            min={0}
+              width={200}
+              min={0}
               tip={INVESTING_HELP}
               onCommit={(v) =>
                 editLineById(update, line.id, (l) => {
@@ -927,21 +875,7 @@ export function InvestingFields({
                 })
               }
             />
-            <NumberField
-              label="After the last paycheck ($/mo)"
-              allowEmpty
-              placeholder="same as now"
-              value={line.monthlyRetired}
-              width={210}
-            min={0}
-              tip={INVESTING_RETIRED_TIP}
-              onCommit={(v) =>
-                editLineById(update, line.id, (l) => {
-                  if (v == null) delete l.monthlyRetired;
-                  else l.monthlyRetired = v;
-                })
-              }
-            />
+            <FieldNote className="muted">stops at retirement</FieldNote>
           </div>
         </div>
       ))}

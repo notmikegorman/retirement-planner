@@ -101,9 +101,11 @@ function errorText(err: unknown): string {
 /**
  * Wait out any autosave the workbench flushed on its way off screen — the
  * gate every OTHER page that reads or writes plan.json must pass first
- * (load() and loadPlanIntoWorkbench always have; the Settings module's
- * History tab and the Investing module's bonds card joined when they took
- * up plan work, 2026-08-30). Without it, a page mounted right after leaving
+ * (load() and loadPlanIntoWorkbench always have; the Investing module's
+ * bonds card joined when it took up plan work, 2026-08-30 — and the
+ * History tab passed it during its one day on the Settings page before
+ * moving back here, where restorePlanOrdered rides the in-page chain
+ * instead). Without it, a page mounted right after leaving
  * the Plan page can fetch the pre-flush plan — and a whole-plan
  * get-mutate-put built on that fetch would then RESURRECT it.
  */
@@ -147,15 +149,6 @@ export function chainPlanWrite(write: () => Promise<unknown>): Promise<void> {
     },
   );
   return run;
-}
-
-/**
- * The comparison state belongs to the plan that just left the screen — the
- * same rule loadPlanIntoWorkbench applies, callable by anything that
- * replaces the plan from another page (the History tab's restore).
- */
-export function forgetPlanComparisons(): void {
-  session.baseline = null;
 }
 
 /**
@@ -618,10 +611,51 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
     setRevision((r) => r + 1);
   };
 
-  // (The History tab's restore flow lived here until 2026-08-30; it moved
-  // with the History card to the Settings module. A restore now happens on
-  // that page, and this page simply loads the restored plan.json fresh on
-  // its next mount.)
+  /*
+   * The History tab's restore (2026-08-31, back from its one-day stay in the
+   * Settings module — it is a results tab now). PlanHistoryCard has already
+   * had the server write the restored plan to disk when this fires; what is
+   * left is OUR copy: replace the draft (bumping the revision re-keys the
+   * input cards, whose editors copy draft state at mount) and drop the
+   * pinned baseline, which was pinned from the plan the restore replaced.
+   * The autosave debounce will notice the new draft and re-run against it;
+   * its redundant PUT writes back the same bytes the restore just wrote.
+   */
+  const onPlanRestored = (plan: Scenario) => {
+    replaceDraft(plan);
+    setBaseline(null);
+  };
+
+  /**
+   * The restore CALL, ordered against this page's own writes (the tenth-pass
+   * review panel's finding). The Settings-era home got the ordering free —
+   * the page was unmounted, its last edit flushed into session.pendingSave,
+   * and the tab gated on it. Mounted, the hazards are explicit:
+   *
+   *  1. FLUSH any in-window edit first. The store files the ON-DISK plan as
+   *     the restore's undo, so an edit still sitting in the debounce would be
+   *     missing from the filed copy — the question's "filed first, undoable"
+   *     must cover what the user actually sees. (An INVALID draft cannot be
+   *     flushed; restoring over it discards it, which is what the user chose.)
+   *  2. RIDE saveChain. Every autosave PUT serializes through it, so an
+   *     already-fired timer's write can only land BEFORE the restore — never
+   *     after it, silently resurrecting the pre-restore plan on disk.
+   */
+  const restorePlanOrdered = useCallback(
+    async (id: string) => {
+      const current = draftRef.current;
+      if (current && lastSavedKey.current !== planSaveKey(current)) {
+        await savePlan(current);
+      }
+      const call = saveChain.current.then(() => api.restorePlan(id));
+      saveChain.current = call.then(
+        () => undefined,
+        () => undefined,
+      );
+      return call;
+    },
+    [savePlan],
+  );
 
   // ---- baseline ----------------------------------------------------------
 
@@ -725,6 +759,8 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
             onSelectTab={selectResultsTab}
             firstRun={firstRun}
             onOpenAccounts={() => navigate('accounts')}
+            onPlanRestored={onPlanRestored}
+            restorePlan={restorePlanOrdered}
           />
         </div>
       </div>

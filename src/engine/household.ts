@@ -22,10 +22,11 @@
  *   scaled by plain CPI in-sim (not medical inflation: the employee share is
  *   negotiated with pay, and modeling it above CPI would compound with the
  *   ACA/Medicare premiums it is meant to be compared against — documented).
- * - Investing stream: investingMonthly x worked months + investingMonthlyRetired
- *   x the months nobody worked, in start-year dollars; simulate.ts scales it by
- *   CPI and caps it at the year's surplus. The retirement year is therefore
- *   split between the two sides, exactly like living and giving.
+ * - Investing stream: investingMonthly x worked months, in start-year dollars;
+ *   simulate.ts scales it by CPI and caps it at the year's surplus. Investing
+ *   STOPS AT RETIREMENT — the app's standing rule (the owner's, 2026-08-31):
+ *   investing out of a paycheck ends with the paycheck, and any
+ *   investingMonthlyRetired still in a file is parsed but ignored.
  * - Retirement income stream (ProfileIncome.retirementMonthly): the mirror
  *   image of a salary — monthly x the months NOBODY worked, in start-year
  *   dollars, starting in the first year no salary is drawn and continuing for
@@ -445,10 +446,10 @@ export interface PreparedHousehold {
   premiumShareRealByYear: number[];
   /**
    * Transfer to the taxable brokerage, start-year dollars (capped at surplus
-   * in-sim). BOTH sides of the pair: investingMonthly x worked months +
-   * investingMonthlyRetired x the months nobody worked, so the retirement year
-   * is prorated between them and a fully retired year is the retired figure
-   * alone. An absent investingMonthlyRetired contributes exactly nothing.
+   * in-sim): investingMonthly x worked months, and NOTHING after the last
+   * paycheck — investing stops at retirement (the app's standing rule,
+   * 2026-08-31), so a fully retired year transfers zero and the retirement
+   * year is prorated down to its worked months.
    */
   investingRealByYear: number[];
   /**
@@ -1036,10 +1037,10 @@ export function prepareHousehold(
   const premiumShareRealByYear: number[] = new Array(horizonYears);
   const investingRealByYear: number[] = new Array(horizonYears);
   const retirementIncomeRealByYear: number[] = new Array(horizonYears);
-  // Retired-side streams: absent means "contributes nothing", and the code
-  // below adds nothing at all in that case, so a profile without them produces
-  // bit-for-bit the numbers it produced before the fields existed.
-  const investingRetired = profile.expenses.investingMonthlyRetired;
+  // Retirement income: absent means "contributes nothing", and the code below
+  // adds nothing at all in that case, so a profile without it produces
+  // bit-for-bit the numbers it produced before the field existed. (Investing
+  // has no retired side at all any more — see investingRealByYear.)
   const retirementIncomeMonthly = profile.income.retirementMonthly;
   // The quote's own age anchor, per person: the household benchmark is a
   // sum of age-rated individual premiums, so a survivor's ratio has to be
@@ -1085,14 +1086,11 @@ export function prepareHousehold(
     const age = startYear + yi - ageSubject.birthYear;
     acaAgeFactorByYear[yi] = ageCurveFactor(aca.ageCurve, age) / quoteFactorFor(ageSubject);
     // Employer coverage runs only while someone works, prorated by worked
-    // months; the investing stream has a working side AND a retired side, and
-    // the months nobody worked are what the retired side is paid for.
+    // months; the investing stream is paid for the SAME months — it stops at
+    // retirement, the app's standing rule.
     const retiredMonths = 12 - employerMonths;
     premiumShareRealByYear[yi] = profile.health.employerPremiumShareMonthly * employerMonths;
     investingRealByYear[yi] = profile.expenses.investingMonthly * employerMonths;
-    if (investingRetired !== undefined && retiredMonths > 0) {
-      investingRealByYear[yi] += investingRetired * retiredMonths;
-    }
     retirementIncomeRealByYear[yi] =
       retirementIncomeMonthly !== undefined && retiredMonths > 0
         ? retirementIncomeMonthly * retiredMonths

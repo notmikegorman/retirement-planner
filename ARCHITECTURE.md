@@ -230,22 +230,20 @@ the horizon (optional real terminal floor).
 
 ## Paired streams: while working / after you stop working
 
-Living, investing and charitable giving each have **two** values — what is in play while
-anyone in the household still earns a salary, and what is in play once nobody does. All
-three switch on ONE signal, `PreparedHousehold.employerMonthsByYear` (the months anyone
-earned): 12 = the working figure, 0 = the after-work figure, anything in between (the
-retirement year itself) = prorated between them by worked months.
+The streams switch on ONE signal, `PreparedHousehold.employerMonthsByYear` (the months
+anyone earned): 12 = the working figure, 0 = the after-work behaviour, anything in between
+(the retirement year itself) = prorated by worked months.
 
-| Stream | Working | After work | An ABSENT after-work value means |
-|---|---|---|---|
-| Living | `expenses.livingMonthly` | `expenses.livingMonthlyRetired` | **the working figure** — groceries, utilities and insurance do not fall the day the salary stops |
-| Investing | `expenses.investingMonthly` | `expenses.investingMonthlyRetired` | **0** — investing out of a paycheck ends with the paycheck |
-| Giving | `expenses.charitableMonthly` | `expenses.retirementGiving` (a *rule*) | **`{ type: 'continue' }`** — the paycheck stream runs on for life |
+| Stream | Working | After work |
+|---|---|---|
+| Living | `expenses.livingMonthly` | `expenses.livingMonthlyRetired`; **absent = the working figure** — groceries, utilities and insurance do not fall the day the salary stops |
+| Investing | `expenses.investingMonthly` | **always 0** — investing stops at retirement (a standing rule since 2026-08-31, engine 1.24.0; an `investingMonthlyRetired` in an older file is parsed and ignored) |
+| Giving | `expenses.charitableMonthly` | `expenses.retirementGiving` (a *rule*); **absent = `{ type: 'continue' }`** — the paycheck stream runs on for life |
 
-Every absent case is bit-for-bit the engine before the pairs existed, which is why
-`migrateProfile` deliberately writes none of them: absence already carries the right
-meaning, and writing a wrong one (`livingMonthlyRetired: 0`) would silently rewrite the
-household's plan.
+An absent `livingMonthlyRetired` is bit-for-bit the engine before the pair existed, which
+is why `migrateProfile` deliberately writes none of these: absence already carries the
+right meaning, and writing a wrong one (`livingMonthlyRetired: 0`) would silently rewrite
+the household's plan.
 
 Giving's after-work side is a rule rather than a number because "a tithe on what the
 portfolio actually produced" cannot be written as a fixed figure:
@@ -268,22 +266,22 @@ household expects AFTER it stops working — part-time work, consulting, a renta
 worked-months signal), is prorated in the retirement year by the months nobody worked,
 inflates with CPI, and then runs for life. Absent means 0.
 
-It is spendable cash: it reduces the withdrawal the year needs, it can fund the retired
-investing stream, it shrinks any automatic 72(t) series (so less of the IRA is locked up),
-and it is reported as `YearRow.income.retirement`. `retirementIncomeTaxable` (absent =
-true) decides whether it is ordinary income — raising AGI and every MAGI test with it —
-or spendable cash that raises neither.
+It is spendable cash: it reduces the withdrawal the year needs, it shrinks any automatic
+72(t) series (so less of the IRA is locked up), and it is reported as
+`YearRow.income.retirement`. It is **always ordinary income** — raising AGI and every MAGI
+test with it (a standing rule since 2026-08-31, engine 1.24.0; the old
+`retirementIncomeTaxable` flag in older files is parsed and ignored).
 
 **Documented simplification — the Social Security EARNINGS TEST is not modeled.** Claiming
 before Full Retirement Age while earning above the annual exempt amount withholds benefits
 ($1 per $2 over the limit; $1 per $3 in the FRA year) and credits the withheld months back
 at FRA. This household claims at 67 — its FRA — where the test never applies, so nothing
 here is affected; a 62 claim combined with part-time earnings above the limit would
-overstate benefits in those years. Taxable retirement income is also modeled as plain
+overstate benefits in those years. Retirement income is also modeled as plain
 ordinary income, not wages: no payroll tax, and it creates no earned income for
 IRA-contribution purposes.
 
-Both the paired streams and the retirement income are overridable per plan
+Both the streams and the retirement income are overridable per plan
 (`assumption_overrides.expenses` / `assumption_overrides.income`), so a what-if never has
 to rewrite `profile.json`. Salaries and 401(k) contributions deliberately are **not**
 overridable — they are payroll facts the profile owns, and the plan already moves the only

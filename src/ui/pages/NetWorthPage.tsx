@@ -66,7 +66,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { NetWorthSnapshot, SnapshotScore } from '../../shared/types';
-import { formatPct, formatUSD } from '../../shared/util';
+import { formatUSD } from '../../shared/util';
 import { api } from '../api';
 import { NET_WORTH_FIRST_RUN, simulationReadiness } from '../firstRun';
 import {
@@ -94,7 +94,6 @@ import {
 } from './netWorthChart';
 import {
   BREAK_CHIP_LABEL,
-  COMPARABILITY_CAPTION,
   UNKNOWN_CHIP_LABEL,
   scoreChartEmptyNote,
   spendChartEmptyNote,
@@ -721,13 +720,6 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
    * the ledger is empty (the profile is a starting guess, not a record).
    */
   const [homeValue, setHomeValue] = useState<number | null>(null);
-  /**
-   * The profile's success target, for the spend chart's caption. Null until the
-   * profile loads — and rendered as nothing rather than as a guess, because
-   * "the most you could spend" is a different number at 85% than at 95% and a
-   * placeholder target would misstate every figure on the plot.
-   */
-  const [successTarget, setSuccessTarget] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [taking, setTaking] = useState(false);
@@ -816,7 +808,6 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
       const [list, profile] = await Promise.all([api.getNetWorth(), api.getProfile()]);
       setSnapshots(list);
       setHomeValue((prev) => prev ?? list[list.length - 1]?.homeValue ?? profile.home.value);
-      setSuccessTarget(profile.settings.successTarget);
       setSnapshotGated(simulationReadiness(profile).state === 'no-accounts');
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
@@ -1278,12 +1269,8 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
                 </span>
               ))}
             </div>
-            <div className="muted" style={{ marginTop: 6 }}>
-              Nominal dollars. Each bar is one snapshot — its height that day&rsquo;s total, its
-              slices where the money sat — priced at its own moment, with the home value you
-              entered that day stacked by size among them. Bars sit an equal distance apart
-              whatever the gap between them: a record of what you saw, not a projection.
-            </div>
+            {/* No explanatory footer (the owner's fluff rule, 2026-08-31):
+                the bars and the legend chips speak for themselves. */}
           </>
         )}
       </div>
@@ -1319,14 +1306,8 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
                   <span style={{ color: chart.neutralStrong }}>◌</span> {UNKNOWN_CHIP_LABEL}
                 </span>
               </div>
-              <div className="muted" style={{ marginTop: 6 }}>
-                The plan&rsquo;s probability of never running out, run at final quality on a
-                fixed seed each time a snapshot is taken — so two points differ because the
-                world moved, not because the dice did. A snapshot with no score leaves a gap
-                rather than a zero. The axis is fitted to your own range and never narrower than
-                ten points, so a wobble inside the engine&rsquo;s noise cannot look like a
-                cliff. {COMPARABILITY_CAPTION}
-              </div>
+              {/* No explanatory footer (the owner's fluff rule, 2026-08-31);
+                  the conditions live in each point's tooltip. */}
             </>
           )}
         </div>
@@ -1368,18 +1349,8 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
                   stated here rather than left to be inferred, and it is stated
                   as YOURS TODAY, because a figure recorded earlier was solved
                   against whatever target that plan carried at the time. */}
-              <div className="muted" style={{ marginTop: 6 }}>
-                The highest annual LIVING spend at which the plan still clears its success
-                target{successTarget === null ? '' : ` — yours is ${formatPct(successTarget, 0)} today`}.
-                Living expenses only: the solver sweeps those and leaves your charitable and
-                investing streams alone, so this is not total household spending. Each figure
-                was solved against the target that plan carried when it was scored, by a
-                bisection run at fewer paths than the probability above — the coarser of the two
-                numbers, and the tooltip gives each point&rsquo;s path count. A snapshot with no
-                figure leaves a gap rather than a zero: an over-funded plan clears the top of
-                the solver&rsquo;s range, which is &ldquo;more than this&rdquo;, not
-                &ldquo;this&rdquo;. {COMPARABILITY_CAPTION}
-              </div>
+              {/* No explanatory footer (the owner's fluff rule, 2026-08-31);
+                  the conditions live in each point's tooltip. */}
             </>
           )}
         </div>
@@ -1537,14 +1508,7 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
               unmeasured instead.
             </div>
           ))}
-        <div className="field-help" style={{ marginTop: 4 }}>
-          Portfolio = total minus the home value; account balances are priced from the quotes
-          stored at the snapshot moment (each row keeps its own per-symbol prices and as-of
-          times in networth.json). The plan score is the plan&rsquo;s own, computed once, when
-          the snapshot was taken — a row records a day, and nothing here writes a later day&rsquo;s
-          number onto it. Hover a score to see the sustainable spend solved alongside it, when
-          there is one.
-        </div>
+        {/* No explanatory footer (the owner's fluff rule, 2026-08-31). */}
       </div>
       )}
 

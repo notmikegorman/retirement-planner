@@ -99,9 +99,20 @@ export interface PlanHistoryCardProps {
   profile: Profile;
   /** Hand a restored plan back to the workbench, which re-runs against it. */
   onRestored: (plan: Scenario) => void;
+  /**
+   * Perform the restore call. Supplied by the page rather than read off
+   * api directly because the workbench is MOUNTED beside this card now: its
+   * debounced autosave serializes through the page's own write chain, and a
+   * bare api.restorePlan could interleave with it — an already-fired
+   * autosave PUT landing after the restore would silently put the
+   * pre-restore plan back on disk (the tenth-pass review panel's finding).
+   * WorkbenchPage's restorePlanOrdered flushes any in-window edit first
+   * (the filed undo must include what the user sees) and rides that chain.
+   */
+  restorePlan: (id: string) => ReturnType<typeof api.restorePlan>;
 }
 
-export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardProps) {
+export function PlanHistoryCard({ plan, profile, onRestored, restorePlan }: PlanHistoryCardProps) {
   const { showToast } = useToast();
   const [entries, setEntries] = useState<PlanHistoryEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -245,7 +256,7 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
     setBusy(row.entry.id);
     const idsBefore = (entries ?? []).map((e) => e.id);
     try {
-      const res = await api.restorePlan(row.entry.id);
+      const res = await restorePlan(row.entry.id);
       // Re-read before speaking: whether the replaced plan was actually filed
       // is a fact about the list, not a promise this page may repeat.
       let after: PlanHistoryEntry[];
@@ -351,6 +362,12 @@ export function PlanHistoryCard({ plan, profile, onRestored }: PlanHistoryCardPr
               onAskRestore={(row) => {
                 setActionError(null);
                 setConfirming(row.entry.id);
+                // The list may be stale by now: on this page the plan is
+                // EDITED beside the card, and any autosave since mount can
+                // have filed today's day-start entry — and the question's
+                // undo sentence is a fact about the list. Refresh while the
+                // question is open; the prompt re-renders from fresh state.
+                void load();
               }}
               onCancelRestore={() => setConfirming(null)}
               onRestore={(row) => void restore(row)}

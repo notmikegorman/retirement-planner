@@ -52,11 +52,11 @@ export type SummedLineCategory = (typeof SUMMED_EXPENSE_CATEGORIES)[number];
  *   retired side of giving is the Tithing RULE (`retirementGiving`), no
  *   survivor giving stream exists, and giving does not change by dwelling —
  *   so none of the three renders.
- * - investing: `deriveExpenseStreams` sums the effective retired value of each
- *   investing line (a blank cell meaning "same as now"); no survivor investing
- *   stream exists, and the transfer's between-homes behaviour is the ENGINE's
- *   decision (it redirects the same dollars to savings, note 24), not a
- *   per-line figure — so retired renders and the other two do not.
+ * - investing: NO optional column since 2026-08-31 — investing stops at
+ *   retirement (the app's standing rule), so a retired cell would commit a
+ *   number nothing consumes; no survivor investing stream exists, and the
+ *   transfer's between-homes behaviour is the ENGINE's decision (it redirects
+ *   the same dollars to savings, note 24), not a per-line figure.
  *
  * There is no entry for 'insurance' / 'modeled_elsewhere' / 'excluded' because
  * there is no tab: the user deleted those lines and the import no longer
@@ -66,7 +66,7 @@ export type SummedLineCategory = (typeof SUMMED_EXPENSE_CATEGORIES)[number];
 export const LINE_TAB_COLUMNS = {
   living: { renting: true, retired: true, survivor: true },
   charitable: { renting: false, retired: false, survivor: false },
-  investing: { renting: false, retired: true, survivor: false },
+  investing: { renting: false, retired: false, survivor: false },
 } as const satisfies Record<
   SummedLineCategory,
   { renting: boolean; retired: boolean; survivor: boolean }
@@ -331,11 +331,12 @@ export function moveLineWithinCategory(
  * One row per stream, so an owner who has only ever typed three numbers loses
  * nothing by itemising.
  *
- * The investing row is the one that must carry an EXPLICIT retired figure. As a
- * scalar, absent `investingMonthlyRetired` means 0 — investing out of a paycheck
- * ends with the paycheck — but on a row absent means "same as now", which would
- * quietly carry $1,250/mo of saving thirty years into retirement. The seed
- * therefore writes the 0 (or whatever the profile says) rather than inheriting.
+ * The investing row still carries an EXPLICIT retired figure so the FILE says
+ * what the engine assumes: since 2026-08-31 investing stops at retirement
+ * whatever the row says (the app's standing rule — the retired cell is
+ * transcribed, never dollars), and before that a row's blank retired cell
+ * meant "same as now". The seed writes the 0 (or whatever the profile says)
+ * rather than inheriting.
  *
  * Giving gets no retired figure for the opposite reason: its after-work answer
  * is the Tithing rule, and a number here would be ignored.

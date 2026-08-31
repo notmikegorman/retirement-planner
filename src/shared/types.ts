@@ -71,7 +71,7 @@ export type YearMonth = string;
  * tests/shared/engineVersion.test.ts now fails when the engine's source
  * changes without this constant moving.
  */
-export const ENGINE_VERSION = '1.23.0';
+export const ENGINE_VERSION = '1.24.0';
 
 // ---------------------------------------------------------------------------
 // Profile
@@ -277,17 +277,14 @@ export interface ProfileIncome {
    */
   retirementMonthly?: number;
   /**
-   * Whether `retirementMonthly` is taxable as ORDINARY income (wages from
-   * part-time work, consulting, a pension, rent). ABSENT MEANS TRUE, which is
-   * the honest default for anything earned. `false` models money that is not
-   * income at all — a return of capital, a gift, a reimbursement: spendable
-   * cash that raises neither AGI nor any MAGI, so it never touches the ACA
-   * cliff, IRMAA, NIIT, or the taxability of Social Security.
+   * PARSED BUT IGNORED since 2026-08-31: post-retirement income is ALWAYS
+   * ordinary income — the app's standing rule (the owner's). The field stays
+   * declared so every profile written while the toggle existed still loads
+   * (the schema is strict), but the engine never reads it and no UI edits it.
    *
-   * DOCUMENTED SIMPLIFICATION: taxable retirement income is treated as plain
-   * ordinary income, NOT as wages — it is not subject to payroll tax, does not
-   * create earned income for IRA-contribution purposes, and (per
-   * `retirementMonthly`) does not trigger the Social Security earnings test.
+   * DOCUMENTED SIMPLIFICATION (unchanged): retirement income is plain
+   * ordinary income, NOT wages — no payroll tax, no earned income for
+   * IRA-contribution purposes, no Social Security earnings test.
    */
   retirementIncomeTaxable?: boolean;
 }
@@ -885,11 +882,10 @@ export interface ProfileExpenses {
   /**
    * Monthly transfer to the taxable brokerage AFTER nobody works.
    *
-   * ABSENT MEANS 0 — investing out of a paycheck ends with the paycheck, which
-   * is exactly what the engine did before this field existed. A household that
-   * expects to keep investing in retirement (a big forced RMD, a pension it
-   * does not spend) sets a figure here; it is capped at the year's surplus
-   * exactly like the working stream, so it still can never force a withdrawal.
+   * PARSED BUT IGNORED since 2026-08-31: investing stops at retirement — the
+   * app's standing rule (the owner's). The field stays declared so every
+   * profile written while it was live still loads (the schema is strict),
+   * but the engine never reads it and no UI edits it.
    */
   investingMonthlyRetired?: number;
   /**
@@ -2087,7 +2083,7 @@ export interface AssumptionOverrides {
     livingMonthlyRetired?: number;
     charitableMonthly?: number;
     investingMonthly?: number;
-    /** Retired-side investing; absent keeps the profile's (and absent there = 0). */
+    /** PARSED BUT IGNORED since 2026-08-31 — investing stops at retirement. */
     investingMonthlyRetired?: number;
     /** Plan-level what-if on the premium; absent keeps the profile’s. */
     lifeInsuranceMonthly?: number;
@@ -2154,6 +2150,7 @@ export interface AssumptionOverrides {
    */
   income?: {
     retirementMonthly?: number;
+    /** Parsed but ignored since 2026-08-31 — always ordinary income. */
     retirementIncomeTaxable?: boolean;
   };
 }
@@ -2370,10 +2367,9 @@ export interface YearRow {
     other: number;
     /**
      * The retirement income stream (ProfileIncome.retirementMonthly) for this
-     * year: spendable cash, ordinary income when
-     * ProfileIncome.retirementIncomeTaxable is not false. A separate cash
-     * component of income, like wages and Social Security — not part of
-     * `other` (one-time income).
+     * year: spendable cash, always ordinary income (the app's standing rule,
+     * 2026-08-31). A separate cash component of income, like wages and Social
+     * Security — not part of `other` (one-time income).
      */
     retirement: number;
     /**

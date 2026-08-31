@@ -308,6 +308,7 @@ export const profileSchema: z.ZodType<Profile> = z.object({
     /** Retired-side income stream, $/month in today's dollars. Absent = 0. */
     retirementMonthly: monthlyDollars.optional(),
     /** Absent = true (ordinary income); false = spendable cash outside AGI. */
+    /** Parsed but ignored since 2026-08-31: always ordinary income. */
     retirementIncomeTaxable: z.boolean().optional(),
   }),
   expenses: z.object({
@@ -316,7 +317,7 @@ export const profileSchema: z.ZodType<Profile> = z.object({
     livingMonthlyRetired: monthlyDollars.optional(),
     charitableMonthly: z.number().min(0),
     investingMonthly: z.number().min(0),
-    /** Absent = 0 (investing out of a paycheck ends with the paycheck). */
+    /** Parsed but ignored since 2026-08-31: investing stops at retirement. */
     investingMonthlyRetired: monthlyDollars.optional(),
     lifeInsuranceMonthly: monthlyDollars.optional(),
     /**
@@ -687,6 +688,7 @@ const expensesOverrideSchema = z.strictObject({
   livingMonthlyRetired: monthlyDollars.optional(),
   charitableMonthly: monthlyDollars.optional(),
   investingMonthly: monthlyDollars.optional(),
+  /** Parsed but ignored since 2026-08-31: investing stops at retirement. */
   investingMonthlyRetired: monthlyDollars.optional(),
   /**
    * The life-insurance policy, overridable as a whole. AssumptionOverrides has
@@ -742,6 +744,7 @@ const expensesOverrideSchema = z.strictObject({
  */
 const incomeOverrideSchema = z.strictObject({
   retirementMonthly: monthlyDollars.optional(),
+  /** Parsed but ignored since 2026-08-31: always ordinary income. */
   retirementIncomeTaxable: z.boolean().optional(),
 });
 

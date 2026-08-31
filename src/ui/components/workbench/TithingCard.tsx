@@ -207,6 +207,11 @@ export function PotFields({
             <option value="give_cash">is given in cash</option>
           </select>
         </label>
+      </div>
+      {/* Their own checkbox-only row (.checkRow collapses the label tracks):
+          sharing the select's row meant every wrapped line carried ~50px of
+          alignment shim as dead air — the owner's screenshot, 2026-08-31. */}
+      <div className="row checkRow">
         <CheckboxField
           label="Seed from gains never tithed"
           checked={pot.seedFromGains !== false}
@@ -283,8 +288,12 @@ export function OngoingGivingEditor({
               </option>
             ))}
           </select>
+          {/* Help under the control, not a field-note beside it: on a narrow
+              panel the note wrapped below the select with the note's whole
+              control-alignment shim showing as a blank gap (the owner's
+              screenshot, 2026-08-31). */}
+          <span className="field-help">{annualGivingNote(rule, charitableMonthly)}</span>
         </label>
-        <span className="field-note muted">{annualGivingNote(rule, charitableMonthly)}</span>
       </div>
       <OngoingRuleParams rule={rule} hasPot={hasPot} onChange={onChange} />
       {status !== undefined && <div className="field-help">{status}</div>}
@@ -420,11 +429,13 @@ export function TithingCard({ profileExpenses, overrides, onChange }: TithingCar
         <InfoTip label="the un-tithed pot" text={potHelp(pot)} />
         <InfoTip label="what the pot is" text={POT_SECTION_TIP} align="end" />
       </div>
-      <CheckboxField
-        label="Set aside an un-tithed pot at retirement"
-        checked={potOn}
-        onChange={togglePot}
-      />
+      <div className="row checkRow">
+        <CheckboxField
+          label="Set aside an un-tithed pot at retirement"
+          checked={potOn}
+          onChange={togglePot}
+        />
+      </div>
       {potOn && (
         <PotFields
           // Remounts the number boxes when the source flips between profile

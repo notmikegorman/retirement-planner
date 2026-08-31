@@ -38,7 +38,6 @@ import { describe, expect, it } from 'vitest';
 import type { NetWorthSnapshot, SnapshotScore } from '../../src/shared/types';
 import {
   BREAK_CHIP_LABEL,
-  COMPARABILITY_CAPTION,
   MIN_SCORE_SPAN_PCT,
   MIN_SPEND_SPAN_USD,
   SPEND_AXIS_PAD_USD,
@@ -510,33 +509,29 @@ describe('the score chart’s wiring (source scan)', () => {
     expect(page).toContain("strokeDasharray={mark === 'unknown' ? '2 2' : undefined}");
   });
 
-  it('lets the legend and the caption carry the distinction without a hover', () => {
+  it('lets the legend chips carry the distinction without a hover', () => {
     // He had to ask what the marks meant. Each chip states its OWN condition,
     // the two chips are two different sentences because they are two different
     // claims, and BOTH plots get both — the spend chart used to draw the marks
     // and explain none of them.
     expect(BREAK_CHIP_LABEL).toContain('a different plan, or a different engine');
     expect(UNKNOWN_CHIP_LABEL).toContain('no way to tell whether the plan changed');
-    expect(COMPARABILITY_CAPTION).toContain('An amber ring');
-    expect(COMPARABILITY_CAPTION).toContain('A grey dotted ring');
-    expect(COMPARABILITY_CAPTION).toContain('cannot tell whether the plan changed');
-    // Neither guess: not "the plan changed", and not "these two are fine".
-    expect(COMPARABILITY_CAPTION).toContain('not a plan change, and not a clean join');
     // Rendered twice each — once under the score plot, once under the spend
     // plot — from the one definition, so the two legends cannot drift apart.
     expect(page.match(/\{BREAK_CHIP_LABEL\}/g)?.length).toBe(2);
     expect(page.match(/\{UNKNOWN_CHIP_LABEL\}/g)?.length).toBe(2);
-    expect(page.match(/\{COMPARABILITY_CAPTION\}/g)?.length).toBe(2);
     // Distinct glyphs, in the marks' own colours, so the chip is readable as
     // the thing on the plot rather than as a colour swatch.
     expect(page).toContain('<span style={{ color: chart.amber }}>○</span> {BREAK_CHIP_LABEL}');
     expect(page).toContain(
       '<span style={{ color: chart.neutralStrong }}>◌</span> {UNKNOWN_CHIP_LABEL}',
     );
-    // And the sentence it replaced is gone — the one that asserted a plan
-    // change at every baseline-era seam.
-    expect(page).not.toContain('A ringed point was scored against a different plan');
-    expect(page).not.toContain('not comparable with the point');
+    // The caption paragraphs under both plots are GONE (the owner's fluff
+    // rule, 2026-08-31) — the chips and each point's tooltip carry the
+    // conditions now, and nothing may reintroduce a legend paragraph.
+    expect(page).not.toContain('COMPARABILITY_CAPTION');
+    expect(page).not.toContain('probability of never running out');
+    expect(page).not.toContain('highest annual LIVING spend');
   });
 
   it('keeps the house rule: no entry animation on either chart', () => {
@@ -839,19 +834,13 @@ describe('the spend chart’s wiring (source scan)', () => {
     expect(page).toContain('datum[spec.dataKey] === null');
   });
 
-  it('states the success target the figure clears, because it is meaningless without one', () => {
-    // "The most you could spend" is a different number at 85% than at 95%.
-    expect(page).toContain('successTarget');
-    expect(page).toContain('still clears its success');
-    expect(page).toContain('yours is ${formatPct(successTarget, 0)} today');
-    // And says which target the RECORDED figures used, which is not
-    // necessarily that one.
-    expect(page).toContain('solved against the target that plan carried when it was scored');
-  });
-
-  it('says it is living expenses only, so it is not read as household spend', () => {
-    expect(page).toContain('Living expenses only');
-    expect(page).toContain('charitable and');
+  it('carries no legend paragraph — retired with the caption (the fluff rule, 2026-08-31)', () => {
+    // The paragraph that stated the success target and the living-only scope
+    // is gone, along with the successTarget state that existed only to feed
+    // it. Per-point conditions live in the tooltip.
+    expect(page).not.toContain('successTarget');
+    expect(page).not.toContain('still clears its success');
+    expect(page).not.toContain('Living expenses only');
   });
 
   it('says nothing at all rather than an empty plot before the first figure', () => {

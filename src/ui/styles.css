@@ -1354,8 +1354,9 @@ dialog.modal::backdrop {
   min-width: 0;
 }
 
-/* An empty cell states its default in words ('same as working', 'stops'), so
-   the placeholder is a statement of behaviour rather than a hint. */
+/* An empty cell states its default in words ('same as working' — living is
+   the one remaining pair), so the placeholder is a statement of behaviour
+   rather than a hint. */
 .pair-cell > input::placeholder {
   color: var(--text-dim);
   font-style: italic;
@@ -2561,6 +2562,38 @@ button.rowDeleteBtn:hover:not(:disabled) {
 
 .moduleFieldset .row.inlineRow .field-checkbox > .field-control {
   min-height: var(--control-h);
+}
+
+/*
+ * A row holding ONLY checkboxes (the Plan page's cards — the owner's
+ * Tithing-panel screenshot, 2026-08-31). The reserved label track and
+ * control-height floor exist to align a checkbox with LABELED neighbors on
+ * one line; a checkbox-only row has none, and on a wrapping row the shim
+ * turns into ~50px of dead air above every wrapped line. Same collapse as
+ * .moduleFieldset's, opted into per row — and harmless when a shared
+ * component (PotFields) renders the row INSIDE a module form, where the
+ * fieldset's own collapse already agrees with it member for member.
+ */
+.row.checkRow {
+  align-items: flex-start;
+  row-gap: 8px;
+}
+
+.row.checkRow .field-checkbox {
+  grid-template-rows: auto;
+  row-gap: 0;
+}
+
+.row.checkRow .field-checkbox > .field-label {
+  display: none;
+}
+
+.row.checkRow .field-checkbox > .field-control {
+  min-height: 0;
+}
+
+.row.checkRow .field-checkbox > .field-help {
+  margin-top: 4px;
 }
 
 /* A line that exists only in VIEW mode — for copy whose call-to-action

@@ -283,7 +283,10 @@ describe('the tab column contract (LINE_TAB_COLUMNS)', () => {
     expect(LINE_TAB_COLUMNS).toEqual({
       living: { renting: true, retired: true, survivor: true },
       charitable: { renting: false, retired: false, survivor: false },
-      investing: { renting: false, retired: true, survivor: false },
+      // investing lost its retired column on 2026-08-31: the engine no
+      // longer reads the retired value anywhere (investing stops at
+      // retirement, the app's standing rule).
+      investing: { renting: false, retired: false, survivor: false },
     });
   });
 
@@ -995,17 +998,20 @@ describe('the Expenses / Tithing / Investing / Insurance split', () => {
   });
 
   it('still reaches every control the one Expenses tab used to carry', () => {
-    // The budget's five money fields moved to the Expenses tab's empty state,
-    // where a profile with no itemised rows still edits its three streams.
+    // The budget's money fields moved to the Expenses tab's empty state,
+    // where a profile with no itemised rows still edits its streams.
+    // (Investing lost its after-work field on 2026-08-31: investing stops at
+    // retirement, the app's standing rule, and no surface may offer the box.)
     for (const label of [
       'Living expenses ($/mo)',
       'Living after you stop working ($/mo)',
       'Charitable giving ($/mo)',
       'Investing / savings ($/mo)',
-      'Investing after you stop working ($/mo)',
     ]) {
       expect(budgetCard, `budget control "${label}" went missing in the split`).toContain(label);
     }
+    expect(budgetCard).not.toContain('Investing after you stop working');
+    expect(budgetCard).not.toContain('After the last paycheck');
     // The four policy fields moved to Insurance, unchanged.
     for (const label of [
       'Life insurance ($/mo)',
@@ -1168,8 +1174,10 @@ describe('the budget tabs are homogeneous', () => {
 
   it('manufactures no line from an empty or zero blur on the create-on-commit fields', () => {
     // NumberField commits on every blur; without the guard, tabbing through
-    // the form in edit mode would litter the budget with $0 rows.
-    expect(budgetCard.match(/if \(v == null \|\| v === 0\) return;/g)?.length).toBe(3);
+    // the form in edit mode would litter the budget with $0 rows. Two guards
+    // since 2026-08-31: giving's create field and investing's one remaining
+    // (working-side) create field.
+    expect(budgetCard.match(/if \(v == null \|\| v === 0\) return;/g)?.length).toBe(2);
   });
 });
 

@@ -70,18 +70,17 @@ projections are only as good as these numbers — replace them and the plan reco
     penalty-protected and are not recaptured. This applies to hand-written `start_72t`
     series exactly as to automatic ones; the year fires a `sepp-busted` event and the tax
     trace itemises the price. A path that fails even after busting fails honestly.
-- **Three paired streams: while working / after you stop working.** Living, investing and
-  giving each have a value in play while anyone still earns a salary and a value in play
-  once nobody does. All three switch on one signal — the first year no salary is drawn —
-  and the retirement year itself is prorated between the two by the months worked. What an
-  EMPTY after-work box means differs per stream, because the honest default differs:
-  - **Living** (`livingMonthlyRetired`) — empty means **the same as working**. Groceries,
-    utilities and insurance do not fall the day the salary stops. (Under the `fixed_percent`
-    spending policy the policy sets living spending outright and neither side is consulted.)
-  - **Investing** (`investingMonthlyRetired`) — empty means **stops**. Investing out of a
-    paycheck ends with the paycheck. Put a figure here if you expect to keep investing (a
-    forced RMD you do not spend); it stays capped at the year's surplus either way.
-    While anyone is still earning, this transfer is the **only** accumulation the model
+- **The streams switch on one signal: while working / after you stop working.** Everything
+  flips on the first year no salary is drawn, and the retirement year itself is prorated by
+  the months worked. What happens after work stops differs per stream:
+  - **Living** (`livingMonthlyRetired`) — an empty after-work box means **the same as
+    working**. Groceries, utilities and insurance do not fall the day the salary stops.
+    (Under the `fixed_percent` spending policy the policy sets living spending outright and
+    neither side is consulted.)
+  - **Investing** — **stops at retirement, always** (a standing rule since 2026-08-31;
+    engine 1.24.0). Investing out of a paycheck ends with the paycheck; there is no
+    after-work box, and an `investingMonthlyRetired` left in an older file is parsed and
+    ignored. While anyone is still earning, this transfer is the **only** accumulation the model
     assumes: leftover pay beyond it is treated as spent, because `livingMonthly` is a budget
     baseline and does not carry the irregular costs (a new air conditioner, a car repair, a
     trip) that the leftover of a paycheck actually pays for. The cashflow breakdown shows it
@@ -170,19 +169,19 @@ projections are only as good as these numbers — replace them and the plan reco
   — in today's dollars per month. It is the mirror image of a salary: it starts in the first
   year nobody draws one, is prorated in the retirement year, inflates with CPI and then runs
   for life. It is spendable cash, so it directly reduces what the portfolio has to produce,
-  and it shrinks any automatic 72(t) series (less of the IRA gets locked up). Taxable by
-  default (`retirementIncomeTaxable`), which raises AGI and every MAGI test with it — the
-  ACA cliff, IRMAA, the taxability of Social Security; switch it off only for money that is
-  not income at all (a return of capital, a gift, a reimbursement). The Workbench's Income
-  card is where "what if I consulted two days a week?" belongs — it is a plan override, so
-  clearing the box undoes it.
+  and it shrinks any automatic 72(t) series (less of the IRA gets locked up). It is
+  **always ordinary income** (a standing rule since 2026-08-31; engine 1.24.0) — it raises
+  AGI and every MAGI test with it: the ACA cliff, IRMAA, the taxability of Social Security.
+  The old `retirementIncomeTaxable` toggle is gone; the flag is parsed and ignored in older
+  files. The Plan page's Income card is where "what if I consulted two days a week?"
+  belongs — it is a plan override, so clearing the box undoes it.
   - ⚠️ **The Social Security earnings test is NOT modeled.** Claiming before Full Retirement
     Age while earning above the annual exempt amount withholds benefits ($1 for every $2
     over the limit; $1 for every $3 in the FRA year), credited back as a permanently higher
     benefit at FRA. Your plan claims at 67 — your FRA — where the test does not apply at
     all, so nothing here is affected. A plan that claims at 62 **and** carries part-time
     earnings above the limit would overstate benefits in those years.
-  - Taxable retirement income is modeled as plain ordinary income, not wages: no payroll
+  - Retirement income is modeled as plain ordinary income, not wages: no payroll
     tax, and it creates no earned income for IRA-contribution purposes.
 - Surplus cash is reinvested in the taxable brokerage (raising balance and cost basis), not
   held as cash — including a 72(t) payment larger than the year's spending. Households with

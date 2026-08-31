@@ -593,8 +593,9 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
     (t) => t !== '',
     'the pre-restore run stamp',
   );
-  // History lives on the Settings module's last tab now (2026-08-30).
-  await page.locator('.sideNav').getByRole('button', { name: 'Settings', exact: true }).click();
+  // History is the Plan page's LAST results tab now (2026-08-31, back from
+  // its one-day stay in the Settings module) — the page is already mounted,
+  // so the version list renders beside the live draft.
   await page.getByRole('tab', { name: 'History' }).click();
   // Capture which entries already carry a spend figure BEFORE scoring, so the
   // wait below can demand a NEW one — through the seam, not the screen. The
@@ -667,23 +668,26 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   });
   expect(refusalMessage).toContain('already has a score');
 
-  // Restore: the store writes the version's plan to plan.json during it (the
-  // History tab lives on the Settings page now, where there is no live
-  // draft to hand it to). The Plan page then LOADS the restored plan fresh
-  // on its next mount — and lands on the FINAL run the version scoring just
-  // cached, which is the cached-final contract working a second way.
+  // Restore: the store writes the version's plan to plan.json during it, and
+  // — the page being MOUNTED now — the card hands the restored plan straight
+  // to the workbench (onPlanRestored replaces the draft in place; no unmount,
+  // no fresh file load). The debounce then re-runs against it and lands on
+  // the FINAL run the version scoring just cached, which is the cached-final
+  // contract working a second way.
   await page.getByRole('button', { name: 'Restore', exact: true }).click();
   await page.getByRole('button', { name: 'Restore it' }).click();
   // The confirm closes only AFTER api.restorePlan resolves (the card awaits
   // it before setConfirming(null)), so its button disappearing is the
-  // write's receipt — navigate back to Plan before it and the page would
-  // load the OLD file and the run-key wait below would hang. BOTH labels:
-  // the button reads 'Restoring…' while busy, and a wait on 'Restore it'
-  // alone would resolve at the RENAME, not the completion.
+  // write's receipt. BOTH labels: the button reads 'Restoring…' while busy,
+  // and a wait on 'Restore it' alone would resolve at the RENAME, not the
+  // completion.
   await page
     .getByRole('button', { name: /^Restor(e it|ing…)$/ })
     .waitFor({ state: 'hidden', timeout: 60_000 });
-  await page.locator('.sideNav').getByRole('button', { name: 'Plan', exact: true }).click();
+  // Back to a run-viewing tab: the History panel deliberately renders outside
+  // the data-run-key wrapper (no run drew it), so the stamp only reappears —
+  // with the restored plan's run — once Summary is fronted again.
+  await page.getByRole('tab', { name: 'Summary' }).click();
   await until(
     () => runKeyOnScreen(),
     (t) => t !== '' && t !== runBeforeRestore,

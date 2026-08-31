@@ -313,10 +313,16 @@ const PINNED = {
   // sale-and-buy, fixed_percent, wholesale living override) as digest
   // equalities.
   //
+  // 1.24.0 adopted two standing rules (the owner's, 2026-08-31): investing
+  // stops at retirement (investingMonthlyRetired parsed but ignored) and
+  // post-retirement income is always ordinary income (retirementIncomeTaxable
+  // parsed but ignored) — a plan or profile carrying either answers
+  // differently.
+  //
   // 1.13.0 was the tithe account's soft window; 1.12.0 per-policy
   // life-insurance dispositions; 1.11.0 the itemised budget.
-  version: '1.23.0',
-  engineSourceSha256: '355140c9524094cccfde62000d91b8d183fc121b95cae632ad58512c0bd0eb84',
+  version: '1.24.0',
+  engineSourceSha256: 'a136835c3b58691ed3fd7a80d1577fcacc31342ea6da898f5e4907b794c08a87',
 };
 
 describe('ENGINE_VERSION and the run cache', () => {

@@ -2185,3 +2185,101 @@ not the completion), and three load-bearing orphaned tips got one-line
 `help=` rescues: the ACA how-to, and the survivor-fraction scope note at
 both of its doors. The search page's probe/saturation tips stay orphaned
 with the page parked.
+
+## Two standing rules, History comes home, and the fluff keeps falling (2026-08-31, tenth pass)
+
+**Investing stops at retirement — a standing rule, not a field.** The
+"After the last paycheck" box is gone from every surface (the Investing
+module's three branches, the pre-itemisation streams card, and the Plan
+page Spending card's retired override cell — the last one because a knob
+wired to a removed concept is exactly the live-looking-but-dead control
+this codebase keeps hunting). The ENGINE enforces the rule at the two
+places the figure ever became dollars: household.ts's investing stream
+(worked months only now) and simulate.ts's between-homes window slice.
+`investingMonthlyRetired` stays in the schemas — they are strict, so
+dropping the key would refuse every file written while the field lived —
+as parsed-but-ignored, and the engine suite pins that a profile OR plan
+carrying one runs bit-for-bit identical to one without. The derive layer
+still transcribes it from budget lines (a faithful transcription that
+never becomes dollars), an investing line's create still stamps an
+explicit retired 0 so the file says what the engine assumes, and the
+zero-spend readiness gate stopped counting it as spending — a profile
+whose only figure is retired investing now genuinely spends nothing.
+
+**Post-retirement income is always ordinary income.** The taxable
+select left the Plan page's Income card, the checkbox left the Income
+module, and the engine's `retirementIncomeTaxable` plumbing came out
+whole (ctx field, SEPP-estimator input, year-loop branch). Same
+schema treatment: parsed but ignored, pinned by an identical-run test.
+The Income card also lost its read-only "While working" column (the
+owner's call — those are the Income page's facts, restated as
+furniture), leaving the card as the one knob it exists for.
+
+**ENGINE_VERSION 1.23.0 → 1.24.0** — both rules change numbers for any
+file carrying the old fields, and the run cache, the plan-history
+scoring, and the net-worth comparability rings all key on the version.
+The history tab immediately marks pre-bump scores "older engine", which
+is that machinery doing its job.
+
+**Plan History moved back to the Plan page** — the results strip's LAST
+tab, after Widow (one day after moving to Settings; the owner's call).
+Every tab before it views the current run; History views what the plan
+used to be — and it is not a view of the run at all, so LiveResults
+renders it OUTSIDE the waiting-for-a-result gate (it works before the
+first run lands) and outside the data-run-key stamp (no run drew it).
+With the workbench MOUNTED during a restore, the Settings-era
+choreography (fetch the plan, gate on the pending flush, reload fresh
+on next mount) collapsed to a direct hand-off: the server has already
+written plan.json when onRestored fires, and WorkbenchPage's hook just
+replaces the draft (bumping the revision re-keys the input cards, whose
+editors copy draft state at mount) and drops the pinned baseline. The
+autosave debounce then re-runs against the restored draft; its
+redundant PUT rewrites the same bytes. `forgetPlanComparisons` lost its
+last consumer and was deleted — loadPlanIntoWorkbench remains the
+out-of-page seam and clears the baseline itself.
+
+**The fluff rule kept cutting:** the four Net-worth legend paragraphs
+(Trend, Score, Spend, Snapshots — COMPARABILITY_CAPTION died with the
+last two, and the successTarget state that existed only to feed the
+Spend caption went with it), the bonds card's explainer, and the
+budget's two footers. What replaced the footers is the one actionable
+list the owner asked for, verified against the engine's own
+'modeled_elsewhere' taxonomy: do not enter charitable giving (Tithing),
+investing (Investing), life-insurance premiums (Insurance), health
+premiums (Settings > Health), or home costs — mortgage, property tax,
+home insurance, maintenance, rent (Home). He recalled six categories;
+health premiums, maintenance and rent are engine-modeled too and made
+the list.
+
+**The Tithing panel's blank gaps** were the round-7 lesson escaping its
+scope: the checkbox label-track collapse lives on `.moduleFieldset`, and
+the Plan page's cards have no such ancestor — so the pot toggle, the
+three pot checkboxes (wrapping under the hold select), and the giving
+note's control-alignment shim all rendered their scaffolding as dead
+air. New `.row.checkRow` opt-in carries the identical collapse outside
+the module forms (fieldSpacing pins it value-for-value against the
+module block so the copies cannot drift), TithingCard's checkboxes moved
+into checkRow rows, and the shared OngoingGivingEditor's annual note
+became field-help under its select — stable at every width instead of
+correct at one. Verified live: all three gap sites closed.
+
+The pass's review panel (20 agents, 4 dimensions, 2 skeptics per finding)
+confirmed one real race and a set of lies the relocations left behind.
+The race: a bare api.restorePlan beside a MOUNTED workbench is unordered
+against the page's debounced autosave — an already-fired PUT of the
+pre-restore draft could land after the restore and silently put the old
+plan back on disk (and the filed undo could miss an edit still sitting in
+the debounce window). PlanHistoryCard now takes the restore call as a
+prop: WorkbenchPage's restorePlanOrdered flushes any in-window edit first
+and rides saveChain, the same serialized chain every autosave PUT goes
+through — pinned in planHistoryTab. The panel also caught the History
+tab hiding behind the zero-start gate (the plan's past exists with zero
+accounts; the history branch now precedes the firstRun branch, which
+un-deads the card's no-accounts Restore path), the stale entry list
+beside a live editor (asking to restore now refreshes the list the
+question's undo promise is computed from), the restore question still
+promising Settings-era behavior ("runs it the next time you open it" —
+it runs right away now), StreamsCard's visible intro still claiming
+every stream has an afterwards, two dead locals the footer deletion
+orphaned, and ASSUMPTIONS.md + ARCHITECTURE.md still documenting both
+removed knobs as live — all fixed, with the engine hash re-pinned.

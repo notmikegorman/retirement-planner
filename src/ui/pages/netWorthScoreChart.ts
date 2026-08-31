@@ -382,26 +382,6 @@ export const UNKNOWN_CHIP_LABEL =
   'recorded differently from the point before it — no way to tell whether the plan changed';
 
 /**
- * The same distinction at caption length, under BOTH plots.
- *
- * Worded for either chart (“measured”, not “scored” or “solved”) so one
- * sentence can serve both: the conditions are identical on the two plots, and
- * the spend chart used to draw the marks while explaining none of them.
- *
- * IT REFUSES TO GUESS, in both directions. It does not say the plan changed at
- * a grey ring, because the app cannot know that; and it does not say the two
- * numbers are fine to compare, because the app cannot know that either.
- */
-export const COMPARABILITY_CAPTION =
-  'An amber ring marks a point measured against a different plan, or by a different engine ' +
-  'version, than the point before it: those two numbers were never on one scale, and the ' +
-  'tooltip says which of the two it was. A grey dotted ring means something weaker and quite ' +
-  'different — the two points record WHAT they measured in ways that cannot be compared (the ' +
-  'older names the frozen baseline of its day, the newer the plan’s own identity, and neither ' +
-  'name can be turned into the other). There the app cannot tell whether the plan changed, so ' +
-  'it claims neither: not a plan change, and not a clean join.';
-
-/**
  * WHAT THIS SCORE SAYS IT SCORED — the name, and the RULE that wrote it.
  *
  * Two vocabularies meet here. A score recorded since the collapse names the

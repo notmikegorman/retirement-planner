@@ -42,7 +42,6 @@ import {
   effectiveMonthly,
   effectiveRetiredMonthly,
   effectiveRetirementIncome,
-  effectiveRetirementTaxable,
   expenseOverride,
   givingOverride,
   givingRuleHelp,
@@ -59,7 +58,6 @@ import {
   retiredPlaceholder,
   retirementIncomeOverride,
   retirementIncomePlaceholder,
-  retirementTaxableOverride,
   noChangeChip,
   pathFractionDeltaResolution,
   pathFractionHalfWidth,
@@ -94,13 +92,11 @@ import {
   setPotPercent,
   setPotSeedFromGains,
   setRetirementIncomeOverride,
-  setRetirementTaxableChoice,
   ssClaimMarkerYear,
   WITHDRAWAL_CHART_EMPTY_NOTE,
   withdrawalRateAxisDomain,
   withdrawalRateSeries,
   withdrawalTooltipView,
-  workingIncomeLines,
   type RunMetrics,
   type WithdrawalRatePoint,
 } from '../../src/ui/components/workbench/workbenchLogic';
@@ -1349,35 +1345,35 @@ describe('setExpenseOverride', () => {
 // ---------------------------------------------------------------------------
 
 describe('effectiveRetiredMonthly / retiredPlaceholder', () => {
-  it('falls back per stream: living keeps working, investing stops', () => {
-    // Nothing set anywhere: living is the working figure, investing is nothing.
-    expect(effectiveRetiredMonthly('same_as_working', 8000, undefined, undefined)).toBe(8000);
-    expect(effectiveRetiredMonthly('stops', 1500, undefined, undefined)).toBe(0);
+  // Living-only since 2026-08-31: investing has no retired side any more
+  // (it stops at retirement, the app's standing rule), so the helpers lost
+  // their per-stream fallback parameter and carry living's "same as
+  // working" semantics outright.
+  it('falls back to the working figure when nothing is set', () => {
+    expect(effectiveRetiredMonthly(8000, undefined, undefined)).toBe(8000);
   });
 
-  it('prefers the plan override, then the profile, then the fallback', () => {
+  it('prefers the plan override, then the profile, then the working figure', () => {
     // Override wins over both.
-    expect(effectiveRetiredMonthly('same_as_working', 8000, 7000, 6500)).toBe(6500);
+    expect(effectiveRetiredMonthly(8000, 7000, 6500)).toBe(6500);
     // No override: the household's own retired figure.
-    expect(effectiveRetiredMonthly('same_as_working', 8000, 7000, undefined)).toBe(7000);
-    // An explicit 0 is a real answer ("we stop investing"), not an absent one.
-    expect(effectiveRetiredMonthly('same_as_working', 8000, 0, undefined)).toBe(0);
-    expect(effectiveRetiredMonthly('stops', 1500, undefined, 400)).toBe(400);
+    expect(effectiveRetiredMonthly(8000, 7000, undefined)).toBe(7000);
+    // An explicit 0 is a real answer, not an absent one.
+    expect(effectiveRetiredMonthly(8000, 0, undefined)).toBe(0);
   });
 
   it('follows the WORKING cell’s override, not the profile, for "same as working"', () => {
     // The working cell is overridden to 7,000 for this plan; "same as working"
     // has to mean 7,000, not whatever profile.json still says.
-    expect(effectiveRetiredMonthly('same_as_working', 7000, undefined, undefined)).toBe(7000);
+    expect(effectiveRetiredMonthly(7000, undefined, undefined)).toBe(7000);
   });
 
   it('says in words what an empty cell will do, or shows the profile figure', () => {
-    expect(retiredPlaceholder('same_as_working', undefined)).toBe('same as working');
-    expect(retiredPlaceholder('stops', undefined)).toBe('stops');
+    expect(retiredPlaceholder(undefined)).toBe('same as working');
     // The profile has its own answer: the box is empty because the PLAN isn't
     // overriding it, so the placeholder is that number.
-    expect(retiredPlaceholder('same_as_working', 7000)).toBe('7000');
-    expect(retiredPlaceholder('stops', 0)).toBe('0');
+    expect(retiredPlaceholder(7000)).toBe('7000');
+    expect(retiredPlaceholder(0)).toBe('0');
   });
 });
 
@@ -1813,8 +1809,6 @@ describe('retirement income override', () => {
     expect(retirementIncomeOverride(o)).toBe(2000);
     expect(retirementIncomeOverride({ expenses: { livingMonthly: 8000 } })).toBeUndefined();
     expect(retirementIncomeOverride(undefined)).toBeUndefined();
-    expect(retirementTaxableOverride(o)).toBeUndefined();
-    expect(retirementTaxableOverride({ income: { retirementIncomeTaxable: false } })).toBe(false);
   });
 
   it('creates, coexists with the expense overrides, and never mutates', () => {
@@ -1871,75 +1865,16 @@ describe('retirement income override', () => {
   });
 });
 
-describe('retirement income — taxable or not', () => {
-  it('resolves plan → profile → taxable', () => {
-    // Absent everywhere means TAXABLE: the honest default for earned money.
-    expect(effectiveRetirementTaxable(undefined, undefined)).toBe(true);
-    expect(effectiveRetirementTaxable(false, undefined)).toBe(false);
-    expect(effectiveRetirementTaxable(false, true)).toBe(true);
-    expect(effectiveRetirementTaxable(undefined, false)).toBe(false);
-  });
+// (The taxable-or-not helpers are gone — post-retirement income is always
+// ordinary income since 2026-08-31, the app's standing rule. The engine
+// suite pins that the old flag is parsed and ignored.)
 
-  it('writes an override only when the choice differs from the profile', () => {
-    // Profile absent (= taxable). Choosing "taxable" is already what the
-    // profile says, so nothing is written and the plan stays clean.
-    expect(setRetirementTaxableChoice(undefined, undefined, true)).toBeUndefined();
-    expect(setRetirementTaxableChoice(undefined, undefined, false)).toEqual({
-      income: { retirementIncomeTaxable: false },
-    });
-    // Profile says false: choosing "not taxable" clears any override...
-    expect(
-      setRetirementTaxableChoice({ income: { retirementIncomeTaxable: true } }, false, false),
-    ).toBeUndefined();
-    // ...and choosing "taxable" writes one.
-    expect(setRetirementTaxableChoice(undefined, false, true)).toEqual({
-      income: { retirementIncomeTaxable: true },
-    });
-  });
-
-  it('keeps the amount override when the taxable choice collapses to the profile', () => {
-    expect(
-      setRetirementTaxableChoice(
-        { income: { retirementMonthly: 2000, retirementIncomeTaxable: false } },
-        undefined,
-        true,
-      ),
-    ).toEqual({ income: { retirementMonthly: 2000 } });
-  });
-});
-
-describe('working income summary', () => {
-  const income = {
-    salaries: { p1: 180_000, p2: 20_000 },
-    contribution401k: 23_500,
-    employerMatch401k: 9_000,
-  };
-
+describe('annualSalaryTotal', () => {
   it('totals the salaries', () => {
-    // 180,000 + 20,000 = 200,000.
-    expect(annualSalaryTotal(income.salaries)).toBe(200_000);
+    // 180,000 + 20,000 = 200,000. (The per-line working-income summary is
+    // gone with IncomeCard's read-only column, 2026-08-31.)
+    expect(annualSalaryTotal({ p1: 180_000, p2: 20_000 })).toBe(200_000);
     expect(annualSalaryTotal({})).toBe(0);
-  });
-
-  it('lists a line per person, then the 401(k) context', () => {
-    expect(
-      workingIncomeLines(income, [
-        { id: 'p1', name: 'Alex' },
-        { id: 'p2', name: 'Sam' },
-      ]),
-    ).toEqual([
-      { label: 'Alex salary', amount: 180_000 },
-      { label: 'Sam salary', amount: 20_000 },
-      { label: '401(k) deferral', amount: 23_500 },
-      { label: 'Employer match', amount: 9_000 },
-    ]);
-  });
-
-  it('shows a person with no salary entry as $0 rather than dropping them', () => {
-    expect(workingIncomeLines(income, [{ id: 'ghost', name: 'Pat' }])[0]).toEqual({
-      label: 'Pat salary',
-      amount: 0,
-    });
   });
 });
 

@@ -115,7 +115,12 @@ export interface DerivedExpenseStreams {
   investingMonthly: number;
   /** undefined keeps ProfileExpenses' meaning: the same as `livingMonthly`. */
   livingMonthlyRetired: number | undefined;
-  /** undefined keeps ProfileExpenses' meaning: 0. */
+  /**
+   * undefined keeps ProfileExpenses' meaning: 0. Since 2026-08-31 the engine
+   * ignores this stream entirely (investing stops at retirement — the app's
+   * standing rule); it is still derived so the rebuilt profile remains a
+   * faithful transcription of the lines.
+   */
   investingMonthlyRetired: number | undefined;
 }
 
@@ -166,11 +171,12 @@ export function deriveExpenseStreams(expenses: ProfileExpenses): DerivedExpenseS
     livingMonthlyRetired: namesRetiredLiving ? retired.living : undefined,
     /*
      * ALWAYS A NUMBER, unlike living above, because the two representations
-     * genuinely disagree about a blank: the scalar's absence means 0
-     * ("investing out of a paycheck ends with the paycheck") while a LINE's
-     * blank retired cell means "the same as now". Where there is a budget, the
-     * budget wins — a household that means to stop investing types a 0 in the
-     * retired column, and sees it.
+     * genuinely disagree about a blank: the scalar's absence means 0 while a
+     * LINE's blank retired cell means "the same as now". A faithful
+     * transcription of the lines — and, since 2026-08-31, NOTHING MORE: the
+     * engine ignores the retired investing stream entirely (investing stops
+     * at retirement, the app's standing rule), so this number never becomes
+     * dollars anywhere.
      */
     investingMonthlyRetired: retired.investing,
   };

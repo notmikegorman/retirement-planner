@@ -122,6 +122,11 @@ export const RESULTS_TAB_IDS = [
   'cashflow',
   'explore',
   'widow',
+  // Last (the owner's placement, 2026-08-31, moving it back from Settings):
+  // every tab before it views the CURRENT run; this one views what the plan
+  // used to be — and it is not a view of the run at all, so LiveResults
+  // renders it outside the waiting-for-a-result gate.
+  'history',
 ] as const;
 
 export const SEARCH_TAB_IDS = ['space', 'progress', 'report', 'history'] as const;

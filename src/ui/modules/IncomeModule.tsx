@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { formatUSD } from '../../shared/util';
-import { CheckboxField, FieldNote, NumberField } from '../components/profile/fields';
+import { FieldNote, NumberField } from '../components/profile/fields';
 import { annualFromMonthly } from '../components/profile/profileLogic';
 import { ProfileFormModule } from './ProfileFormModule';
 import { TabPanel, TabStrip, type TabDef } from './TabStrip';
@@ -17,14 +17,6 @@ const RETIREMENT_INCOME_HELP =
   'year nobody draws one, the retirement year is prorated by the months nobody worked, and it ' +
   'inflates with CPI and runs for life. Empty means none. The plan can override it on the Plan page, ' +
   'which is where “what if I consulted two days a week?” belongs.';
-const RETIREMENT_INCOME_TAXABLE_HELP =
-  'On by default, which is the honest answer for anything earned: it is ordinary income, so it ' +
-  'raises AGI and every MAGI test with it (the ACA subsidy cliff, IRMAA, the taxability of Social ' +
-  'Security). Switch it off only for money that is not income at all — a return of capital, a ' +
-  'gift, a reimbursement. Simplification: taxable income here is plain ordinary income, not wages ' +
-  '— no payroll tax, and the Social Security earnings test is not modeled (this household claims ' +
-  'at 67, its full retirement age, where that test never applies).';
-
 const INCOME_TABS: ReadonlyArray<TabDef<'current' | 'retirement'>> = [
   { id: 'current', label: 'Current' },
   { id: 'retirement', label: 'After Retirement' },
@@ -115,21 +107,9 @@ export function IncomeModule() {
                   }
                 />
                 <FieldNote className="muted">
-                  = {formatUSD(annualFromMonthly(draft.income.retirementMonthly ?? 0))}/yr
+                  = {formatUSD(annualFromMonthly(draft.income.retirementMonthly ?? 0))}/yr —
+                  taxed as ordinary income
                 </FieldNote>
-                <CheckboxField
-                  label="Taxable as ordinary income"
-                  checked={draft.income.retirementIncomeTaxable !== false}
-                  tip={RETIREMENT_INCOME_TAXABLE_HELP}
-                  onChange={(v) =>
-                    doc.update((p) => {
-                      // true is what an absent field already means; writing it
-                      // out would only add noise.
-                      if (v) delete p.income.retirementIncomeTaxable;
-                      else p.income.retirementIncomeTaxable = false;
-                    })
-                  }
-                />
               </div>
             </div>
           )}

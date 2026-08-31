@@ -218,9 +218,9 @@ describe('the wiring (source scan)', () => {
     // parenthetical anchors after the composition they stand for.
     expect(bondsSelect).toContain('US Treasuries — what VGIT tracks');
     expect(bondsSelect).toContain('Total bond market — what BND approximates (~30% corporate)');
-    // The one-line tip: whole-plan scope (it is a market assumption, not a
-    // per-event setting) and the approximate mapping, said out loud.
-    expect(bondsSelect).toContain('One setting for the whole plan');
-    expect(bondsSelect).toContain('The fund mapping is approximate');
+    // The explanatory footer is GONE (the owner's fluff rule, 2026-08-31):
+    // the labels above already carry the approximate-mapping caveat.
+    expect(bondsSelect).not.toContain('One setting for the whole plan');
+    expect(bondsSelect).not.toContain('The fund mapping is approximate');
   });
 });

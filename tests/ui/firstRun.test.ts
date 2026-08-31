@@ -61,13 +61,16 @@ describe('simulationReadiness', () => {
     }
   });
 
-  it('a retired-side stream alone clears it too — retirement spending IS spending', () => {
+  it('a retired-side LIVING stream alone clears it too — retirement spending IS spending', () => {
     const p = withAccount(fresh());
     p.expenses = { ...p.expenses, livingMonthlyRetired: 4000 };
     expect(simulationReadiness(p)).toEqual({ state: 'ready', zeroSpend: false });
+    // A retired-side INVESTING figure no longer counts as spending at all:
+    // investing stops at retirement (the app's standing rule, 2026-08-31),
+    // so a profile carrying only that old field genuinely spends nothing.
     const q = withAccount(fresh());
     q.expenses = { ...q.expenses, investingMonthlyRetired: 250 };
-    expect(simulationReadiness(q)).toEqual({ state: 'ready', zeroSpend: false });
+    expect(simulationReadiness(q)).toEqual({ state: 'ready', zeroSpend: true });
   });
 
   it('reads spending through the derived streams, so a budget and the scalars cannot disagree', () => {
