@@ -3046,6 +3046,10 @@ export const PANEL_TABS = [
   // Directly after Spending, whose giving row points here: the un-tithed pot
   // and the ongoing method are two decisions that outgrew a dropdown cell.
   { id: 'tithing', label: 'Tithing' },
+  // Its own fold (the owner's relocation, 2026-08-31): the policy rows used
+  // to render at the bottom of the Spending card, under a divider — a
+  // section's worth of content wearing another section's name.
+  { id: 'insurance', label: 'Life insurance' },
   { id: 'income', label: 'Income' },
   { id: 'housing', label: 'Housing' },
   { id: 'events', label: 'Events' },

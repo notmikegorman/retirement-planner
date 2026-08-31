@@ -245,7 +245,7 @@ export interface EffectivePolicy {
  *
  * `benefit` for a list is the LARGEST payout a single death can collect: the
  * peak coverage band on one insured life (coverageBands — the same arithmetic
- * the Spending card's caption states). Summing across insureds would claim a
+ * the Life-insurance fold's caption states). Summing across insureds would claim a
  * A $2.5M-on-one plus $1M-on-the-other household pays $3.5M, and only one of them can be
  * the one who died; summing face amounts on one life would overstate policies
  * whose terms do not overlap.

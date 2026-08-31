@@ -2283,3 +2283,37 @@ it runs right away now), StreamsCard's visible intro still claiming
 every stream has an afterwards, two dead locals the footer deletion
 orphaned, and ASSUMPTIONS.md + ARCHITECTURE.md still documenting both
 removed knobs as live — all fixed, with the engine hash re-pinned.
+
+## Life insurance gets its own fold (2026-08-31, eleventh pass)
+
+**The policy dispositions left the Spending card** for a new 'insurance'
+fold ("Life insurance"), between Tithing and Income — a section's worth
+of content had been wearing another section's name, rendered under a
+divider and a sub-heading at the bottom of Spending. PolicyListBlock,
+the legacy PolicyBlock, and their tips moved whole into
+InsuranceCard.tsx on the container's usual contract (props + onChange,
+key ins:${revision}); SpendingCard slimmed to the three streams and
+now exports its MoneyBox/OverrideStatus cell primitives for the new
+card. The fold id joins the stored open-set vocabulary; the last-two-
+folds bubble-flip is positional and still covers Events and Advanced.
+
+**The big gaps were the field-note shim again** — the same disease the
+Tithing giving note had, one pass earlier: each policy row put its
+premium/benefit/term summary in a .field-note BESIDE the select, and at
+the panel's width the note wrapped below it with its whole
+control-alignment margin showing as blank space. The summary is the
+select's help line now, inside the label — stable at every width — and
+the block's own "Life insurance" pair-head and border-top divider died
+with the move (the fold header names the card). Verified live: label,
+select, summary, overridden line and coverage caption stack tight.
+
+The pass's review panel (13 agents, 3 dimensions, 2 skeptics per
+finding) confirmed three leftovers: the Widow tab's no-payout guidance
+still sent the user to "the Spending tab" for controls that had just
+moved (both branches now name the Life insurance section), the
+fold-to-tip pin in workbenchChrome had not grown an entry for the new
+hint (deleting it would have passed the suite), and a dead maxWidth on
+the policy label that CSS could never reach. Plus the docstring that
+listed the brand-new card among the "unchanged" ones, and the section
+tip that described only the policy-list UI while hanging over the
+legacy branch too — all fixed before push.

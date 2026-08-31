@@ -54,8 +54,9 @@
  * with the strip gone there is no line to protect.)
  *
  * The cards themselves are unchanged — PlanCard / SpendingCard / IncomeCard /
- * EventsCard / OverridesCard already take props and call onChange, so this is a
- * container, not a re-implementation. HousingCard is the one new one, and it
+ * EventsCard / OverridesCard already take props and call onChange, so this is
+ * a container, not a re-implementation. (InsuranceCard arrived later,
+ * 2026-08-31, carved out of SpendingCard on the same contract.) HousingCard is the one new one, and it
  * edits `scenario.housing` rather than events (see HousingCard.tsx).
  */
 import { useState, type ReactNode } from 'react';
@@ -79,6 +80,7 @@ import {
 import { InfoTip } from '../profile/fields';
 import { HOUSING_CARD_TIP, HousingCard } from './HousingCard';
 import { IncomeCard, INCOME_CARD_TIP } from './IncomeCard';
+import { InsuranceCard, INSURANCE_CARD_TIP } from './InsuranceCard';
 import { SPENDING_CARD_TIP, SpendingCard } from './SpendingCard';
 import { TITHING_CARD_TIP, TithingCard } from './TithingCard';
 import {
@@ -191,6 +193,7 @@ const SECTION_HINTS: Partial<Record<PanelTabId, ReactNode>> = {
   plan: <InfoTip label="the plan" text={PLAN_CARD_TIP} />,
   spending: <InfoTip label="spending" text={SPENDING_CARD_TIP} />,
   tithing: <InfoTip label="tithing" text={TITHING_CARD_TIP} />,
+  insurance: <InfoTip label="life insurance in this plan" text={INSURANCE_CARD_TIP} />,
   income: <InfoTip label="income" text={INCOME_CARD_TIP} />,
   housing: <InfoTip label="the housing plan" text={HOUSING_CARD_TIP} />,
 };
@@ -264,12 +267,6 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           <SpendingCard
             key={`spend:${cardKey}`}
             profileExpenses={profile.expenses}
-            // The policy rows state the month the last paycheck stops (that is
-            // when "cancel at retirement" bites), so they need the plan's
-            // retire events and who actually draws a salary.
-            events={draft.events}
-            salaries={profile.income.salaries}
-            personNames={Object.fromEntries(profile.people.map((p) => [p.id, p.name]))}
             overrides={draft.assumption_overrides}
             onChange={(assumption_overrides) => onChange({ assumption_overrides })}
           />,
@@ -285,6 +282,22 @@ export function ScenarioPanel(props: ScenarioPanelProps) {
           <TithingCard
             key={`tithing:${cardKey}`}
             profileExpenses={profile.expenses}
+            overrides={draft.assumption_overrides}
+            onChange={(assumption_overrides) => onChange({ assumption_overrides })}
+          />,
+        )}
+
+        {section(
+          'insurance',
+          <InsuranceCard
+            key={`ins:${cardKey}`}
+            profileExpenses={profile.expenses}
+            // The policy rows state the month the last paycheck stops (that is
+            // when "cancel at retirement" bites), so they need the plan's
+            // retire events and who actually draws a salary.
+            events={draft.events}
+            salaries={profile.income.salaries}
+            personNames={Object.fromEntries(profile.people.map((p) => [p.id, p.name]))}
             overrides={draft.assumption_overrides}
             onChange={(assumption_overrides) => onChange({ assumption_overrides })}
           />,

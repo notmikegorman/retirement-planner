@@ -399,18 +399,20 @@ export function WidowCard({ profile, plan, target, runParams, disabled }: WidowC
           <div className="field-help" style={{ marginTop: 10 }}>
             {/*
               Two sentences because the fix lives in two different places: a
-              LIST profile re-instates a policy on the Spending tab's per-policy
-              rows (the legacy "add a benefit beside the premium" boxes do not
-              even render for it), while a legacy profile still has those boxes.
+              LIST profile re-instates a policy on the Life insurance fold's
+              per-policy rows (the legacy "add a benefit beside the premium"
+              boxes do not even render for it), while a legacy profile still
+              has those boxes. The fold is its own section since 2026-08-31 —
+              this copy used to send the user to the Spending tab.
             */}
             {(profile.expenses.lifeInsurancePolicies ?? []).length > 0
               ? 'No life-insurance payout is in force in this plan: every policy is cancelled ' +
                 'or carries no benefit, so there is nothing to compare against. Reinstate one ' +
-                'on the Spending tab to make the comparison mean something.'
+                'in the Life insurance section to make the comparison mean something.'
               : 'No life-insurance payout is in force in this plan, so there is nothing to ' +
                 'compare against. Add a death benefit beside the premium — on the Insurance page for ' +
-                'the policy you actually hold, or on the Spending tab to try one on this plan ' +
-                'only.'}
+                'the policy you actually hold, or in the Life insurance section to try one on ' +
+                'this plan only.'}
           </div>
         )}
       </div>

@@ -19,6 +19,7 @@
  * stored value is a stable function of the state.
  */
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   PANEL_OPEN_STORAGE_KEY,
@@ -133,20 +134,58 @@ describe('File > New forgets the open set', () => {
 });
 
 describe('the section list', () => {
-  it('holds the seven sections, Plan first and Advanced (id settings) last', () => {
+  it('holds the eight sections, Plan first and Advanced (id settings) last', () => {
     // The order IS the storage serialization order (strip order), so it is
-    // part of the contract these tests execute, not just chrome. History
-    // left for the Settings module (2026-08-30), and 'settings' wears the
-    // ADVANCED label while keeping its stored id.
+    // part of the contract these tests execute, not just chrome. 'settings'
+    // wears the ADVANCED label while keeping its stored id; 'insurance'
+    // joined 2026-08-31 (the policy rows moved out of the Spending card).
     expect(PANEL_TABS.map((t) => t.id)).toEqual([
       'plan',
       'spending',
       'tithing',
+      'insurance',
       'income',
       'housing',
       'events',
       'settings',
     ]);
     expect(PANEL_TABS.find((t) => t.id === 'settings')?.label).toBe('Advanced');
+  });
+});
+
+describe('the Life insurance fold (source scan)', () => {
+  const read = (rel: string) =>
+    readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+  const panel = read('../../src/ui/components/workbench/ScenarioPanel.tsx');
+  const spending = read('../../src/ui/components/workbench/SpendingCard.tsx');
+  const insurance = read('../../src/ui/components/workbench/InsuranceCard.tsx');
+
+  it('renders InsuranceCard under its own section, and Spending no longer carries it', () => {
+    // The owner's relocation (2026-08-31): the policy rows used to render at
+    // the bottom of the Spending card under a divider and a sub-heading.
+    expect(panel).toMatch(/section\(\s*'insurance',\s*<InsuranceCard/);
+    expect(spending).not.toContain('PolicyListBlock');
+    expect(spending).not.toContain('PolicyBlock');
+    expect(spending).not.toContain('lifeInsurance');
+  });
+
+  it('wears no heading of its own — the fold header names it', () => {
+    // The old block's "Life insurance" pair-head and its border-top divider
+    // died with the move; a card must not repeat its section's name.
+    expect(insurance).not.toContain('pair-head');
+    expect(insurance).not.toContain('borderTop');
+  });
+
+  it('keeps each policy’s summary UNDER its select, never in a field-note beside it', () => {
+    // The owner's screenshot (2026-08-31): at panel width the field-note
+    // wrapped below the select with its whole control-alignment shim showing
+    // as a blank gap — the same disease the Tithing giving note had. The
+    // summary is the select's help line now, stable at every width.
+    expect(insurance).toContain(
+      '<span className="field-help">{policyRowSummary(policy)}</span>',
+    );
+    // The RENDER form, not the bare word — the file's own comment may name
+    // the disease it fixed (the tombstone-comment pin lesson).
+    expect(insurance).not.toContain('className="field-note');
   });
 });

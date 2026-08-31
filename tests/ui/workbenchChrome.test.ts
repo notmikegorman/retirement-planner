@@ -442,16 +442,18 @@ describe('the panel and the results column read at one size', () => {
     // (the *_CARD_TIP exports) named so a rename cannot silently strand a
     // fold without its help.
     expect(panel).toContain('hint={SECTION_HINTS[id]}');
-    // Five hints since History left for the Settings module (2026-08-30).
-    // The InfoTip component renders null while the owner's no-?-icons rule
+    // Six hints — Life insurance joined 2026-08-31 (History's left for the
+    // results strip; Events and Advanced deliberately carry none). The
+    // InfoTip component renders null while the owner's no-?-icons rule
     // stands; the wiring stays so the help text keeps its home.
-    for (const id of ['plan', 'spending', 'tithing', 'income', 'housing']) {
+    for (const id of ['plan', 'spending', 'tithing', 'insurance', 'income', 'housing']) {
       expect(panel).toContain(`${id}: <InfoTip`);
     }
     for (const tip of [
       'PLAN_CARD_TIP',
       'SPENDING_CARD_TIP',
       'TITHING_CARD_TIP',
+      'INSURANCE_CARD_TIP',
       'INCOME_CARD_TIP',
       'HOUSING_CARD_TIP',
     ]) {

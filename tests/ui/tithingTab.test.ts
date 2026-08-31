@@ -31,6 +31,7 @@ describe('the ScenarioPanel Tithing tab', () => {
       'plan',
       'spending',
       'tithing',
+      'insurance',
       'income',
       'housing',
       'events',
