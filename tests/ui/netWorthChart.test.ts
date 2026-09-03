@@ -48,6 +48,7 @@ import {
   formatSegmentShare,
   formatSnapshotDate,
   hoveredSlice,
+  snapshotChange,
   tooltipPosition,
 } from '../../src/ui/pages/netWorthChart';
 
@@ -787,5 +788,104 @@ describe('formatSegmentShare', () => {
 
   it('has nothing to report about a bar that totals nothing', () => {
     expect(formatSegmentShare(0, 0)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ledger table's Change column
+// ---------------------------------------------------------------------------
+
+describe('snapshotChange — what moved since the row before', () => {
+  const earlier = snapshot('2026-08-19T09:00:11.349Z', 550_000, [['k401', '401(k)', 1_000_000]]);
+  // +$24,300 on a $1,550,000 base: 1.567…%, which must print 1.6, not 1.5.
+  const later = snapshot('2026-09-01T09:00:00.000Z', 550_000, [['k401', '401(k)', 1_024_300]]);
+
+  it('carries the dollars and the percentage in ONE reading, per the owner', () => {
+    const change = snapshotChange(later, earlier);
+    expect(change).not.toBeNull();
+    expect(change?.amount).toBe(24_300);
+    expect(change?.text).toBe('+$24,300 (+1.6%)');
+  });
+
+  it('signs a fall with a true minus, and reports its size as a positive', () => {
+    // The sign is carried once, by the leading character; "-$-24,300" and
+    // "(-−1.6%)" are the two ways a naive formatter gets this wrong.
+    const change = snapshotChange(earlier, later);
+    expect(change?.amount).toBe(-24_300);
+    // 1.5%, not 1.6: the base is the row it moved FROM, which going down is
+    // the larger of the two totals. A fall and the rise that undoes it are not
+    // the same percentage, and this column must not pretend they are.
+    expect(change?.text).toBe('\u2212$24,300 (\u22121.5%)');
+    expect(change?.text).not.toContain('-');
+  });
+
+  it('gives the OLDEST row no change at all — not a zero', () => {
+    // A first snapshot did not hold steady; there was nothing to hold steady
+    // against. $0 here would be a measurement nobody took, which is the same
+    // mistake the score cell refuses to make two columns over.
+    expect(snapshotChange(earlier, undefined)).toBeNull();
+  });
+
+  it('prints an unchanged total as an unsigned zero, because that IS a reading', () => {
+    const same = snapshot('2026-09-02T09:00:00.000Z', 550_000, [['k401', '401(k)', 1_000_000]]);
+    const change = snapshotChange(same, earlier);
+    expect(change?.amount).toBe(0);
+    expect(change?.text).toBe('$0 (0.0%)');
+  });
+
+  it('drops the percentage rather than divide by a base of nothing', () => {
+    const empty = snapshot('2026-08-01T09:00:00.000Z', 0, []);
+    const change = snapshotChange(earlier, empty);
+    expect(change?.text).toBe('+$1,550,000');
+    expect(change?.text).not.toContain('%');
+  });
+
+  it('names the row it measured against, and both totals, for the hover', () => {
+    const change = snapshotChange(later, earlier);
+    expect(change?.title).toBe('Against Aug 19, 2026: $1,550,000 \u2192 $1,574,300');
+  });
+});
+
+describe('the ledger table, under the bars (source scan)', () => {
+  it('lives on the TREND panel now — there is no snapshots tab to switch to', () => {
+    // The owner's relocation, 2026-09-03: the bar and the row are two readings
+    // of one day, and a tab switch between them dropped the bar off screen.
+    expect(page).not.toContain("tab === 'snapshots'");
+    expect(page).not.toContain('networth-panel-snapshots');
+    // The table is inside the trend panel's non-empty branch, after the chips.
+    const trend = page.slice(
+      page.indexOf("{tab === 'trend' && ("),
+      page.indexOf('THE SCORE, ON ITS OWN PLOT'),
+    );
+    expect(trend).toContain('<div className="table-scroll managedTableWrap"');
+    expect(trend).toContain('<th>Date</th>');
+    expect(trend.indexOf('chip-list')).toBeLessThan(trend.indexOf('table-scroll'));
+  });
+
+  it('shows the change beside the total, and no Note column at all', () => {
+    // One column, the percentage in parentheses beside the amount — the
+    // owner's shape. The note is still recorded and still readable; it rides
+    // on the Date cell's hover, where it costs the table no width.
+    expect(page).toContain("<th style={{ textAlign: 'right' }}>Change</th>");
+    expect(page).not.toContain('<th>Note</th>');
+    expect(page).not.toContain('{s.note ?? \'\'}');
+    expect(page).toContain('`${s.takenAt} — ${s.note}`');
+    const head = page.slice(page.indexOf('<th>Date</th>'), page.indexOf('</thead>'));
+    expect(head.indexOf('>Change</th>')).toBeLessThan(head.indexOf('>Portfolio</th>'));
+  });
+
+  it('pairs each row with the snapshot BEFORE it in time, not after', () => {
+    // The ledger is stored oldest-first and read newest-first, so the previous
+    // row is list[i + 1]. list[i - 1] would report every change backwards —
+    // right magnitudes, inverted signs, and nothing on screen looking wrong.
+    expect(page).toMatch(/\[\.\.\.\(snapshots \?\? \[\]\)\]\.reverse\(\)/);
+    expect(page).toContain('change: snapshotChange(s, list[i + 1]),');
+    expect(page).not.toContain('snapshotChange(s, list[i - 1])');
+  });
+
+  it('colours the cell by the SIGN, and dashes the row that has no previous', () => {
+    expect(page).toContain("change.amount > 0 ? 'good' : change.amount < 0 ? 'bad' : 'muted'");
+    expect(page).toContain('{change === null ? (');
+    expect(page).toContain('&mdash;');
   });
 });

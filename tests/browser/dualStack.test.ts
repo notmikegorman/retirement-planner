@@ -540,9 +540,11 @@ async function driveSession(page: Page, entryUrl: string): Promise<DriveUiState>
   await dialogInputs.nth(1).fill(DRIVE_NOTE);
   await dialogInputs.nth(1).press('Tab');
   await page.locator('dialog button.primary').click();
-  // The table lives on the Snapshots tab since the ledger grew tabs.
-  await page.getByRole('tab', { name: 'Snapshots' }).click();
-  const scoreCell = page.locator('tbody tr').first().locator('td').nth(4);
+  // The table lives UNDER the bars on the Trend tab (the owner's
+  // relocation, 2026-09-03) — it is no longer a tab of its own. The score
+  // is td 5 there, not 4: Change now sits between Total and Portfolio.
+  await page.getByRole('tab', { name: 'Trend' }).click();
+  const scoreCell = page.locator('tbody tr').first().locator('td').nth(5);
   const snapshotScoreCell = (
     await until(
       () => scoreCell.innerText().catch(() => ''),

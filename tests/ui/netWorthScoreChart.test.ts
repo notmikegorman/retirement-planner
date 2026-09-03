@@ -622,14 +622,14 @@ describe('what the scores on this page are scores OF (source scan)', () => {
   });
 
   it('lets the snapshots table scroll SIDEWAYS inside its own card', () => {
-    // Every cell in this table is `white-space: nowrap` (styles.css), so four
-    // money columns and a note are already wider than the card they sit in on a
-    // narrow window — and the page would then hand the WHOLE window a
-    // horizontal scrollbar, scrolling the heading and the charts along with it.
-    // `.table-scroll` is the app's answer to exactly this, and every other wide
-    // table here already uses it. (It was the removed "Add the spend figure"
-    // button that first made the table overflow; the fix outlived the cause.)
-    expect(page).toContain('<div className="table-scroll managedTableWrap">');
+    // Every cell in this table is `white-space: nowrap` (styles.css), so five
+    // money columns are already wider than the card they sit in on a narrow
+    // window — and the page would then hand the WHOLE window a horizontal
+    // scrollbar, scrolling the heading and the charts along with it. That got
+    // worse, not better, when the table moved under the bars (2026-09-03):
+    // sideways scrolling now drags the chart too. `.table-scroll` is the app's
+    // answer to exactly this, and every other wide table here already uses it.
+    expect(page).toContain('<div className="table-scroll managedTableWrap"');
   });
 });
 

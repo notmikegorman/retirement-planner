@@ -49,6 +49,13 @@
  * saturates. Every version reads 96-point-something, so the probability trend
  * can be flat while the plan gets materially better or worse — and the dollars
  * are what say which.
+ *
+ * THE TABLE IS PART OF THE TREND PANEL, not a tab of its own (the owner's
+ * relocation, 2026-09-03). The bars and the rows are the same days read two
+ * ways, so they share one scroll and one order; the tab strip is left naming
+ * only the three genuinely different views. The rows carry one derived figure
+ * — what changed since the snapshot before, in dollars with the percentage in
+ * parentheses — and nothing else on the row is arithmetic.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -85,6 +92,7 @@ import {
   buildNetWorthChart,
   formatSnapshotDate,
   hoveredSlice,
+  snapshotChange,
   tooltipPosition,
   type BoxSize,
   type ChartPoint,
@@ -677,16 +685,18 @@ function TrendChart({
 const SCORING_POLL_MS = 2500;
 
 /**
- * The four views, one per panel (the owner's reorganisation, 2026-08-30).
- * The ids live in nav.ts because they are URL segments (/networth/trend);
- * this record supplies the words, and a tab without a label fails to
- * compile.
+ * The three views, one per panel. The ids live in nav.ts because they are URL
+ * segments (/networth/trend); this record supplies the words, and a tab
+ * without a label fails to compile.
+ *
+ * There were four until the owner moved the snapshots table under the bars
+ * (2026-09-03). A tab whose panel has been emptied into another one is not a
+ * tab; it is a click between a bar and the row that describes it.
  */
 const NETWORTH_TAB_LABELS: Record<NetWorthTabId, string> = {
   trend: 'Trend',
   score: 'Score',
   spend: 'Spend',
-  snapshots: 'Snapshots',
 };
 
 export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
@@ -792,6 +802,30 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
   const { segments, bars } = useMemo(
     () => buildNetWorthChart(snapshots ?? [], chart),
     [snapshots, chart],
+  );
+
+  /**
+   * THE TABLE'S ROWS: newest first, each carrying what changed since the
+   * snapshot before it.
+   *
+   * The change is computed here rather than in the cell because the pairing is
+   * the whole subtlety. The ledger is stored oldest-first (it is appended to);
+   * the table reads newest-first, because the row you just took is the row you
+   * came to see. So a row's PREVIOUS snapshot — the one it moved from — is the
+   * row BELOW it on screen, `list[i + 1]`, and the last row has none. Reading
+   * `list[i - 1]` instead would quietly report every change backwards, with the
+   * signs and the colours to match, and nothing on screen would look wrong.
+   *
+   * Memoised with the rest: this list is rebuilt on every hover otherwise, for
+   * a ledger that changed only when a snapshot was taken or deleted.
+   */
+  const rows = useMemo(
+    () =>
+      [...(snapshots ?? [])].reverse().map((s, i, list) => ({
+        snapshot: s,
+        change: snapshotChange(s, list[i + 1]),
+      })),
+    [snapshots],
   );
 
   /**
@@ -1269,8 +1303,205 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
                 </span>
               ))}
             </div>
-            {/* No explanatory footer (the owner's fluff rule, 2026-08-31):
-                the bars and the legend chips speak for themselves. */}
+            {/* THE ROWS THE BARS ARE DRAWN FROM, DIRECTLY UNDER THEM (the
+                owner's relocation, 2026-09-03). It was a fourth tab, and a tab
+                was the wrong container: the bar and the row are two readings of
+                one day — the picture and the figures — and every question that
+                starts at a bar ("what was that, exactly?") ended in a tab
+                switch that dropped the bar off screen on the way. Under the
+                chart both are on one scroll, in the same order, and the tab
+                strip is left naming only the things that ARE different views.
+
+                No "Nothing recorded yet" branch survives the move: the table is
+                inside the same non-empty guard the chart is, because a ledger
+                with no rows has neither a bar nor a row to show and says so
+                once, above.
+
+                The delete and finish-scoring failures come along and land here
+                rather than at the top of the panel — both can only be raised by
+                a button that lives in a row, so the message sits with the table
+                it is about, not above a chart that had nothing to do with it. */}
+            {deleteError === null ? null : <div className="error-banner">{deleteError}</div>}
+            {finishError === null ? null : <div className="error-banner">{finishError}</div>}
+            {/* The app's wide-table convention (styles.css .table-scroll). Five
+                money columns, every cell nowrap, is wider than its own card on a
+                narrow window — and a page that scrolls sideways scrolls its
+                heading and, now, the chart above it too. Sideways scrolling
+                belongs inside the box the wide thing is in. */}
+            <div className="table-scroll managedTableWrap" style={{ marginTop: 20 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th style={{ textAlign: 'right' }}>Total</th>
+                  {/* Beside the total it is a change IN, not a sixth figure to
+                      relate back to one — and before the split into Portfolio
+                      and Home, because it is the whole number that moved. */}
+                  <th style={{ textAlign: 'right' }}>Change</th>
+                  <th style={{ textAlign: 'right' }}>Portfolio</th>
+                  <th style={{ textAlign: 'right' }}>Home (as entered)</th>
+                  <th style={{ textAlign: 'right' }}>Plan score</th>
+                  {/* The Note column retired 2026-09-03 (the owner: it will not
+                      be used often and takes up space). The note itself is still
+                      recorded, still exported, and still readable — it rides on
+                      the Date cell's hover, where it costs no width. */}
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {/* Newest first: the row you just took is the row you came to see.
+                    `rows` carries each snapshot with the change to the one before
+                    it in TIME, which after the reverse is the row below. */}
+                {rows.map(({ snapshot: s, change }) => (
+                  <tr key={s.id}>
+                    <td title={s.note === undefined ? s.takenAt : `${s.takenAt} — ${s.note}`}>
+                      {formatSnapshotDate(s.takenAt)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{formatUSD(s.total)}</td>
+                    {/* THE OLDEST ROW SHOWS A DASH, NOT A ZERO — there is no
+                        earlier row for it to have moved from, and $0 would be a
+                        measurement nobody took. Colour is the sign and nothing
+                        else: `good`/`bad` are the app's own two, and the text
+                        says which way it went without them. */}
+                    <td style={{ textAlign: 'right' }}>
+                      {change === null ? (
+                        <span
+                          className="muted"
+                          title="The first snapshot in the ledger — there is nothing earlier to measure it against."
+                        >
+                          &mdash;
+                        </span>
+                      ) : (
+                        <span
+                          className={change.amount > 0 ? 'good' : change.amount < 0 ? 'bad' : 'muted'}
+                          title={change.title}
+                        >
+                          {change.text}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{formatUSD(s.total - s.homeValue)}</td>
+                    <td style={{ textAlign: 'right' }}>{formatUSD(s.homeValue)}</td>
+                    {/*
+                      FIVE DIFFERENT STATES, and none of them is a zero. A score;
+                      a run still going; a run that was INTERRUPTED and can still
+                      be finished honestly (below); a run that failed, with its
+                      reason on the row; and a row nobody ever measured, which is
+                      not a failure and is not dressed as one. Printing 0% for
+                      any of the last four would claim this plan fails in every
+                      simulated future.
+
+                      THE LAST TWO ARE PERMANENT, and they say so rather than
+                      reading as a gap waiting to be filled. There is no re-score:
+                      a run that died took the only chance this row had, and "not
+                      measured" is the true and final statement about that day.
+                      The alternative on offer was a button that measured a
+                      DIFFERENT day and filed the answer here. INTERRUPTED is the
+                      one exception, and it is not an exception to the rule: the
+                      write-ahead intent's runKey proves today's inputs still
+                      produce the very run that was cut short, so Finish scoring
+                      completes the SAME measurement — a blank filled, never a
+                      number rewritten (store/scoringIntent.ts).
+                    */}
+                    <td style={{ textAlign: 'right' }}>
+                      {s.score ? (
+                        <span title={scoreRowTitle(s.score)}>
+                          {formatScorePct(s.score.success * 100)}
+                        </span>
+                      ) : scoring.includes(s.id) ? (
+                        <span className="muted">scoring…</span>
+                      ) : interrupted.includes(s.id) ? (
+                        <span
+                          className="flag"
+                          title="Scoring was interrupted before this row's number landed, and today's inputs still produce the same run — press Finish scoring to complete the same measurement."
+                        >
+                          interrupted
+                        </span>
+                      ) : s.scoreError ? (
+                        <span
+                          className="flag"
+                          title={`${s.scoreError} — and this row stays unscored: the plan is scored once, when the snapshot is taken.`}
+                        >
+                          no score
+                        </span>
+                      ) : (
+                        <span
+                          className="muted"
+                          title="This snapshot was never scored, and cannot be now: the plan is scored once, when the snapshot is taken. Not measured is not zero."
+                        >
+                          not measured
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {/* DELETE IS THE ONLY UNCONDITIONAL ACTION ON A ROW, and
+                          that is the point. There was a scoring button here in
+                          three costumes — score a blank row, retry a failed one,
+                          add the missing dollars to one scored before the solve
+                          existed — and every one of them ran TODAY's plan against
+                          TODAY's profile and filed the answer on a row recorded
+                          weeks ago. The number it produced was never true of the
+                          row it landed on. FINISH SCORING is not that button
+                          back: it appears only behind a write-ahead intent whose
+                          runKey still verifies against today's inputs, and the
+                          backend re-verifies at the press — it completes the
+                          interrupted measurement or refuses with the reason,
+                          never measures a different day. */}
+                      <div className="row" style={{ gap: 6 }}>
+                        {interrupted.includes(s.id) && !scoring.includes(s.id) && (
+                          <button className="primary" onClick={() => void finish(s.id)}>
+                            Finish scoring
+                          </button>
+                        )}
+                        <button className="danger" onClick={() => void remove(s.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+            {/* The reasons, in full. The cell has room for "no score" and a
+                tooltip; a failure the user has to hover to read is a failure he
+                will not read. It ends by saying the state is final — otherwise the
+                sentence reads like a problem waiting for the button that used to be
+                beside it. */}
+            {snapshots
+              .filter(
+                (s) =>
+                  s.scoreError !== undefined &&
+                  s.score === undefined &&
+                  !interrupted.includes(s.id),
+              )
+              .map((s) => (
+                <div key={s.id} className="field-help" style={{ marginTop: 6 }}>
+                  <strong>{formatSnapshotDate(s.takenAt)}</strong> has no score: {s.scoreError} That
+                  row stays unscored — the plan is scored once, when the snapshot is taken, so what
+                  this day would have measured is not recoverable.
+                </div>
+              ))}
+            {/* The interrupted rows, in full — same idiom as the failure blocks
+                above: a state the user has to hover to understand is a state they
+                will not understand. It says WHY finishing is honest here and
+                nowhere else: the write-ahead intent recorded which run was in
+                flight, and today's inputs still produce exactly that run. */}
+            {snapshots
+              .filter((s) => interrupted.includes(s.id) && !scoring.includes(s.id))
+              .map((s) => (
+                <div key={s.id} className="field-help" style={{ marginTop: 6 }}>
+                  <strong>{formatSnapshotDate(s.takenAt)}</strong> was interrupted mid-scoring —
+                  the app closed before the measurement finished. Today&rsquo;s plan and prices
+                  still produce exactly the run that was cut short, so <em>Finish scoring</em>{' '}
+                  completes the same measurement: a blank being filled, not a number being
+                  rewritten. If the inputs change first, the row will say so and stay honestly
+                  unmeasured instead.
+                </div>
+              ))}
+            {/* No explanatory footer (the owner's fluff rule, 2026-08-31): the
+                bars, the legend chips and the table's own headings speak for
+                themselves. */}
           </>
         )}
       </div>
@@ -1354,162 +1585,6 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
             </>
           )}
         </div>
-      )}
-
-      {tab === 'snapshots' && (
-      <div role="tabpanel" id="networth-panel-snapshots" aria-labelledby="networth-tab-snapshots">
-        {deleteError === null ? null : <div className="error-banner">{deleteError}</div>}
-        {finishError === null ? null : <div className="error-banner">{finishError}</div>}
-        {snapshots.length === 0 ? (
-          <div className="muted">Nothing recorded yet.</div>
-        ) : (
-          /* The app's wide-table convention (styles.css .table-scroll). Four
-             money columns and a note, every cell nowrap, is already wider than
-             its own card on a narrow window — and a page that scrolls sideways
-             scrolls its heading and its charts too. Sideways scrolling belongs
-             inside the box the wide thing is in. */
-          <div className="table-scroll managedTableWrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th style={{ textAlign: 'right' }}>Total</th>
-                <th style={{ textAlign: 'right' }}>Portfolio</th>
-                <th style={{ textAlign: 'right' }}>Home (as entered)</th>
-                <th style={{ textAlign: 'right' }}>Plan score</th>
-                <th>Note</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {/* Newest first: the row you just took is the row you came to see. */}
-              {[...snapshots].reverse().map((s) => (
-                <tr key={s.id}>
-                  <td title={s.takenAt}>{formatSnapshotDate(s.takenAt)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatUSD(s.total)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatUSD(s.total - s.homeValue)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatUSD(s.homeValue)}</td>
-                  {/*
-                    FIVE DIFFERENT STATES, and none of them is a zero. A score;
-                    a run still going; a run that was INTERRUPTED and can still
-                    be finished honestly (below); a run that failed, with its
-                    reason on the row; and a row nobody ever measured, which is
-                    not a failure and is not dressed as one. Printing 0% for
-                    any of the last four would claim this plan fails in every
-                    simulated future.
-
-                    THE LAST TWO ARE PERMANENT, and they say so rather than
-                    reading as a gap waiting to be filled. There is no re-score:
-                    a run that died took the only chance this row had, and "not
-                    measured" is the true and final statement about that day.
-                    The alternative on offer was a button that measured a
-                    DIFFERENT day and filed the answer here. INTERRUPTED is the
-                    one exception, and it is not an exception to the rule: the
-                    write-ahead intent's runKey proves today's inputs still
-                    produce the very run that was cut short, so Finish scoring
-                    completes the SAME measurement — a blank filled, never a
-                    number rewritten (store/scoringIntent.ts).
-                  */}
-                  <td style={{ textAlign: 'right' }}>
-                    {s.score ? (
-                      <span title={scoreRowTitle(s.score)}>
-                        {formatScorePct(s.score.success * 100)}
-                      </span>
-                    ) : scoring.includes(s.id) ? (
-                      <span className="muted">scoring…</span>
-                    ) : interrupted.includes(s.id) ? (
-                      <span
-                        className="flag"
-                        title="Scoring was interrupted before this row's number landed, and today's inputs still produce the same run — press Finish scoring to complete the same measurement."
-                      >
-                        interrupted
-                      </span>
-                    ) : s.scoreError ? (
-                      <span
-                        className="flag"
-                        title={`${s.scoreError} — and this row stays unscored: the plan is scored once, when the snapshot is taken.`}
-                      >
-                        no score
-                      </span>
-                    ) : (
-                      <span
-                        className="muted"
-                        title="This snapshot was never scored, and cannot be now: the plan is scored once, when the snapshot is taken. Not measured is not zero."
-                      >
-                        not measured
-                      </span>
-                    )}
-                  </td>
-                  <td className="muted">{s.note ?? ''}</td>
-                  <td>
-                    {/* DELETE IS THE ONLY UNCONDITIONAL ACTION ON A ROW, and
-                        that is the point. There was a scoring button here in
-                        three costumes — score a blank row, retry a failed one,
-                        add the missing dollars to one scored before the solve
-                        existed — and every one of them ran TODAY's plan against
-                        TODAY's profile and filed the answer on a row recorded
-                        weeks ago. The number it produced was never true of the
-                        row it landed on. FINISH SCORING is not that button
-                        back: it appears only behind a write-ahead intent whose
-                        runKey still verifies against today's inputs, and the
-                        backend re-verifies at the press — it completes the
-                        interrupted measurement or refuses with the reason,
-                        never measures a different day. */}
-                    <div className="row" style={{ gap: 6 }}>
-                      {interrupted.includes(s.id) && !scoring.includes(s.id) && (
-                        <button className="primary" onClick={() => void finish(s.id)}>
-                          Finish scoring
-                        </button>
-                      )}
-                      <button className="danger" onClick={() => void remove(s.id)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
-        {/* The reasons, in full. The cell has room for "no score" and a
-            tooltip; a failure the user has to hover to read is a failure he
-            will not read. It ends by saying the state is final — otherwise the
-            sentence reads like a problem waiting for the button that used to be
-            beside it. */}
-        {snapshots
-          .filter(
-            (s) =>
-              s.scoreError !== undefined &&
-              s.score === undefined &&
-              !interrupted.includes(s.id),
-          )
-          .map((s) => (
-            <div key={s.id} className="field-help" style={{ marginTop: 6 }}>
-              <strong>{formatSnapshotDate(s.takenAt)}</strong> has no score: {s.scoreError} That
-              row stays unscored — the plan is scored once, when the snapshot is taken, so what
-              this day would have measured is not recoverable.
-            </div>
-          ))}
-        {/* The interrupted rows, in full — same idiom as the failure blocks
-            above: a state the user has to hover to understand is a state they
-            will not understand. It says WHY finishing is honest here and
-            nowhere else: the write-ahead intent recorded which run was in
-            flight, and today's inputs still produce exactly that run. */}
-        {snapshots
-          .filter((s) => interrupted.includes(s.id) && !scoring.includes(s.id))
-          .map((s) => (
-            <div key={s.id} className="field-help" style={{ marginTop: 6 }}>
-              <strong>{formatSnapshotDate(s.takenAt)}</strong> was interrupted mid-scoring —
-              the app closed before the measurement finished. Today&rsquo;s plan and prices
-              still produce exactly the run that was cut short, so <em>Finish scoring</em>{' '}
-              completes the same measurement: a blank being filled, not a number being
-              rewritten. If the inputs change first, the row will say so and stay honestly
-              unmeasured instead.
-            </div>
-          ))}
-        {/* No explanatory footer (the owner's fluff rule, 2026-08-31). */}
-      </div>
       )}
 
       {/* The automatic snapshot's moment: a strict little overlay that closes

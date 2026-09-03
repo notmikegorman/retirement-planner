@@ -254,9 +254,11 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
     expect(intents.intents[0].kind).toBe('snapshot');
 
     await page2.getByRole('button', { name: 'Net worth' }).click();
-    // The table lives on the Snapshots tab since the ledger grew tabs.
-    await page2.getByRole('tab', { name: 'Snapshots' }).click();
-    const scoreCell = page2.locator('tbody tr').first().locator('td').nth(4);
+    // The table lives UNDER the bars on the Trend tab (the owner's
+    // relocation, 2026-09-03) — it is no longer a tab of its own. The score
+    // is td 5 there, not 4: Change now sits between Total and Portfolio.
+    await page2.getByRole('tab', { name: 'Trend' }).click();
+    const scoreCell = page2.locator('tbody tr').first().locator('td').nth(5);
     await scoreCell.locator('.flag', { hasText: 'interrupted' }).waitFor({ timeout: 60_000 });
 
     // THE ONE CLICK (decision D4). The row flips to scoring…, the same
@@ -345,9 +347,11 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
     // On screen: the permanent no-score reading with the reason in full — and
     // no Finish button anywhere, because finishing would be dishonest.
     await page2.getByRole('button', { name: 'Net worth' }).click();
-    // The table lives on the Snapshots tab since the ledger grew tabs.
-    await page2.getByRole('tab', { name: 'Snapshots' }).click();
-    const scoreCell = page2.locator('tbody tr').first().locator('td').nth(4);
+    // The table lives UNDER the bars on the Trend tab (the owner's
+    // relocation, 2026-09-03) — it is no longer a tab of its own. The score
+    // is td 5 there, not 4: Change now sits between Total and Portfolio.
+    await page2.getByRole('tab', { name: 'Trend' }).click();
+    const scoreCell = page2.locator('tbody tr').first().locator('td').nth(5);
     await scoreCell.locator('.flag', { hasText: 'no score' }).waitFor({ timeout: 60_000 });
     expect(await page2.getByRole('button', { name: 'Finish scoring' }).count()).toBe(0);
     expect(await page2.locator('.field-help', { hasText: 'belong to now' }).count()).toBe(1);

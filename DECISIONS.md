@@ -2317,3 +2317,44 @@ the policy label that CSS could never reach. Plus the docstring that
 listed the brand-new card among the "unchanged" ones, and the section
 tip that described only the policy-list UI while hanging over the
 legacy branch too — all fixed before push.
+
+## The ledger table moves under its own bars (2026-09-03, twelfth pass)
+
+**The Snapshots tab is gone, and the table it held now sits under the
+trend chart** — the owner's call. A tab was the wrong container for it:
+the bar and the row are two readings of one day, the picture and the
+figures, and every question that starts at a bar ("what was that,
+exactly?") ended in a tab switch that took the bar off screen on the
+way. NETWORTH_TAB_IDS is three now (Trend, Score, Spend), so the strip
+names only things that really are different views. Nothing breaks on the
+way in: resolveTab drops a segment the list no longer knows, so a
+bookmarked or remembered /networth/snapshots lands on Trend, which is
+where the table went. The delete and finish-scoring error banners, and
+the two full-text blocks for failed and interrupted rows, travelled with
+it — all three can only be raised by a control that lives in a row. The
+table's own "Nothing recorded yet" branch died in the move: it is inside
+the chart's non-empty guard now, and an empty ledger says so once.
+
+**The Note column retired** (the owner: it will not be used often and
+takes up space). The note is still asked for in the snapshot dialog,
+still recorded in networth.json, still exported — it rides on the Date
+cell's `title` now, where it costs the table no width.
+
+**Change is one column, not two.** The dollars and the percentage are
+the same fact read two ways and a household reads them together: the
+cell is "+$24,300 (+1.6%)", the percentage in parentheses beside the
+amount, coloured by sign alone (.good/.bad, which the text does not need
+to be understood). `snapshotChange` in netWorthChart.ts is the pure half
+— it drops the percentage rather than divide by a base of nothing, and
+it gives the OLDEST row null rather than a zero, for the same reason the
+score cell two columns over says "not measured": a first snapshot did
+not hold steady, there was nothing to hold steady against. The pairing
+is the subtlety and it is tested: the ledger is stored oldest-first and
+read newest-first, so a row's previous snapshot is `list[i + 1]` — the
+row below it on screen. `list[i - 1]` would have reported every change
+backwards, right magnitudes and inverted signs, with nothing on screen
+looking wrong.
+
+The four browser specs that clicked through to the table came along:
+they open Trend now, and the score cell is td 5, not td 4, because
+Change sits between Total and Portfolio.

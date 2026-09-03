@@ -132,11 +132,17 @@ export const RESULTS_TAB_IDS = [
 export const SEARCH_TAB_IDS = ['space', 'progress', 'report', 'history'] as const;
 
 /**
- * The Net worth ledger's four views (2026-08-30): the stacked-bar trend, the
- * two score plots, and the snapshots table — one tab per panel, 'trend'
- * first because the picture is what the page exists to show.
+ * The Net worth ledger's three views: the stacked-bar trend, and the two score
+ * plots — 'trend' first because the picture is what the page exists to show.
+ *
+ * 'snapshots' was a fourth (2026-08-30) and is not one any more (the owner's
+ * relocation, 2026-09-03): the table now sits UNDER the bars it tabulates, on
+ * the trend panel, where the row and the bar for a given day can be read
+ * without a tab switch between them. A remembered or bookmarked
+ * /networth/snapshots is not a broken link — resolveTab drops a segment this
+ * list does not name and lands on 'trend', which is where the table went.
  */
-export const NETWORTH_TAB_IDS = ['trend', 'score', 'spend', 'snapshots'] as const;
+export const NETWORTH_TAB_IDS = ['trend', 'score', 'spend'] as const;
 
 export type ResultsTabId = (typeof RESULTS_TAB_IDS)[number];
 export type SearchTabId = (typeof SEARCH_TAB_IDS)[number];

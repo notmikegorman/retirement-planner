@@ -121,7 +121,10 @@ describe('the vocabulary', () => {
       'history',
     ]);
     expect([...SEARCH_TAB_IDS]).toEqual(['space', 'progress', 'report', 'history']);
-    expect([...NETWORTH_TAB_IDS]).toEqual(['trend', 'score', 'spend', 'snapshots']);
+    // Three, not four: the snapshots table moved under the bars on the trend
+    // panel (the owner's relocation, 2026-09-03), and a tab whose panel has
+    // been emptied into another one is not a tab.
+    expect([...NETWORTH_TAB_IDS]).toEqual(['trend', 'score', 'spend']);
   });
 
   it('is URL-safe and free of duplicates within a page', () => {
@@ -288,8 +291,8 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 12 pages + 10 results tabs + 4 search tabs + 4 net-worth tabs = 30.
-    expect(paths.length).toBe(30);
+    // 12 pages + 10 results tabs + 4 search tabs + 3 net-worth tabs = 29.
+    expect(paths.length).toBe(29);
   });
 });
 

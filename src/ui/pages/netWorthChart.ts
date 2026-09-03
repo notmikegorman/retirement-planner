@@ -43,6 +43,11 @@
  * the IRA. What still marks it out is its colour: the palette's one un-hued
  * grey, which no account can be handed.
  *
+ * IT ALSO CARRIES THE TABLE'S FORMATTING (`formatSnapshotDate`,
+ * `snapshotChange`), which is not chart assembly but belongs to the same pure
+ * half of the page — and since the owner moved the ledger table under the bars
+ * (2026-09-03) the two are one panel anyway, reading the same rows.
+ *
  * (Unit tests: tests/ui/netWorthChart.test.ts.)
  */
 import type { NetWorthSnapshot } from '../../shared/types';
@@ -71,6 +76,62 @@ export function formatSegmentShare(value: number, total: number): string | null 
   const pct = Math.round((value / total) * 100);
   const shown = value === 0 ? '0%' : pct === 0 ? '<1%' : `${pct}%`;
   return `${shown} of ${formatUSD(total)}`;
+}
+
+/**
+ * WHAT MOVED SINCE THE ROW BEFORE — the ledger table's one derived column
+ * (the owner's request, 2026-09-03), and the only figure on the page that is
+ * arithmetic rather than a record.
+ *
+ * ONE COLUMN, NOT TWO. The dollars and the percentage are the same fact read
+ * two ways, and a household reads them together or not at all: $24,300 means
+ * nothing without knowing it moved a $1.8M total, and 1.4% means nothing
+ * without the dollars. Two columns would also double the width of a table that
+ * already scrolls sideways on a narrow window, to say one thing twice.
+ *
+ * THE OLDEST ROW HAS NO CHANGE, and gets null rather than a zero. A first
+ * snapshot did not hold steady — there was nothing to hold steady against, and
+ * printing $0 would claim a measurement nobody took. Same reasoning as the
+ * score cell's "not measured" two columns over.
+ *
+ * THE PERCENTAGE IS DROPPED, not faked, when the earlier total is not positive
+ * — a percentage of zero is a division this table has no business printing.
+ * The dollars stand alone in that case, and they are still true.
+ */
+export interface SnapshotChange {
+  /** The signed dollar move; its SIGN is what the cell is coloured by. */
+  amount: number;
+  /** The cell: "+$24,300 (+1.4%)", or just the dollars when there is no base. */
+  text: string;
+  /** Which row this is measured against, and both totals, named on hover. */
+  title: string;
+}
+
+/**
+ * The change from `previous` to `current`, or null when there is no previous
+ * row. `previous` is the snapshot taken BEFORE this one in time — the table
+ * lists newest first, so on screen it is the row underneath.
+ */
+export function snapshotChange(
+  current: NetWorthSnapshot,
+  previous: NetWorthSnapshot | undefined,
+): SnapshotChange | null {
+  if (previous === undefined) return null;
+  const amount = current.total - previous.total;
+  // A true minus sign rather than a hyphen: this column is read down a stack
+  // of right-aligned figures, where a hyphen is a dash and a dash is noise.
+  const sign = amount > 0 ? '+' : amount < 0 ? '\u2212' : '';
+  const pct =
+    previous.total > 0
+      ? ` (${sign}${((Math.abs(amount) / previous.total) * 100).toFixed(1)}%)`
+      : '';
+  return {
+    amount,
+    text: `${sign}${formatUSD(Math.abs(amount))}${pct}`,
+    title:
+      `Against ${formatSnapshotDate(previous.takenAt)}: ` +
+      `${formatUSD(previous.total)} \u2192 ${formatUSD(current.total)}`,
+  };
 }
 
 /**
