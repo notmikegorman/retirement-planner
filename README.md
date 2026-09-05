@@ -103,9 +103,8 @@ Be clear about what can go wrong, because it needs no simultaneity at all.
 One machine writes and its owner shuts the lid before the upload completes;
 the other opens twenty minutes later, reads a stale `networth.json`, adds a
 row, and writes the whole file back. Strictly one writer at a time, and rows
-are gone anyway. No lock can see that — which is why the app no longer ships
-one for this case, and why the honest safeguard is the git repository above.
-Commit after a session and a bad sync costs you one `git checkout`.
+are gone anyway. No lock can see that, which is why the app no longer ships
+one for this case — letting the sync settle is the whole discipline.
 
 ---
 

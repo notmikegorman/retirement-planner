@@ -2402,11 +2402,11 @@ one machine. Relaxing it would have bought nothing.
 **The owner's judgement, recorded so it is not re-litigated:** this is one
 household's spreadsheet, not life support, and losing some net-worth history
 is an acceptable price for a guard that never misfires on the normal case.
-The recovery story is now git on the data folder alone — strictly stronger
-than the lease was, because it survives the stale-read failure too. README
-says so in a new *Sharing the folder between two machines* section that
-describes the stale-read shape in plain words rather than implying a lock
-prevents it.
+There is no replacement safeguard and none is wanted: the operating
+condition is one machine at a time, and letting the sync settle is the whole
+discipline. README says exactly that in a new *Sharing the folder between
+two machines* section, which describes the stale-read shape in plain words
+rather than implying a lock prevents it.
 
 `LocalBootRefusedError` narrows to `reason: 'tab'`, `GuardRefusal` keeps its
 page for that one case, and the writer identity in localStorage
