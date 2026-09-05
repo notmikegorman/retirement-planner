@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // src/store joined in Phase 3 of the browser port: the record stores, the
-// seeding/migration logic and the writer lease all run inside the browser's
+// seeding/migration logic and the record guards all run inside the browser's
 // IO context now, so one convenient node: import there would break (or
 // silently shim) the exact code that guards irreplaceable records. src/ui/io
 // is the browser driver + writer guard — browser-only by nature, but a Node

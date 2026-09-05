@@ -24,7 +24,6 @@
 /// <reference types="vite/client" />
 import { parentDirOf, type FileStore } from '../../../src/shared/fileStore';
 import { createStores } from '../../../src/store';
-import { parseLease, LEASE_FILENAME } from '../../../src/store/writerLease';
 import { createFsaFileStore } from '../../../src/ui/io/fsaFileStore';
 import {
   acquireBrowserWriterGuard,
@@ -96,11 +95,10 @@ const contractCases = fileStoreContractCases();
 const suiteCases = storeSuiteCases();
 const heldGuards = new Map<string, BrowserWriterGuard>();
 
-export interface LeaseAcquireReply {
+export interface GuardAcquireReply {
   ok: boolean;
   reason?: string;
   message?: string;
-  takeoverNote?: string | null;
 }
 
 export interface StoreWindow {
@@ -111,16 +109,10 @@ export interface StoreWindow {
     runContractCase(name: string): Promise<true>;
     runSuiteCase(name: string): Promise<true>;
     golden(): Promise<{ fresh: Record<string, string>; legacy: Record<string, string> }>;
-    leaseWrite(folder: string, rel: string, text: string): Promise<true>;
-    leaseRead(folder: string, rel: string): Promise<string | null>;
-    leaseHolder(folder: string): Promise<string | null>;
-    leaseAcquire(
-      folder: string,
-      clientId: string,
-      label: string,
-    ): Promise<LeaseAcquireReply>;
-    leaseAcquireOverBrokenIO(folder: string): Promise<{ threw: boolean }>;
-    leaseRelease(folder: string): Promise<{ leaseGone: boolean }>;
+    writeRaw(folder: string, rel: string, text: string): Promise<true>;
+    readRaw(folder: string, rel: string): Promise<string | null>;
+    guardAcquire(folder: string): Promise<GuardAcquireReply>;
+    guardRelease(folder: string): Promise<true>;
   };
 }
 
@@ -175,14 +167,14 @@ export interface StoreWindow {
     };
   },
 
-  async leaseWrite(folder: string, rel: string, text: string): Promise<true> {
+  async writeRaw(folder: string, rel: string, text: string): Promise<true> {
     const files = await namedFolder(folder);
     await files.mkdir(parentDirOf(rel));
     await files.writeText(rel, text);
     return true;
   },
 
-  async leaseRead(folder: string, rel: string): Promise<string | null> {
+  async readRaw(folder: string, rel: string): Promise<string | null> {
     const files = await namedFolder(folder);
     try {
       return await files.readText(rel);
@@ -191,67 +183,18 @@ export interface StoreWindow {
     }
   },
 
-  async leaseHolder(folder: string): Promise<string | null> {
-    const files = await namedFolder(folder);
-    try {
-      return parseLease(await files.readText(LEASE_FILENAME))?.holder.clientId ?? null;
-    } catch {
-      return null;
-    }
-  },
-
-  async leaseAcquire(folder: string, clientId: string, label: string): Promise<LeaseAcquireReply> {
-    const files = await namedFolder(folder);
-    const result = await acquireBrowserWriterGuard({
-      files,
-      folderId: folder,
-      self: { clientId, label },
-      onLog: () => undefined,
-    });
+  async guardAcquire(folder: string): Promise<GuardAcquireReply> {
+    const result = await acquireBrowserWriterGuard({ folderId: folder });
     if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
     heldGuards.set(folder, result.guard);
-    return { ok: true, takeoverNote: result.guard.takeoverNote };
+    return { ok: true };
   },
 
-  /**
-   * Attempt the guard over a store whose lease read THROWS (an IO failure,
-   * not a refusal). The point is the Web Lock's exception hygiene: a throw
-   * out of the lease layer must release the lock, or this tab would go on
-   * holding it while reporting failure — and a retry would be refused as
-   * "another tab" that does not exist. The vitest side proves the release by
-   * acquiring the SAME folderId normally right after.
-   */
-  async leaseAcquireOverBrokenIO(folder: string): Promise<{ threw: boolean }> {
-    const files = await namedFolder(folder);
-    const broken = {
-      ...files,
-      async readText(relPath: string): Promise<string> {
-        if (relPath === LEASE_FILENAME) throw new Error('injected IO failure');
-        return files.readText(relPath);
-      },
-    };
-    try {
-      const result = await acquireBrowserWriterGuard({
-        files: broken,
-        folderId: folder,
-        self: { clientId: 'client-broken', label: 'Broken IO Tab' },
-        onLog: () => undefined,
-      });
-      // Reachable only if the throw was swallowed somewhere — release so a
-      // failed expectation does not wedge later scenarios, then report.
-      if (result.ok) await result.guard.release();
-      return { threw: false };
-    } catch {
-      return { threw: true };
-    }
-  },
-
-  async leaseRelease(folder: string): Promise<{ leaseGone: boolean }> {
+  async guardRelease(folder: string): Promise<true> {
     const guard = heldGuards.get(folder);
     if (!guard) throw new Error(`no held guard for folder ${folder}`);
     heldGuards.delete(folder);
     await guard.release();
-    const files = await namedFolder(folder);
-    return { leaseGone: !(await files.exists(LEASE_FILENAME)) };
+    return true;
   },
 };

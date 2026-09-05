@@ -2358,3 +2358,61 @@ looking wrong.
 The four browser specs that clicked through to the table came along:
 they open Trend now, and the score cell is td 5, not td 4, because
 Change sits between Total and Portfolio.
+
+## The cross-machine writer guard comes out (2026-09-05, thirteenth pass)
+
+**The heartbeat lease and the sync-conflict scan are deleted; one Web Lock
+remains.** The owner wants the data folder in a shared iCloud Drive so a
+second household member can open the planner on her own laptop, and asked
+for the two-writer logic to be relaxed to something optimistic. Reading the
+three refusals the boot path actually had, the one he named turned out not
+to be the one that would have bitten him.
+
+**What the layers were.** `tab` — Web Locks, one tab per folder per browser
+profile, airtight and instant. `held` — a foreign `.writer.lease` younger
+than 45s (15s heartbeat × 3 beats). `sync-conflict` — a recursive scan that
+refused the folder outright on any name matching `conflicted copy`,
+`sync-conflict`, or `.icloud`.
+
+**Why the lease went.** It only ever saw writers overlapping in TIME, and the
+way a synced folder actually loses data needs no overlap: machine A writes,
+its owner closes the lid before the upload finishes, machine B opens twenty
+minutes later, reads a stale `networth.json`, appends, writes it back. One
+writer at a time throughout; rows gone anyway. The lease could not see that
+and never could — so it was buying much less than its ceremony implied, and
+its own header already conceded the cross-machine case was advisory. Deleting
+it removes a heartbeat timer, a dedicated worker, a message-passing client, a
+staleness calculus, and a file in the user's folder, for a guarantee that was
+never really there.
+
+**Why the sync scan went, and it is the one that mattered.** `.icloud` is not
+a conflict marker. It is iCloud's ordinary eviction stub for a file offloaded
+to save space, and on a folder two people open on alternate days it is the
+normal resting state. The app was telling its owner to hand-reconcile a fork
+that did not exist, and would have done so constantly under exactly the
+arrangement he was setting up. Lumping eviction in with Dropbox's genuine
+`conflicted copy` rename was the original error; rather than split the two
+and keep a refusal for real forks, both go — a personal planner has no call
+to refuse to open at all.
+
+**Why the Web Lock stays.** It costs nothing, has no false positives, needs no
+file, and catches the collision most likely to actually happen: two tabs on
+one machine. Relaxing it would have bought nothing.
+
+**The owner's judgement, recorded so it is not re-litigated:** this is one
+household's spreadsheet, not life support, and losing some net-worth history
+is an acceptable price for a guard that never misfires on the normal case.
+The recovery story is now git on the data folder alone — strictly stronger
+than the lease was, because it survives the stale-read failure too. README
+says so in a new *Sharing the folder between two machines* section that
+describes the stale-read shape in plain words rather than implying a lock
+prevents it.
+
+`LocalBootRefusedError` narrows to `reason: 'tab'`, `GuardRefusal` keeps its
+page for that one case, and the writer identity in localStorage
+(`fplan-writer-client-id`) retires with the lease that needed it. The golden
+cross-driver sequence no longer takes a lease: the guard is a browser API
+with nothing on disk to byte-compare, so it has no place in an
+environment-neutral script. The browser lane swaps its five lease specs for
+five lock specs, including the one that pins the reversal — a folder holding
+`.plan.json.icloud` and a `(conflicted copy)` file now opens.

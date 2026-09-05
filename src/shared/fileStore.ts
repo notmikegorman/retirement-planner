@@ -92,9 +92,9 @@ export interface FileStore {
    * Create a file with this text ONLY if nothing is there. Under node this is
    * 'wx' — a real O_EXCL, strong enough to carry a lock. On the browser
    * driver it is check-then-create and therefore ADVISORY ONLY: nothing
-   * mutual-exclusion-critical may ride on it there, which is why the
-   * single-writer lease (src/store/writerLease.ts) never calls it and the
-   * browser's actual exclusion is Web Locks (src/ui/io/browserWriterGuard.ts).
+   * mutual-exclusion-critical may ride on it there: the browser's exclusion
+   * is Web Locks alone (src/ui/io/browserWriterGuard.ts), and nothing in the
+   * app calls this for exclusion.
    * Throws FileExistsError when the file exists.
    */
   createExclusive(relPath: string, text: string): Promise<void>;

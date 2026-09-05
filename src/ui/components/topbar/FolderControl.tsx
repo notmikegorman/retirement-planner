@@ -16,8 +16,8 @@
  * flight (the beforeunload guards must never argue with a reload that
  * already released the guard), re-request folder permission behind the
  * click gesture, write the choice, RELEASE the writer guard gracefully
- * (guardClient.releaseHeldGuard — heartbeat stopped, lease deleted, Web
- * Lock freed, so the folder being left is immediately openable elsewhere),
+ * (browserWriterGuard.releaseHeldGuard — the Web Lock freed, so the folder
+ * being left is immediately openable in this browser),
  * and location.reload() into the boot gate, which re-runs against the new
  * handle exactly as a fresh visit would — reconnect page, zero-start setup
  * step and all.
@@ -62,7 +62,7 @@ async function localWorkInFlight(): Promise<boolean> {
 /** Release the held guard (local mode), then reload into the boot gate. */
 async function releaseGuardAndReload(): Promise<void> {
   if (backendMode === 'local') {
-    const { releaseHeldGuard } = await import('../../local/guardClient');
+    const { releaseHeldGuard } = await import('../../io/browserWriterGuard');
     await releaseHeldGuard();
   }
   location.reload();

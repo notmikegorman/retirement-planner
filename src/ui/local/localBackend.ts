@@ -66,7 +66,6 @@ import { defaultRefreshSymbols } from '../../store/quotes';
 import { createServices, type Services } from '../../store/services';
 import { createScoreStore } from '../../store/search/scoreStore';
 import { createSearchManager } from '../../store/searchManager';
-import { randomHex } from '../../shared/random';
 import { createFsaFileStore } from '../io/fsaFileStore';
 import { sweepSwapArtifacts } from '../io/swapArtifacts';
 import { resolveStorageForBoot, supportsFolderPicker } from './storageChoice';
@@ -74,7 +73,7 @@ import type { Api } from '../api';
 import { bundledDefaults } from './bundledDefaults';
 import { createBrowserRunExecutor } from './browserRunExecutor';
 import { createBrowserSearchRunner } from './searchClient';
-import { acquireGuardInWorker } from './guardClient';
+import { acquireBrowserWriterGuard } from '../io/browserWriterGuard';
 import {
   QUOTE_PROXY_STORAGE_KEY,
   createProxyQuoteFetcher,
@@ -82,7 +81,6 @@ import {
 } from './proxyQuoteFetcher';
 import { setScoringInFlight } from './scoringGuard';
 
-const CLIENT_ID_KEY = 'fplan-writer-client-id';
 
 /**
  * Options injectable from OUTSIDE the bundle, read once at boot. The one
@@ -101,30 +99,11 @@ export interface LocalBackendOptions {
 export class LocalBootRefusedError extends Error {
   override readonly name = 'LocalBootRefusedError';
   constructor(
-    public readonly reason: 'tab' | 'held' | 'sync-conflict',
+    public readonly reason: 'tab',
     message: string,
   ) {
     super(message);
   }
-}
-
-/**
- * This installation's stable writer identity — the browser's stand-in for
- * pid+hostname, minted once and kept in localStorage so a reload re-adopts
- * its own lease instead of reading it as a foreign writer's.
- */
-function writerIdentity(): { clientId: string; label: string } {
-  let clientId: string | null = null;
-  try {
-    clientId = localStorage.getItem(CLIENT_ID_KEY);
-    if (clientId === null) {
-      clientId = `web-${randomHex(8)}`;
-      localStorage.setItem(CLIENT_ID_KEY, clientId);
-    }
-  } catch {
-    clientId = `web-${randomHex(8)}`; // storage disabled: identity lasts the tab
-  }
-  return { clientId, label: 'Retirement Planner (browser tab)' };
 }
 
 /** The stand-in while no proxy URL is configured — see the module header. */
@@ -182,20 +161,10 @@ export async function bootLocalBackend(): Promise<Api> {
   const storage = await resolveStorageForBoot();
   const handle = storage.handle;
 
-  // The guard FIRST — before initDataDir can touch a byte. The heartbeat (and
-  // the Web Lock) live in a dedicated worker so a backgrounded tab's throttled
-  // timers cannot let the lease go stale under a live writer.
-  const acquisition = await acquireGuardInWorker({
-    handle,
-    folderId: storage.folderId,
-    self: writerIdentity(),
-    onLog: (message) => console.log(`[writer guard] ${message}`),
-    onLeaseLost: () =>
-      console.warn(
-        '[writer guard] the folder lease was lost to another writer — this tab was ' +
-          'presumably frozen past its own staleness window. Treat the folder as contested.',
-      ),
-  });
+  // The guard FIRST — before initDataDir can touch a byte. One Web Lock,
+  // scoped to this folder in this browser profile; browserWriterGuard.ts
+  // explains what it covers and what it deliberately does not.
+  const acquisition = await acquireBrowserWriterGuard({ folderId: storage.folderId });
   if (!acquisition.ok) throw new LocalBootRefusedError(acquisition.reason, acquisition.message);
 
   // Orphaned `.crswap` staging files sweep NOW — guard held (so nothing can

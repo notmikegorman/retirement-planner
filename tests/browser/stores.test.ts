@@ -30,7 +30,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { createNodeFileStore } from '../../src/server/fileStore';
 import { createStores } from '../../src/store';
-import { DEFAULT_HEARTBEAT_MS, STALE_AFTER_BEATS } from '../../src/store/writerLease';
 import { fileStoreContractCases } from '../store/fileStoreContract';
 import { storeSuiteCases } from '../store/storeSuite';
 import {
@@ -211,92 +210,58 @@ describe('browser storage engine (OPFS, real Chromium)', () => {
     expect(Object.keys(nodeTrees.legacy)).toContain('scenarios/trap-case.json');
   });
 
-  describe('the writer guard (Web Locks + lease) on the real driver', () => {
-    it('acquires a free folder, writes the lease, and release removes it', async () => {
-      const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('solo', 'client-a', 'Tab One'));
+  describe('the writer guard (one Web Lock) on the real driver', () => {
+    it('acquires a free folder, and release hands it back', async () => {
+      const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('solo'));
       expect(r.ok).toBe(true);
-      expect(r.takeoverNote).toBeNull();
-      expect(await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseHolder('solo'))).toBe('client-a');
-      const released = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('solo'));
-      expect(released.leaseGone).toBe(true);
+      expect(await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('solo'))).toBe(true);
+      // Free again straight after — release really released.
+      const again = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('solo'));
+      expect(again.ok).toBe(true);
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('solo'));
     });
 
-    it('a second TAB of the same profile is refused by Web Locks, and freed by release', async () => {
-      const first = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('shared', 'client-a', 'Tab One'));
+    it('a second TAB of the same profile is refused, and freed by release', async () => {
+      const first = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('shared'));
       expect(first.ok).toBe(true);
-      // The second tab loses at the Web Locks layer — before the lease file
-      // is even consulted — because within one profile that layer is airtight
-      // and instant.
-      const second = await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('shared', 'client-b', 'Tab Two'));
+      const second = await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('shared'));
       expect(second.ok).toBe(false);
       expect(second.reason).toBe('tab');
       expect(second.message).toContain('Another tab');
-      // Release frees both layers; the second tab can now take the folder.
-      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('shared'));
-      const retry = await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('shared', 'client-b', 'Tab Two'));
+      // Release frees the lock; the second tab can now take the folder.
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('shared'));
+      const retry = await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('shared'));
       expect(retry.ok).toBe(true);
-      expect(await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.leaseHolder('shared'))).toBe('client-b');
-      await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('shared'));
+      await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('shared'));
     });
 
-    it('respects a FRESH foreign lease: refused, holder named — like .writer.lock today', async () => {
-      // A lease from "another machine": no Web Lock held anywhere (different
-      // folderId than any held guard), file fresh by its own heartbeat math.
-      const foreign = JSON.stringify({
-        holder: { clientId: 'client-far', label: 'Chrome on other-machine' },
-        acquiredAt: new Date(Date.now() - 60_000).toISOString(),
-        renewedAt: new Date().toISOString(),
-        heartbeatMs: DEFAULT_HEARTBEAT_MS,
-      });
-      await store(page).evaluate((raw) => (window as unknown as StoreWindow).__store.leaseWrite('foreign', '.writer.lease', raw), foreign);
-      const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('foreign', 'client-a', 'Tab One'));
-      expect(r.ok).toBe(false);
-      expect(r.reason).toBe('held');
-      expect(r.message).toContain('Chrome on other-machine');
-      expect(r.message).toContain('ADVISORY across machines');
-      // The foreign lease was not touched.
-      expect(await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseHolder('foreign'))).toBe('client-far');
+    it('two DIFFERENT folders never contend — the lock is scoped per folder', async () => {
+      const a = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('scope-a'));
+      const b = await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('scope-b'));
+      expect(a.ok).toBe(true);
+      expect(b.ok).toBe(true);
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('scope-a'));
+      await store(page2).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('scope-b'));
     });
 
-    it('takes over a STALE lease with a logged note', async () => {
-      const staleAge = DEFAULT_HEARTBEAT_MS * STALE_AFTER_BEATS + 60_000;
-      const stale = JSON.stringify({
-        holder: { clientId: 'client-dead', label: 'a crashed tab' },
-        acquiredAt: new Date(Date.now() - staleAge - 60_000).toISOString(),
-        renewedAt: new Date(Date.now() - staleAge).toISOString(),
-        heartbeatMs: DEFAULT_HEARTBEAT_MS,
-      });
-      await store(page).evaluate((raw) => (window as unknown as StoreWindow).__store.leaseWrite('stale', '.writer.lease', raw), stale);
-      const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('stale', 'client-a', 'Tab One'));
+    it('opens a folder carrying iCloud stubs and conflicted copies — sync artifacts no longer refuse', async () => {
+      // The old guard scanned for these and refused the folder. `.icloud` is
+      // not a conflict marker at all (it is iCloud's eviction stub for an
+      // offloaded file), and refusing on it made a folder shared between two
+      // machines unopenable in its normal resting state. Nothing scans now.
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.writeRaw('artifacts', '.plan.json.icloud', ''));
+      await store(page).evaluate(() =>
+        (window as unknown as StoreWindow).__store.writeRaw('artifacts', 'networth (conflicted copy).json', '{}'),
+      );
+      const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('artifacts'));
       expect(r.ok).toBe(true);
-      expect(r.takeoverNote).toContain('a crashed tab');
-      expect(await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseHolder('stale'))).toBe('client-a');
-      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('stale'));
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('artifacts'));
     });
 
-    it('an IO failure during acquisition releases the Web Lock — a throw never wedges the tab', async () => {
-      // The lease read throws (an IO failure, not a refusal). The error must
-      // surface AND the Web Lock must come back, or this tab would be told
-      // "another tab is writing" forever about a tab that does not exist.
-      const broken = await store(page).evaluate(() =>
-        (window as unknown as StoreWindow).__store.leaseAcquireOverBrokenIO('broken-io'),
-      );
-      expect(broken.threw).toBe(true);
-      // The SAME folderId acquires cleanly right after: the lock was released.
-      const retry = await store(page).evaluate(() =>
-        (window as unknown as StoreWindow).__store.leaseAcquire('broken-io', 'client-a', 'Tab One'),
-      );
-      expect(retry.ok).toBe(true);
-      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseRelease('broken-io'));
-    });
-
-    it('refuses to open a folder carrying sync-conflict artifacts until resolved', async () => {
-      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseWrite('conflicted', '.plan.json.icloud', ''));
-      const r = await store(page).evaluate(() => (window as unknown as StoreWindow).__store.leaseAcquire('conflicted', 'client-a', 'Tab One'));
-      expect(r.ok).toBe(false);
-      expect(r.reason).toBe('sync-conflict');
-      expect(r.message).toContain('.plan.json.icloud');
-      expect(r.message).toContain('Resolve them');
+    it('leaves no lease file behind — the folder carries no guard state at all', async () => {
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardAcquire('no-files'));
+      await store(page).evaluate(() => (window as unknown as StoreWindow).__store.guardRelease('no-files'));
+      expect(await store(page).evaluate(() => (window as unknown as StoreWindow).__store.readRaw('no-files', '.writer.lease'))).toBeNull();
     });
   });
 

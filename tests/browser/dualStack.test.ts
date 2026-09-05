@@ -67,7 +67,7 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const distUi = path.join(repoRoot, 'dist', 'ui');
 
 /** Guard artifacts, not records: each stack's writer machinery leaves its own. */
-const TREE_EXCLUDED = new Set(['.writer.lock', '.writer.lease', '.last-browser-open']);
+const TREE_EXCLUDED = new Set(['.writer.lock', '.last-browser-open']);
 
 // ---------------------------------------------------------------------------
 // Small machinery

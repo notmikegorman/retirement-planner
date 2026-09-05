@@ -200,12 +200,11 @@ export function createFsaFileStore(
     /**
      * ADVISORY ONLY on this driver, by API limitation: FSA has no O_EXCL, so
      * this is exists-then-create with a visible window between the two. That
-     * is why the single-writer lease does NOT ride on it (the Phase-2
-     * fitness audit's explicit instruction): same-profile exclusion is Web
-     * Locks (real, kernel-grade within the profile), cross-machine exclusion
-     * is the heartbeat lease's age math — neither needs this primitive to be
-     * strong. It exists here so shared code paths that use it for
-     * NON-exclusion purposes keep working.
+     * is why the single-writer guard does NOT ride on it (the Phase-2
+     * fitness audit's explicit instruction): exclusion is Web Locks alone,
+     * real and kernel-grade within the profile, and there is no cross-machine
+     * layer any more (browserWriterGuard.ts says why). It exists here so
+     * shared code paths that use it for NON-exclusion purposes keep working.
      */
     async createExclusive(relPath, text) {
       if (await this.exists(relPath)) throw new FileExistsError(describe(relPath));

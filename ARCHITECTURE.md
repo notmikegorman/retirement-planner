@@ -51,9 +51,9 @@ src/engine/    PURE, deterministic given input + seed. simulate.ts (yearly loop)
 src/store/     ENVIRONMENT-NEUTRAL record stores (browser port Phase 3): the
                logic of dataStore/planStore/planHistoryStore/networthStore/
                quotes, moved whole into factories over a FileStore pair
-               (`createStores({files, defaults})`), plus writerLease.ts (the
-               heartbeat lease that replaces .writer.lock where no pid
-               exists). No node: imports, ever (pinned by
+               (`createStores({files, defaults})`). The browser's answer to
+               .writer.lock is one Web Lock and lives in src/ui/io — see
+               browserWriterGuard.ts. No node: imports, ever (pinned by
                tests/shared/noNodeImports.test.ts) — the same guard and
                migration code runs under node and inside a browser bundle.
                dataStore.ts (seeding, backfills, zod-validated load/save),

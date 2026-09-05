@@ -82,16 +82,30 @@ repository in the folder, which gives you a dated history of every change:
 cd <your-data-folder> && git init && git add -A && git commit -m "start"
 ```
 
-Add a `.gitignore` with two lines of app plumbing that isn't data:
+Add a `.gitignore` with the one line of app plumbing that isn't data:
 
 ```
 *.crswap
-.writer.lease
 ```
 
 Whatever you do, **include `networth.json`**. Everything else can be retyped
 from statements; that file is the only record of what the portfolio was worth
 on past days, and nothing reconstructs it.
+
+### Sharing the folder between two machines
+
+Put the folder in iCloud Drive (or Dropbox) and two people can each point
+their own browser at it. The app does not stop you, and does not pretend to
+police it: **use one machine at a time, and let the sync finish before the
+other one opens it.**
+
+Be clear about what can go wrong, because it needs no simultaneity at all.
+One machine writes and its owner shuts the lid before the upload completes;
+the other opens twenty minutes later, reads a stale `networth.json`, adds a
+row, and writes the whole file back. Strictly one writer at a time, and rows
+are gone anyway. No lock can see that — which is why the app no longer ships
+one for this case, and why the honest safeguard is the git repository above.
+Commit after a session and a bad sync costs you one `git checkout`.
 
 ---
 
@@ -120,8 +134,11 @@ unaffected. Never refresh, and the app never connects to anything at all.
 
 ## Living with it
 
-- **One tab writes at a time.** A second tab (or another machine on a synced
-  folder) gets an honest refusal page instead of silently corrupting records.
+- **One tab writes at a time.** A second tab in the same browser gets an
+  honest refusal page instead of silently corrupting records. That guard is a
+  Web Lock, so it is exact and it costs nothing — but it sees only this
+  browser on this machine. See **Sharing the folder between two machines**
+  below for what it deliberately does not cover.
 - **The tab is the engine.** Closing it mid-simulation stops the simulation;
   the app warns before you close while scoring or a search is in flight, and
   an interrupted snapshot score is either finishable with one click or

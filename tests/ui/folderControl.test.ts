@@ -31,7 +31,7 @@ const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 const control = read('../../src/ui/components/topbar/FolderControl.tsx');
 const app = read('../../src/ui/App.tsx');
-const guardClient = read('../../src/ui/local/guardClient.ts');
+const writerGuard = read('../../src/ui/io/browserWriterGuard.ts');
 
 // ---------------------------------------------------------------------------
 
@@ -174,20 +174,20 @@ describe('the switch keeps the guard discipline (source scans)', () => {
     expect(releaseAt).toBeGreaterThan(-1);
     expect(reloadAt).toBeGreaterThan(-1);
     expect(releaseAt).toBeLessThan(reloadAt);
-    // And the guard client documents the release-vs-heartbeat race rather
-    // than pretending the release is atomic: the leftover outcome is the
-    // killed-tab outcome, which staleness already recovers.
-    expect(guardClient).toContain('release-vs-heartbeat race');
-    expect(guardClient).toContain('goes stale on schedule');
+    // And the guard documents why the ordinary path has no release at all:
+    // the tab dying IS the release, and releasing on pagehide would drop the
+    // lock while a bfcache'd page could still come back.
+    expect(writerGuard).toContain('the tab dying IS the');
+    expect(writerGuard).toContain('bfcache');
   });
 
   it('loads the local machinery lazily — the HTTP bundle stays pure', () => {
     // The same discipline as api.ts's lazy backend: FolderControl renders in
     // every mode, so its static imports must not drag the local chunk in.
-    expect(control).toContain("import('../../local/guardClient')");
+    expect(control).toContain("import('../../io/browserWriterGuard')");
     expect(control).toContain("import('../../local/scoringGuard')");
     expect(control).toContain("import('../../local/searchClient')");
-    expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/local\/guardClient'/m);
+    expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/io\/browserWriterGuard'/m);
     expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/local\/scoringGuard'/m);
     expect(control).not.toMatch(/^import .*from '\.\.\/\.\.\/local\/searchClient'/m);
   });

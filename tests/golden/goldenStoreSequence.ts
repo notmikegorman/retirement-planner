@@ -16,9 +16,11 @@
  * .writer.lock (singleWriter) — none of those modules ported in Phase 3, so
  * a sequence touching them could not run in the browser at all. They stay in
  * the node-only harness; their browser equivalents arrive with Phases 4-5.
- * The lease, their Phase-3 replacement for the lock, IS exercised: taken at
- * the start (pinned clock, no heartbeat), released at the end, leaving no
- * file — like the harness's lock take/verify/release.
+ *
+ * The single-writer guard is not exercised here either, and now never will
+ * be: it is one Web Lock (src/ui/io/browserWriterGuard.ts), a browser API
+ * with no node equivalent and nothing on disk to compare, so it has no place
+ * in an environment-neutral byte-for-byte sequence.
  *
  * Environment-neutral by construction: no node imports, no vitest; fixture
  * files are built THROUGH the FileStore under test, assertions come from
@@ -28,7 +30,6 @@ import { FileNotFoundError, type FileStore } from '../../src/shared/fileStore';
 import { ENGINE_VERSION, type Scenario } from '../../src/shared/types';
 import type { Stores } from '../../src/store';
 import { planHash } from '../../src/store/planHistoryStore';
-import { acquireWriterLease, LEASE_FILENAME } from '../../src/store/writerLease';
 import { eq, is, ok } from '../store/check';
 
 export interface GoldenSequenceContext {
@@ -45,17 +46,6 @@ export interface GoldenSequenceContext {
 
 export async function runGoldenFreshSequence(ctx: GoldenSequenceContext): Promise<void> {
   const { stores, files } = ctx;
-
-  // --- The lease: take (pinned clock, no heartbeat), verify, release later --
-  const lease = await acquireWriterLease({
-    files,
-    self: { clientId: 'golden-client', label: 'golden-sequence' },
-    now: () => new Date('2026-08-24T08:00:00.000Z'),
-    schedule: () => 0, // never beats — the sequence is single-pass
-    cancel: () => undefined,
-    onLog: () => undefined,
-  });
-  ok(lease.ok, 'the golden sequence could not take a fresh folder’s lease');
 
   // --- Seed an empty folder -------------------------------------------------
   const init = await stores.data.initDataDir();
@@ -173,10 +163,6 @@ export async function runGoldenFreshSequence(ctx: GoldenSequenceContext): Promis
   );
   await stores.networth.deleteSnapshot(row3.id);
   is((await stores.networth.listSnapshots()).length, 2, 'expected 2 net-worth rows after delete');
-
-  // --- Release the lease: like the harness's lock, it must leave no file ----
-  await lease.guard.release();
-  is(await files.exists(LEASE_FILENAME), false, `${LEASE_FILENAME} still present after release`);
 }
 
 // ---------------------------------------------------------------------------
