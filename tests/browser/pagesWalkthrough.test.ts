@@ -556,6 +556,13 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
         { timeout: 120_000 },
       )
       .toEqual(before);
+
+    // Settle before handing the shared page to the next case: wait for the
+    // app SHELL, not the verdict. The reload lands back on the remembered
+    // view — Settings, where this case started — which has no .verdict on
+    // it at all, so waiting for one here is a guaranteed timeout.
+    await page.locator('.sideNav').waitFor({ state: 'visible', timeout: 120_000 });
+    await download.delete();
   }, 300_000);
 
   it('a deep link under the base reloads through the 404 trick', async () => {
