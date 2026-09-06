@@ -2416,3 +2416,54 @@ with nothing on disk to byte-compare, so it has no place in an
 environment-neutral script. The browser lane swaps its five lease specs for
 five lock specs, including the one that pins the reversal — a folder holding
 `.plan.json.icloud` and a `(conflicted copy)` file now opens.
+
+## Save a copy, and the browsers that had no way out (2026-09-06, fourteenth pass)
+
+**Settings → Advanced grows a Save-a-copy card: the whole data folder out as
+one JSON file, and back in from the same file.** The occasion was a friend of
+the owner's who does not use Chrome. The floor he asked for — "he should be
+able to tinker and have it not write anything to any file" — already existed:
+Safari and Firefox have no folder picker, so D8 boots them into
+browser-private OPFS, which writes no file on disk by construction. What did
+not exist was any way to get data OUT of that mode, which is what made it a
+demo rather than a place to work.
+
+**One JSON file, not a zip.** Every file in a data folder is text — the JSON
+records, the assumptions tables, one CSV of historical returns, a README in
+scenarios/ — so an envelope of `{path: contents}` round-trips the folder
+exactly with no encoding step and no archive dependency. It also stays
+readable and diffable in a text editor, which is the same property the folder
+itself is sold on; keys are sorted so two saves of an unchanged folder are
+byte-identical. A zip would have bought compression this data does not need
+at the price of a dependency the app does not otherwise have.
+
+**Caches and plumbing do not travel.** `runs/` and `searches/` are
+content-keyed caches — D7's bargain says they cost recomputation and nothing
+else — and would dwarf the records they rode with. Dot-files and `.crswap`
+staging debris are app plumbing, never records.
+
+**Restore writes and never deletes.** Every path in the envelope replaces
+what is there; a file the envelope does not mention is left alone. So the
+failure mode of a mistaken restore is "an old scenario file survived", not
+"the folder I meant to keep is gone" — and a round trip of the same file is
+still exact, because every record file is in every envelope. It sits behind a
+confirm that says that in those words, and reloads afterwards because the
+stores read at boot.
+
+**It is not on the Api type.** That type is the HTTP client's surface, which
+the parked Node server implements route for route; a browser-only
+download/upload has no business adding a route to it. The card renders only
+in local mode and lazily imports its implementation, the same discipline
+FolderControl uses for the writer guard, so an HTTP session loads none of it.
+`bootedFileStore()` on the local backend is the one new seam.
+
+**The demo banner now names the remedy.** It used to warn about loss and
+offer only "go and use Chrome". A warning that does not name the way out is
+half a warning, so it points at Save a copy first.
+
+The round trip is tested where it has to hold: eighteen node tests over the
+memory driver (what travels, what does not, every way an uploaded file can be
+wrong, and a byte-for-byte restore into an empty folder), plus a real-browser
+walkthrough case that clicks Save, captures the download, clobbers the plan
+through the scripting seam, restores the captured file, and watches the
+change revert. That last one was confirmed to fail when restore is sabotaged.

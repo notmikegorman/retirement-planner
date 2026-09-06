@@ -190,14 +190,20 @@ export function FolderReconnect({
  * door, so every session is honestly demo-scoped). Rendered above the app —
  * persistent, not dismissible, because its claim never stops being true and
  * a dismissed banner is how a demo edit gets mistaken for a durable record.
+ *
+ * It names Settings → Save a copy (2026-09-06), because that is now the
+ * honest answer for this browser rather than only "go and use Chrome": the
+ * backup file is the one way data leaves a browser profile here, and a
+ * banner that warns about loss without naming the remedy is half a warning.
  */
 export function DemoStorageBanner() {
   return (
     <div className="warn-banner demo-banner" role="status">
       <strong>Demo storage.</strong> This browser can&apos;t hold a durable folder connection,
       so your edits live only inside this browser profile — Clear browsing data erases them,
-      and no file on disk ever holds them. For durable, file-backed use, open this page in
-      Chrome, Edge, or Brave.
+      and no file on disk ever holds them. Use <strong>Settings → Save a copy</strong> to
+      download your data as a file, and Restore to bring it back. For durable, file-backed
+      use without that step, open this page in Chrome, Edge, or Brave.
     </div>
   );
 }

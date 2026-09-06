@@ -62,7 +62,10 @@ src/store/     ENVIRONMENT-NEUTRAL record stores (browser port Phase 3): the
                replaces), planHistoryStore.ts (plan-history.json — every
                version there has been; one serial writer),
                networthStore.ts (the append-only ledger; one serial writer, so
-               a snapshot and a late-arriving score cannot lose each other).
+               a snapshot and a late-arriving score cannot lose each other),
+               portableBackup.ts (the whole folder out and back as one JSON
+               file — the only door in or out of the Safari/Firefox demo
+               storage; caches and plumbing excluded, restore never deletes).
 src/server/    File IO + API, node face. fileStore.ts (the node:fs driver of
                src/shared/fileStore.ts's contract + the data folder's
                location), stores.ts (binds src/store to the real folders),

@@ -57,8 +57,14 @@ connection, so they get the one thing they can honestly offer: the full app
 in browser-private demo storage, behind a standing banner that says so. The
 files live inside the browser profile itself, invisible on disk — good for
 trying the app in thirty seconds, but **Clear browsing data erases all of
-them**, and no ordinary backup ever sees them. For real, file-backed use,
-open the page in Chrome, Edge, or Brave.
+them**, and no ordinary backup ever sees them.
+
+**Settings → Save a copy** is the way out, and it makes these browsers a real
+place to work rather than a toy: it downloads the entire data folder as one
+JSON file, and **Restore from a file…** reads that same file back. Save when
+you finish a session, restore when you return, and keep the file wherever you
+keep anything else you would be sorry to lose. For durable, file-backed use
+without that step, open the page in Chrome, Edge, or Brave.
 
 ### What's in the folder
 
@@ -71,6 +77,20 @@ open the page in Chrome, Edge, or Brave.
 | `quotes.json` | last fetched prices |
 | `assumptions/` | market, tax, Social Security, Medicare, ACA tables — yours to edit |
 | `runs/`, `searches/` | caches. Deletable; they cost you recomputation and nothing else |
+
+### Save a copy, on any browser
+
+**Settings → Save a copy** downloads everything above — records, assumptions,
+scenarios — as a single dated JSON file (`retirement-planner-2026-09-06.json`),
+and **Restore from a file…** reads it back. It is plain sorted JSON, so two
+saves of an unchanged folder are byte-identical and `diff` tells you what
+moved between them. The `runs/` and `searches/` caches are left out; they cost
+recomputation and nothing else.
+
+Restore **replaces every file the backup contains and deletes nothing** — a
+scenario you added since the save is still there afterwards. It is the only
+way in and out of the Safari/Firefox demo storage, and a portable snapshot
+everywhere else.
 
 ### Backing it up
 
@@ -113,7 +133,7 @@ one for this case — letting the sync settle is the whole discipline.
 | Browser | What you get |
 |---|---|
 | **Chrome, Edge, Brave** (Chromium ≥122) | Everything: the folder picker, the durable storage, installing as an app |
-| **Safari, Firefox** | Demo mode: the full app in browser-private storage, with a standing banner saying so — these browsers don't ship the folder picker (the File System Access API), so they cannot hold a durable folder connection |
+| **Safari, Firefox** | Demo mode: the full app in browser-private storage, with a standing banner saying so — these browsers don't ship the folder picker (the File System Access API), so they cannot hold a durable folder connection. **Settings → Save a copy** exports the whole folder as one JSON file and Restore reads it back, which is how data gets in and out |
 
 ## Privacy, and the one network step
 

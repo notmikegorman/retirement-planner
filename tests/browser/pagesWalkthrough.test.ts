@@ -48,6 +48,7 @@
  * (off-origin requests aborted), ephemeral port, own dist directory
  * (dist/ui-pages — never the dist/ui the other lanes build).
  */
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -452,7 +453,11 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // The data-folder card lives on the ADVANCED tab now (Settings grew tabs
     // 2026-08-30), alongside Appearance — both outside the view/edit form.
     await page.getByRole('tab', { name: 'Advanced' }).click();
-    const card = page.locator('.card').filter({ hasText: 'Data folder' });
+    // Scoped by HEADING, not by text: the Save-a-copy card below it also
+    // says "data folder" in its description, and hasText would match both.
+    const card = page
+      .locator('.card')
+      .filter({ has: page.getByRole('heading', { name: 'Data folder' }) });
     await card.waitFor({ state: 'visible', timeout: 120_000 });
     // The card fills in after its meta() round trip; wait for the D7 row
     // rather than reading the transient Loading… state.
@@ -467,6 +472,76 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     expect(cardText).toMatch(/storage (persistent|best-effort)/);
     expect(cardText).toContain('Switch storage…');
   }, 120_000);
+
+  it('Save a copy downloads the whole folder, and Restore puts it back', async () => {
+    // The D8 browsers (Safari, Firefox) have no folder picker, so this file
+    // IS their backup — the only way data leaves the browser profile. The
+    // round trip is therefore tested end to end in a real browser: click
+    // Save, capture the download, change something, restore, see it revert.
+    const card = page
+      .locator('.card')
+      .filter({ has: page.getByRole('heading', { name: 'Save a copy' }) });
+    await card.waitFor({ state: 'visible', timeout: 120_000 });
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 120_000 }),
+      card.getByRole('button', { name: 'Save a copy…' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^retirement-planner-\d{4}-\d{2}-\d{2}\.json$/);
+
+    const saved = await readFile(
+      (await download.path()) ?? (() => { throw new Error('no download path'); })(),
+      'utf8',
+    );
+    const envelope = JSON.parse(saved) as { kind: string; files: Record<string, string> };
+    expect(envelope.kind).toBe('retirement-planner-backup');
+    // The session's real records travelled, and the unbounded cache did not.
+    expect(Object.keys(envelope.files)).toEqual(
+      expect.arrayContaining(['profile.json', 'plan.json', 'networth.json']),
+    );
+    expect(Object.keys(envelope.files).some((p) => p.startsWith('runs/'))).toBe(false);
+    // The card reports what left.
+    await card.getByText(/Saved .* files\./).waitFor({ state: 'visible', timeout: 30_000 });
+
+    // Change the plan through the documented seam, so the restore has
+    // something to undo that the assertion can see.
+    const planBefore = JSON.parse(envelope.files['plan.json']!) as { description?: string };
+    await page.evaluate(async () => {
+      const api = (window as unknown as {
+        __fplanApi: { getPlan(): Promise<Record<string, unknown>>; putPlan(p: unknown): Promise<unknown> };
+      }).__fplanApi;
+      const plan = await api.getPlan();
+      await api.putPlan({ ...plan, description: 'CLOBBERED BY THE TEST' });
+    });
+    expect(
+      await page.evaluate(async () =>
+        ((await (window as unknown as {
+          __fplanApi: { getPlan(): Promise<{ description?: string }> };
+        }).__fplanApi.getPlan()).description),
+      ),
+    ).toBe('CLOBBERED BY THE TEST');
+
+    // Restore. The confirm is deliberate (it replaces files), and the page
+    // reloads on success, so accept the dialog and wait the navigation out.
+    page.once('dialog', (dialog) => void dialog.accept());
+    await card.locator('input[type="file"]').setInputFiles({
+      name: download.suggestedFilename(),
+      mimeType: 'application/json',
+      buffer: Buffer.from(saved, 'utf8'),
+    });
+    await page.waitForLoadState('load', { timeout: 120_000 });
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async () =>
+            ((await (window as unknown as {
+              __fplanApi: { getPlan(): Promise<{ description?: string }> };
+            }).__fplanApi.getPlan()).description),
+          ),
+        { timeout: 120_000 },
+      )
+      .toBe(planBefore.description);
+  }, 300_000);
 
   it('a deep link under the base reloads through the 404 trick', async () => {
     const response = await page.goto(`${staticServer.origin}${BASE}/expenses`);

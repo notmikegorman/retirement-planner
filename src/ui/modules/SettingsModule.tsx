@@ -3,7 +3,7 @@
  * simulation runs (horizon, target, path counts, seed, terminal floor);
  * SPENDING and WITHDRAWALS are the two policies; HEALTH holds the coverage
  * inputs (relocated from its own sidebar module the same day); ADVANCED holds
- * the two always-active cards — Appearance and the data folder. Advanced sits
+ * the always-active cards — Appearance, the data folder, and Save a copy. Advanced sits
  * OUTSIDE the view/edit form because its cards act on change, not on Save.
  * (Plan History spent one day here as a sixth tab; on 2026-08-31 the owner
  * moved it back to the Plan page, as the results strip's last tab.)
@@ -20,6 +20,7 @@ import {
   normalizeSpendingPolicy,
   setGuardrail,
 } from '../components/profile/profileLogic';
+import { BackupCard } from '../components/profile/BackupCard';
 import { DataFolderCard } from '../components/profile/DataFolderCard';
 import { themeModeLabel, useTheme, type ThemeMode } from '../theme';
 import { PRETAX_OPTIONS } from './formOptions';
@@ -112,6 +113,7 @@ export function SettingsModule() {
           <TabPanel idPrefix="settings" tab={tab}>
             <AppearanceCard />
             <DataFolderCard />
+            <BackupCard />
           </TabPanel>
         ) : null
       }

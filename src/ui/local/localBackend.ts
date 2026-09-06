@@ -66,6 +66,7 @@ import { defaultRefreshSymbols } from '../../store/quotes';
 import { createServices, type Services } from '../../store/services';
 import { createScoreStore } from '../../store/search/scoreStore';
 import { createSearchManager } from '../../store/searchManager';
+import type { FileStore } from '../../shared/fileStore';
 import { createFsaFileStore } from '../io/fsaFileStore';
 import { sweepSwapArtifacts } from '../io/swapArtifacts';
 import { resolveStorageForBoot, supportsFolderPicker } from './storageChoice';
@@ -89,6 +90,25 @@ import { setScoringInFlight } from './scoringGuard';
  */
 export interface LocalBackendOptions {
   quoteFetcher?: FetchLike;
+}
+
+/**
+ * The FileStore this tab booted on, once boot has completed — the seam the
+ * Settings page's backup card reaches through (src/ui/local/backup.ts).
+ *
+ * It is NOT on the Api type: that type is the HTTP client's surface, which
+ * the parked Node server implements route for route, and a browser-only
+ * download/upload has no business adding a route to it. A module-level
+ * handle keeps the feature entirely inside local mode, the same way the
+ * scoring and search guards live outside the seam.
+ */
+let bootedFiles: FileStore | null = null;
+
+export function bootedFileStore(): FileStore {
+  if (bootedFiles === null) {
+    throw new Error('the local backend has not booted, so there is no data folder to read');
+  }
+  return bootedFiles;
 }
 
 /**
@@ -179,6 +199,7 @@ export async function bootLocalBackend(): Promise<Api> {
   }
 
   const files = createFsaFileStore(handle, storage.label);
+  bootedFiles = files;
   const stores: Stores = createStores({ files, defaults: await bundledDefaults() });
   /*
    * ZERO-START: only the D8 demo fallback still seeds the fictional starter
