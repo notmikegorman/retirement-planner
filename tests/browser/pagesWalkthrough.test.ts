@@ -473,11 +473,25 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     expect(cardText).toContain('Switch storage…');
   }, 120_000);
 
+  /** The scripting surface this case drives (DEVELOPMENT.md's __fplanApi). */
+  type BackupApiWindow = {
+    __fplanApi: {
+      getNetWorth(): Promise<{ id: string }[]>;
+      deleteNetWorthSnapshot(id: string): Promise<unknown>;
+    };
+  };
+
   it('Save a copy downloads the whole folder, and Restore puts it back', async () => {
     // The D8 browsers (Safari, Firefox) have no folder picker, so this file
     // IS their backup — the only way data leaves the browser profile. The
     // round trip is therefore tested end to end in a real browser: click
-    // Save, capture the download, change something, restore, see it revert.
+    // Save, capture the download, destroy a record, restore, see it return.
+    //
+    // The record destroyed is a NET-WORTH ROW, not the plan, and that choice
+    // is about lane cost rather than coverage: restore rewrites plan.json
+    // with identical bytes, so the reload it triggers hits the run cache
+    // instead of re-simulating at drive scale. Clobbering the plan instead
+    // cost this lane ~40s of recomputation to prove the same thing.
     const card = page
       .locator('.card')
       .filter({ has: page.getByRole('heading', { name: 'Save a copy' }) });
@@ -489,58 +503,59 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     ]);
     expect(download.suggestedFilename()).toMatch(/^retirement-planner-\d{4}-\d{2}-\d{2}\.json$/);
 
-    const saved = await readFile(
-      (await download.path()) ?? (() => { throw new Error('no download path'); })(),
-      'utf8',
-    );
+    const downloadPath = await download.path();
+    if (downloadPath === null) throw new Error('the download produced no file');
+    const saved = await readFile(downloadPath, 'utf8');
     const envelope = JSON.parse(saved) as { kind: string; files: Record<string, string> };
     expect(envelope.kind).toBe('retirement-planner-backup');
     // The session's real records travelled, and the unbounded cache did not.
     expect(Object.keys(envelope.files)).toEqual(
       expect.arrayContaining(['profile.json', 'plan.json', 'networth.json']),
     );
-    expect(Object.keys(envelope.files).some((p) => p.startsWith('runs/'))).toBe(false);
-    // The card reports what left.
+    expect(Object.keys(envelope.files).some((f) => f.startsWith('runs/'))).toBe(false);
     await card.getByText(/Saved .* files\./).waitFor({ state: 'visible', timeout: 30_000 });
 
-    // Change the plan through the documented seam, so the restore has
-    // something to undo that the assertion can see.
-    const planBefore = JSON.parse(envelope.files['plan.json']!) as { description?: string };
-    await page.evaluate(async () => {
-      const api = (window as unknown as {
-        __fplanApi: { getPlan(): Promise<Record<string, unknown>>; putPlan(p: unknown): Promise<unknown> };
-      }).__fplanApi;
-      const plan = await api.getPlan();
-      await api.putPlan({ ...plan, description: 'CLOBBERED BY THE TEST' });
-    });
+    // Destroy the scored snapshot this session built — the one record that
+    // cannot be recomputed, which is the whole reason the backup exists.
+    const before = (
+      await page.evaluate(() =>
+        (window as unknown as BackupApiWindow).__fplanApi.getNetWorth(),
+      )
+    ).map((r) => r.id);
+    expect(before.length).toBeGreaterThan(0);
+    for (const id of before) {
+      await page.evaluate(
+        (target: string) =>
+          (window as unknown as BackupApiWindow).__fplanApi.deleteNetWorthSnapshot(target),
+        id,
+      );
+    }
     expect(
-      await page.evaluate(async () =>
-        ((await (window as unknown as {
-          __fplanApi: { getPlan(): Promise<{ description?: string }> };
-        }).__fplanApi.getPlan()).description),
-      ),
-    ).toBe('CLOBBERED BY THE TEST');
+      await page.evaluate(() => (window as unknown as BackupApiWindow).__fplanApi.getNetWorth()),
+    ).toHaveLength(0);
 
     // Restore. The confirm is deliberate (it replaces files), and the page
-    // reloads on success, so accept the dialog and wait the navigation out.
+    // reloads on success, so accept the dialog and let the navigation land.
     page.once('dialog', (dialog) => void dialog.accept());
     await card.locator('input[type="file"]').setInputFiles({
       name: download.suggestedFilename(),
       mimeType: 'application/json',
       buffer: Buffer.from(saved, 'utf8'),
     });
-    await page.waitForLoadState('load', { timeout: 120_000 });
     await expect
       .poll(
         async () =>
-          page.evaluate(async () =>
-            ((await (window as unknown as {
-              __fplanApi: { getPlan(): Promise<{ description?: string }> };
-            }).__fplanApi.getPlan()).description),
-          ),
+          page
+            .evaluate(() => (window as unknown as BackupApiWindow).__fplanApi.getNetWorth())
+            .then((rows) => rows.map((r) => r.id))
+            .catch(() => null),
+        // Generous, but not the lane's 300s ceiling: the reload this waits
+        // on hits the warm run cache, so a restore that works lands in
+        // seconds and a restore that is BROKEN should say so without
+        // burning four minutes of CI first.
         { timeout: 120_000 },
       )
-      .toBe(planBefore.description);
+      .toEqual(before);
   }, 300_000);
 
   it('a deep link under the base reloads through the 404 trick', async () => {
