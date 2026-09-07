@@ -21,7 +21,10 @@
       "notes": "EXAMPLE SETUP: this person is modelled with no earnings record of their own — under 40 credits, so own benefit is 0 and only the spousal benefit applies. That is a configuration, not an assumption about you: set hasOwnBenefit=true and both PIA figures from the SSA statement if this person has a work record."
     }
   ],
-  "filing": { "status": "mfj", "state": "va" },
+  "filing": {
+    "status": "mfj",
+    "state": "va"
+  },
   "accounts": [
     {
       "id": "k401",
@@ -29,9 +32,15 @@
       "type": "401k",
       "owner": "p1",
       "balance": 850000,
-      "allocation": { "stocks": 0.68, "bonds": 0.32, "bills": 0 },
+      "allocation": {
+        "stocks": 0.68,
+        "bonds": 0.32,
+        "bills": 0
+      },
       "currentEmployer": true,
-      "targetDateFund": { "targetYear": 2035 },
+      "targetDateFund": {
+        "targetYear": 2035
+      },
       "notes": "PLACEHOLDER balance and allocation. Shaped like a 2035 target-date fund — roughly 68/32 stocks/bonds today, which the engine glides toward the target year automatically. Set targetDateFund.targetYear (or delete it and set a fixed allocation) to match what this account actually holds. Rolled into the traditional IRA at separation in every scenario."
     },
     {
@@ -40,7 +49,11 @@
       "type": "traditional_ira",
       "owner": "p1",
       "balance": 250000,
-      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "allocation": {
+        "stocks": 1,
+        "bonds": 0,
+        "bills": 0
+      },
       "notes": "PLACEHOLDER balance."
     },
     {
@@ -49,8 +62,15 @@
       "type": "roth_ira",
       "owner": "p1",
       "balance": 120000,
-      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
-      "rothBasis": { "contributions": 60000, "conversions": [] },
+      "allocation": {
+        "stocks": 1,
+        "bonds": 0,
+        "bills": 0
+      },
+      "rothBasis": {
+        "contributions": 60000,
+        "conversions": []
+      },
       "notes": "PLACEHOLDER balance and contribution basis."
     },
     {
@@ -59,8 +79,15 @@
       "type": "roth_ira",
       "owner": "p2",
       "balance": 30000,
-      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
-      "rothBasis": { "contributions": 20000, "conversions": [] },
+      "allocation": {
+        "stocks": 1,
+        "bonds": 0,
+        "bills": 0
+      },
+      "rothBasis": {
+        "contributions": 20000,
+        "conversions": []
+      },
       "notes": "PLACEHOLDER balance and contribution basis."
     },
     {
@@ -70,7 +97,11 @@
       "owner": "joint",
       "balance": 70000,
       "costBasis": 45000,
-      "allocation": { "stocks": 1, "bonds": 0, "bills": 0 },
+      "allocation": {
+        "stocks": 1,
+        "bonds": 0,
+        "bills": 0
+      },
       "notes": "PLACEHOLDER. Together with savings this is the liquid money available before 59 1/2 — the bridge the 72(t) and rule-of-55 logic exist to supplement."
     },
     {
@@ -79,7 +110,11 @@
       "type": "savings",
       "owner": "joint",
       "balance": 35000,
-      "allocation": { "stocks": 0, "bonds": 0, "bills": 1 },
+      "allocation": {
+        "stocks": 0,
+        "bonds": 0,
+        "bills": 1
+      },
       "notes": "PLACEHOLDER. High-yield savings; earns the T-bill return as taxable interest."
     }
   ],
@@ -94,14 +129,172 @@
     "mortgage": null
   },
   "income": {
-    "salaries": { "p1": 150000, "p2": 0 },
+    "salaries": {
+      "p1": 150000,
+      "p2": 0
+    },
     "contribution401k": 24000,
     "employerMatch401k": 6000
   },
   "expenses": {
     "livingMonthly": 6000,
     "charitableMonthly": 0,
-    "investingMonthly": 0
+    "investingMonthly": 0,
+    "lines": [
+      {
+        "id": "auto-car-payment",
+        "label": "Auto: Car payment",
+        "category": "living",
+        "monthlyNow": 520
+      },
+      {
+        "id": "auto-fuel",
+        "label": "Auto: Fuel",
+        "category": "living",
+        "monthlyNow": 240,
+        "monthlySurvivor": 150
+      },
+      {
+        "id": "auto-insurance",
+        "label": "Auto: Insurance",
+        "category": "living",
+        "monthlyNow": 185,
+        "monthlySurvivor": 120
+      },
+      {
+        "id": "auto-maintenance",
+        "label": "Auto: Maintenance",
+        "category": "living",
+        "monthlyNow": 120
+      },
+      {
+        "id": "general-expenses-groceries-and-household",
+        "label": "General expenses: Groceries & household",
+        "category": "living",
+        "monthlyNow": 1150,
+        "monthlySurvivor": 690
+      },
+      {
+        "id": "general-expenses-eating-out",
+        "label": "General expenses: Eating out",
+        "category": "living",
+        "monthlyNow": 420,
+        "monthlySurvivor": 250
+      },
+      {
+        "id": "general-expenses-clothing",
+        "label": "General expenses: Clothing",
+        "category": "living",
+        "monthlyNow": 210,
+        "monthlySurvivor": 130
+      },
+      {
+        "id": "general-expenses-entertainment",
+        "label": "General expenses: Entertainment",
+        "category": "living",
+        "monthlyNow": 160,
+        "monthlySurvivor": 110
+      },
+      {
+        "id": "general-expenses-gifts",
+        "label": "General expenses: Gifts",
+        "category": "living",
+        "monthlyNow": 180
+      },
+      {
+        "id": "general-expenses-medical",
+        "label": "General expenses: Medical",
+        "category": "living",
+        "monthlyNow": 150,
+        "monthlySurvivor": 95
+      },
+      {
+        "id": "home-electricity",
+        "label": "Home: Electricity",
+        "category": "living",
+        "monthlyNow": 240,
+        "monthlyRenting": 120
+      },
+      {
+        "id": "home-heating-oil",
+        "label": "Home: Heating oil",
+        "category": "living",
+        "monthlyNow": 165,
+        "monthlyRenting": 0
+      },
+      {
+        "id": "home-internet-and-phone",
+        "label": "Home: Internet & phone",
+        "category": "living",
+        "monthlyNow": 195
+      },
+      {
+        "id": "home-water-and-trash",
+        "label": "Home: Water & trash",
+        "category": "living",
+        "monthlyNow": 95,
+        "monthlyRenting": 0
+      },
+      {
+        "id": "home-security-system",
+        "label": "Home: Security system",
+        "category": "living",
+        "monthlyNow": 55,
+        "monthlyRenting": 0
+      },
+      {
+        "id": "travel",
+        "label": "Travel",
+        "category": "living",
+        "monthlyNow": 520,
+        "monthlySurvivor": 380
+      },
+      {
+        "id": "subscriptions",
+        "label": "Subscriptions",
+        "category": "living",
+        "monthlyNow": 125,
+        "monthlySurvivor": 80
+      },
+      {
+        "id": "pets",
+        "label": "Pets",
+        "category": "living",
+        "monthlyNow": 110
+      },
+      {
+        "id": "household-help",
+        "label": "Household help",
+        "category": "living",
+        "monthlyNow": 160
+      },
+      {
+        "id": "personal-care",
+        "label": "Personal care",
+        "category": "living",
+        "monthlyNow": 95,
+        "monthlySurvivor": 55
+      },
+      {
+        "id": "hobbies",
+        "label": "Hobbies",
+        "category": "living",
+        "monthlyNow": 140,
+        "monthlySurvivor": 90
+      },
+      {
+        "id": "family-fund",
+        "label": "Family fund",
+        "category": "living",
+        "monthlyNow": 450
+      },
+      {
+        "id": "miscellaneous",
+        "label": "Miscellaneous",
+        "category": "living",
+        "monthlyNow": 315
+      }
+    ]
   },
   "health": {
     "acaBenchmarkMonthly": 1480,
@@ -116,9 +309,16 @@
     "mcPathsInteractive": 1000,
     "mcPathsFinal": 10000,
     "seed": 20260812,
-    "spendingPolicy": { "type": "fixed_real" },
+    "spendingPolicy": {
+      "type": "fixed_real"
+    },
     "withdrawalPolicy": {
-      "order": ["cash", "taxable", "pretax", "roth"],
+      "order": [
+        "cash",
+        "taxable",
+        "pretax",
+        "roth"
+      ],
       "pretaxPreference": "ira_first"
     }
   }

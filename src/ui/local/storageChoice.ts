@@ -134,6 +134,31 @@ export function readFriendMode(): boolean {
 }
 
 /**
+ * Throw the sample away and let the next boot seed a fresh one.
+ *
+ * WHY IT EXISTS AT ALL: the friend folder is disposable by definition —
+ * everything in it is invented, and a demo walked through a few times
+ * accumulates edits nobody wants to keep. It earned its place the hard way,
+ * though. While the plan-block stash was keyed by the CHOSEN folder rather
+ * than the BOOTED one (fixed 2026-09-07), clicking "Model the move here"
+ * inside the mode wrote the owner's REAL housing move into the sample
+ * household's plan — which promptly bankrupted an invented household that
+ * cannot afford a real house, reporting 0.0%. Fixing the leak stops new
+ * ones; it cannot clean a folder already polluted. This does.
+ *
+ * It touches ONLY the friend folder. The real storage is not named here.
+ */
+export async function resetFriendFolder(): Promise<void> {
+  const opfs = await navigator.storage.getDirectory();
+  try {
+    await opfs.removeEntry(FRIEND_OPFS_FOLDER, { recursive: true });
+  } catch {
+    // Already gone (or never created): the next boot seeds it either way,
+    // which is exactly the outcome asked for.
+  }
+}
+
+/**
  * Turn the mode on or off. Both states are written EXPLICITLY — removing the
  * key would mean "on", which is the opposite of what turning it off means.
  * The caller reloads; boot re-reads this.

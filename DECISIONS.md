@@ -2585,3 +2585,49 @@ through only the second. The result was that a brand-new visit, the exact
 case the ON-by-default exists for, went straight to the chooser. The fix is
 the same shape as the rest of this feature: check the override FIRST, once,
 before any other fact is even read.
+
+## The sample household gets a real budget, and a reset (2026-09-07, seventeenth pass)
+
+**Three reports, one root and one coincidence.**
+
+**"What happened to Expenses?"** — nothing: the owner was in Show a friend
+mode (on by default since this morning) and the example household had no
+`expenses.lines`, so the Expenses tab rendered the pre-itemisation streams
+form and its "Itemise this budget" pitch. The example now carries 23 living
+lines, which is what a demo of this app should show: the four-column table is
+the feature, and three bare numbers are not it.
+
+The lines deliberately name NO `monthlyRetired`. Partly it matches a real
+budget's shape — in the owner's own screenshot every "if I stop working" cell
+is inherited and the overrides live in "if I die" — and partly it keeps the
+example's `livingMonthlyRetired` absent, which three engine and search cases
+assert about the seeded profile. Four overrides sit in "while renting"
+(electricity halves, heating oil and the security system go to zero, water and
+trash follows the dwelling) and eleven in "if I die", which is exactly the
+demonstration: the car payment does not fall when one of you dies, and the
+groceries do.
+
+**"0.0% success, and it will not calculate"** — the coincidence, and it is
+this morning's leak still on the ground. The example household is healthy:
+93.8% before these lines, 94.9% after, deterministic 100%. But while the
+plan-block stash was keyed by the CHOSEN folder rather than the BOOTED one,
+clicking "Model the move here" inside the mode wrote the owner's REAL housing
+move into the sample's plan — and an invented household cannot buy a real
+house. Reproduced exactly: dropping a $1.2M cash move into the sample takes
+it from 93.8% to 15.9% with shortfalls starting in 2027, against the reported
+"runs out around 2028". Fixing the leak stops new pollution; it cannot clean a
+folder already polluted, so the card gains **Start the sample over**, which
+deletes the friend folder and lets the next boot seed a fresh one. It names
+only the friend folder.
+
+**"Run now failed — no account lists any symbols"** is not friend-mode
+specific and is not fixed here: the example's accounts are balance-only, so a
+price refresh has nothing to refresh, and any balance-only household gets the
+same sentence. Giving the example holdings would trade that error for the
+quote proxy's, since the proxy is not deployed.
+
+Three tests that spread the seeded profile and then set `charitableMonthly` or
+`livingMonthlyRetired` now strip `lines` first, with a note saying why: where
+lines exist they are the truth and the scalars are their sum, so those cases
+were setting fields the engine had stopped reading. They exercise the scalar
+path, which stays supported for every profile written before itemisation.

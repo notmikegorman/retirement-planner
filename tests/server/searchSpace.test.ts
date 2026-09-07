@@ -62,6 +62,11 @@ beforeAll(async () => {
   process.env.FPLAN_DATA_DIR = tmpDir;
   await initDataDir();
   profile = await loadProfile();
+  // Same reason as the engine suite: these cases probe the SCALAR expense
+  // streams, and the seeded example household is itemised now — where lines
+  // exist they are the truth and the scalars are only their sum.
+  profile = { ...profile, expenses: { ...profile.expenses } };
+  delete (profile.expenses as { lines?: unknown }).lines;
   assumptions = await loadAssumptions();
 });
 

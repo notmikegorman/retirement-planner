@@ -27,7 +27,7 @@
  */
 import { useCallback, useState } from 'react';
 import { backendMode } from '../../api';
-import { readFriendMode, writeFriendMode } from '../../local/storageChoice';
+import { readFriendMode, resetFriendFolder, writeFriendMode } from '../../local/storageChoice';
 
 export function FriendModeCard() {
   // Read once, at mount: the value only changes through this button, and the
@@ -41,6 +41,19 @@ export function FriendModeCard() {
     location.reload();
   }, [on]);
 
+  const reset = useCallback(() => {
+    if (
+      !window.confirm(
+        'Start the sample over?\n\nEverything changed in the sample household is discarded ' +
+          'and a fresh copy is seeded. Your own data is not involved.',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    void resetFriendFolder().finally(() => location.reload());
+  }, []);
+
   if (backendMode !== 'local') return null;
 
   return (
@@ -53,9 +66,19 @@ export function FriendModeCard() {
             data is not open at all, and nothing here can reach it. Changes you make stay with the
             sample.
           </p>
-          <button onClick={toggle} disabled={busy}>
-            {busy ? 'Switching…' : 'Turn off and go back to my data'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={toggle} disabled={busy}>
+              {busy ? 'Switching…' : 'Turn off and go back to my data'}
+            </button>
+            <button onClick={reset} disabled={busy}>
+              Start the sample over
+            </button>
+          </div>
+          <p className="muted" style={{ marginTop: 6 }}>
+            Starting over throws the sample away and seeds a fresh one — useful after a demo has
+            been walked through a few times, or if the sample has picked up something it should
+            not have. It never touches your own data.
+          </p>
         </>
       ) : (
         <>

@@ -120,7 +120,24 @@ function assumptions(): Assumptions {
   };
 }
 
-const starterProfile = profileJson as unknown as Profile;
+/**
+ * The starter household with its ITEMISED BUDGET REMOVED.
+ *
+ * The example profile grew `expenses.lines` on 2026-09-07 so Show a friend
+ * mode demonstrates the real budget table instead of three bare streams.
+ * Lines, when present, are the truth and the three scalars become a cache of
+ * their sum (deriveExpenseStreams) — so a test that spreads this profile and
+ * then sets `charitableMonthly` would be setting a field the engine no
+ * longer reads. These engine cases were written against the SCALAR streams
+ * and still exercise that path, which remains fully supported for every
+ * profile written before itemisation existed. Dropping the lines here says
+ * so, and keeps their arithmetic about the numbers they actually name.
+ */
+const starterProfile = ((): Profile => {
+  const raw = JSON.parse(JSON.stringify(profileJson)) as Record<string, unknown>;
+  delete (raw.expenses as Record<string, unknown>).lines;
+  return raw as unknown as Profile;
+})();
 
 /** Both spouses born June 1971; no Social Security unless a test says otherwise. */
 function toyPerson(id: string, over?: Partial<Person>): Person {
