@@ -168,13 +168,20 @@ async function boot(): Promise<void> {
       return;
     }
     demoStorage = gate.kind === 'ready-opfs' && gate.demo;
+    const friendMode = gate.kind === 'ready-friend';
     try {
       await ensureBackendReady();
       // The second stage: storage is ready, the guard is held — does the
       // folder hold a household? meta() answers LIVE, so the re-boot after
       // the setup write falls straight through here.
       const meta = await api.meta();
-      if (profileSetupNeeded({ demo: demoStorage, profileExists: meta.profileExists !== false })) {
+      if (
+        profileSetupNeeded({
+          demo: demoStorage,
+          profileExists: meta.profileExists !== false,
+          friendMode,
+        })
+      ) {
         render(
           <ProfileSetup
             onSubmit={async (profile) => {

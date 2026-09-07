@@ -133,6 +133,38 @@ describe('profileSetupNeeded (the gate’s second stage — zero-start)', () => 
   });
 });
 
+describe('Show a friend mode (the storage override)', () => {
+  it('overrides every other row of the matrix — chooser, reconnect and all', () => {
+    // The whole point: turning it on must work from ANY state, including a
+    // first visit that has never chosen storage and a folder whose
+    // permission has lapsed. Its storage is OPFS, always present, needing no
+    // grant, so there is nothing for the gate to stop and ask about.
+    expect(gate({ friendMode: true })).toEqual({ kind: 'ready-friend' });
+    expect(gate({ friendMode: true, choice: 'folder', handleFound: false })).toEqual({
+      kind: 'ready-friend',
+    });
+    expect(
+      gate({ friendMode: true, choice: 'folder', handleFound: true, permission: 'prompt' }),
+    ).toEqual({ kind: 'ready-friend' });
+    expect(gate({ friendMode: true, choice: 'opfs', canPickFolder: false })).toEqual({
+      kind: 'ready-friend',
+    });
+  });
+
+  it('off (or absent) changes nothing about the existing matrix', () => {
+    expect(gate({ friendMode: false, choice: 'opfs' })).toEqual({ kind: 'ready-opfs', demo: false });
+    expect(gate({ choice: 'opfs' })).toEqual({ kind: 'ready-opfs', demo: false });
+    expect(gate({ friendMode: false })).toEqual({ kind: 'choose', canPickFolder: true });
+  });
+
+  it('never lands on the setup step — a filled example is the point', () => {
+    expect(profileSetupNeeded({ demo: false, profileExists: false, friendMode: true })).toBe(false);
+    expect(profileSetupNeeded({ demo: false, profileExists: true, friendMode: true })).toBe(false);
+    // And the flag absent still means the ordinary rule.
+    expect(profileSetupNeeded({ demo: false, profileExists: false })).toBe(true);
+  });
+});
+
 describe('isSwapArtifact', () => {
   it('matches Chromium write-staging debris and nothing else', () => {
     expect(isSwapArtifact('plan.json.crswap')).toBe(true);

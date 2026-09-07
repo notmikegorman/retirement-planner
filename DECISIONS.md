@@ -2467,3 +2467,68 @@ wrong, and a byte-for-byte restore into an empty folder), plus a real-browser
 walkthrough case that clicks Save, captures the download, clobbers the plan
 through the scripting seam, restores the captured file, and watches the
 change revert. That last one was confirmed to fail when restore is sabotaged.
+
+## Show a friend mode (2026-09-07, fifteenth pass)
+
+**Settings → Advanced gains a toggle that boots the app on the fictional
+example household instead of the owner's own data**, so the app can be
+demonstrated to someone without a real figure on screen.
+
+**IT IS A STORAGE SWITCH, NOT A MASK, and that is the whole design.** The
+first instinct — scale or blank the numbers where they are rendered — fails
+at the only moment it matters. A mask has to be correct at every card, table,
+tooltip, chart axis, chart label, and the JSON that Save a copy downloads;
+one site missed is one real figure shown to the person the mode exists to
+hide it from. Booting a different folder has no such surface. While the mode
+is on the real storage is never opened — not read, not listed, not locked —
+so nothing downstream is capable of leaking it, and every number on screen is
+consistently invented, simulations included.
+
+**THE ROAD NOT TAKEN, and why it was priced first.** The owner's initial
+preference was his own plan with the dollars scaled by a hidden factor:
+same accounts, same dates, truthful ratios. Enumerating the numeric leaves
+from the zod schemas priced that honestly — 76 in profile.json, 92 in
+plan.json, 11 in networth.json, plus plan-history nesting a whole plan per
+entry — every one needing a hand judgement, because a blanket scale corrupts
+rates, allocations, ages, seeds and share counts. Several are traps:
+`roth_conversion.toBracketTop` reads like dollars and is a rate; `solver.from`
+is a YEAR under `retire_year_sweep` while `solver.step` is DOLLARS under
+`swr_curve`, so the classifier would have to be union-discriminant aware, not
+path-keyed; `holdings[].quantity` has to scale with `balance` or share × price
+stops reconciling; and a free-text note reading "Dad's inheritance, $340k"
+walks straight past any numeric scaler. On top of the cost, the promise was
+not quite deliverable: with tax brackets, IRMAA and ACA thresholds unscaled,
+the success percentage shifts, so "truthful outcomes" would have required
+scaling the tax tables too. Shown the price, the owner took the sample
+household — which is 90% of the demonstration for a tenth of the work and,
+being a different dataset entirely, has no leak surface at all.
+
+**WHY IT OVERRIDES RATHER THAN REPLACES THE CHOICE.** The mode is a flag
+(`fplan-friend-mode`) that resolveStorageForBoot and resolveBootGate consult
+BEFORE the remembered choice, returning its own OPFS folder (`fplan-friend`,
+its own Web-Lock scope). STORAGE_CHOICE_KEY and the saved folder handle are
+untouched, so turning the mode off restores the real folder with no re-pick
+and no permission prompt. It also short-circuits every row of the gate
+matrix, which means it can be turned on from any state at all — including a
+first visit that has never chosen storage, and a folder whose permission has
+lapsed.
+
+**IT SEEDS, IT NEVER ASKS.** initDataDir gets `seedStarterProfile` for the
+same reason D8's demo does, and profileSetupNeeded returns false: a filled
+example is the entire point, and stopping to ask a friend for a birth year
+would be absurd.
+
+**THE SIDEBAR IS THE SAFETY.** folderControlLabel returns "Show a friend
+mode" ahead of every other reading, including a picked folder's name. The
+failure this guards is not privacy but the reverse: forgetting the mode is on
+and typing a real change into the sample, where it stays. For the same
+reason the folder menu becomes a note rather than the switcher — offering to
+switch to a folder the next boot would ignore is a control that lies.
+
+Proven end to end in a real browser rather than asserted: the walkthrough
+turns the mode on, sees a different household served, reads the real folder's
+profile.json straight out of OPFS to confirm it was not written, and turns
+the mode off to see the original come back. It fails when the override is
+sabotaged. The discriminator is the whole profile, not a name — the
+walkthrough's own household IS the starter profile with the path counts
+turned down, so Alex and Jordan appear on both sides of the switch.

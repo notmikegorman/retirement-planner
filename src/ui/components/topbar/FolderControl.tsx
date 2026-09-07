@@ -27,6 +27,7 @@ import { api, backendMode } from '../../api';
 import {
   listRememberedFolders,
   openRememberedFolder,
+  readFriendMode,
   readStorageChoice,
   loadFolderHandle,
   saveFolderHandle,
@@ -36,6 +37,7 @@ import {
 } from '../../local/storageChoice';
 import {
   DEMO_FOLDER_NOTE,
+  FRIEND_MODE_NOTE,
   NEW_FOLDER_HINT,
   OPFS_STAYS_NOTE,
   SERVER_FOLDER_NOTE,
@@ -94,16 +96,20 @@ export function FolderControl() {
     }
     const choice = readStorageChoice();
     const canPickFolder = supportsFolderPicker();
-    setFacts({ mode: 'local', choice, canPickFolder, folderName: null });
+    const friendMode = readFriendMode();
+    setFacts({ mode: 'local', choice, canPickFolder, folderName: null, friendMode });
     void (async () => {
-      const saved = choice === 'folder' ? await loadFolderHandle() : null;
-      const list = canPickFolder ? await listRememberedFolders() : [];
+      // The real folder's handle is not even loaded while the mode is on:
+      // the control has nothing to say about a folder the app did not open.
+      const saved = choice === 'folder' && !friendMode ? await loadFolderHandle() : null;
+      const list = canPickFolder && !friendMode ? await listRememberedFolders() : [];
       if (cancelled) return;
       setFacts({
         mode: 'local',
         choice,
         canPickFolder,
         folderName: saved?.handle.name ?? null,
+        friendMode,
       });
       setCurrentId(saved?.id ?? null);
       setFolders(list);
@@ -208,6 +214,7 @@ export function FolderControl() {
         <div className="folder-menu" role="menu" aria-label="Data folders">
           {kind === 'server-note' && <div className="muted">{SERVER_FOLDER_NOTE}</div>}
           {kind === 'demo-note' && <div className="muted">{DEMO_FOLDER_NOTE}</div>}
+          {kind === 'friend-note' && <div className="muted">{FRIEND_MODE_NOTE}</div>}
           {kind === 'switcher' && (
             <>
               {folders.length > 0 && (

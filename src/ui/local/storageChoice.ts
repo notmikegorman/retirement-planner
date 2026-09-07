@@ -59,6 +59,64 @@ export const OPFS_FOLDER = 'fplan-data';
 export const OPFS_FOLDER_ID = `opfs:${OPFS_FOLDER}`;
 
 // ---------------------------------------------------------------------------
+// Show a friend mode
+// ---------------------------------------------------------------------------
+
+/**
+ * SHOW A FRIEND MODE: a second, entirely separate OPFS folder holding the
+ * fictional example household, which the app boots on INSTEAD of the real
+ * storage while the mode is on.
+ *
+ * WHY A WHOLE SEPARATE FOLDER rather than masking numbers on screen. The
+ * point of the mode is that a friend looking over your shoulder sees no real
+ * figure of yours — and a display-layer mask has to be right at every single
+ * site that renders a number: cards, tables, tooltips, chart axes and
+ * labels, the CSV in Save a copy. One missed site is the whole feature
+ * failing at the only moment it matters. Booting a different folder has no
+ * such surface: the real data is never read, so nothing downstream can leak
+ * it, and every figure on screen — including the simulations, which run on
+ * the sample household — is consistently made up.
+ *
+ * WHY IT DOES NOT TOUCH THE REMEMBERED CHOICE. Turning the mode on must not
+ * cost you the folder you picked: STORAGE_CHOICE_KEY and the saved handle
+ * are left exactly as they are, and this flag simply OVERRIDES them for as
+ * long as it is set. Turning the mode off restores the real folder with no
+ * re-picking and no permission prompt.
+ *
+ * EDITS MADE IN THE MODE ARE KEPT — in the friend folder, where they belong.
+ * A demo you have already walked through once should still be where you left
+ * it; none of it can reach the real data, which is the only guarantee that
+ * matters here.
+ */
+export const FRIEND_MODE_KEY = 'fplan-friend-mode';
+
+/** The OPFS directory the sample household lives in — never the real one. */
+export const FRIEND_OPFS_FOLDER = 'fplan-friend';
+
+/** Its own Web-Lock scope: a different folder is a different writer. */
+export const FRIEND_OPFS_FOLDER_ID = `opfs:${FRIEND_OPFS_FOLDER}`;
+
+/** Is the mode on? Storage being unreadable reads as OFF — the safe side is
+ *  showing your own data to you, never the reverse. */
+export function readFriendMode(): boolean {
+  try {
+    return localStorage.getItem(FRIEND_MODE_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+/** Turn the mode on or off. The caller reloads; boot re-reads this. */
+export function writeFriendMode(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(FRIEND_MODE_KEY, 'on');
+    else localStorage.removeItem(FRIEND_MODE_KEY);
+  } catch {
+    /* storage disabled: the toggle cannot persist, and boot will read OFF */
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The remembered choice (localStorage)
 // ---------------------------------------------------------------------------
 
@@ -360,6 +418,8 @@ export type BootGateState =
   | { kind: 'reconnect'; folderName: string }
   /** Boot straight onto OPFS. `demo` marks the no-picker fallback (D8). */
   | { kind: 'ready-opfs'; demo: boolean }
+  /** Show a friend mode: boot the sample household's own OPFS folder. */
+  | { kind: 'ready-friend' }
   /** Boot onto the picked folder; permission already granted. */
   | { kind: 'ready-folder' };
 
@@ -388,7 +448,14 @@ export function resolveBootGate(facts: {
   handleFound: boolean;
   folderName: string | null;
   permission: PermissionState | null;
+  friendMode?: boolean;
 }): BootGateState {
+  // FIRST, ahead of every other row: the mode overrides the remembered
+  // choice, so it must never stop at the chooser or a folder reconnect. Its
+  // storage is OPFS, always present, never needing permission — which is
+  // also what makes turning it on safe from any state, including one whose
+  // real folder currently needs a re-grant.
+  if (facts.friendMode === true) return { kind: 'ready-friend' };
   if (facts.choice === 'folder') {
     if (!facts.handleFound) return { kind: 'choose', canPickFolder: facts.canPickFolder };
     if (facts.permission === 'granted' || facts.permission === null) {
@@ -421,8 +488,15 @@ export function resolveBootGate(facts: {
  *                                     so abandoning setup and reloading lands
  *                                     back on setup.
  */
-export function profileSetupNeeded(facts: { demo: boolean; profileExists: boolean }): boolean {
-  if (facts.demo) return false;
+export function profileSetupNeeded(facts: {
+  demo: boolean;
+  profileExists: boolean;
+  friendMode?: boolean;
+}): boolean {
+  // Show a friend mode reads exactly like the demo here, and for the same
+  // reason: its whole purpose is a filled example household, so it must
+  // never stop to ask a stranger's birth year.
+  if (facts.demo || facts.friendMode === true) return false;
   return !facts.profileExists;
 }
 
@@ -445,6 +519,7 @@ export async function computeBootGate(): Promise<BootGateState> {
     handleFound: saved !== null,
     folderName: saved?.handle.name ?? null,
     permission,
+    friendMode: readFriendMode(),
   });
 }
 
@@ -453,7 +528,7 @@ export async function computeBootGate(): Promise<BootGateState> {
 // ---------------------------------------------------------------------------
 
 export interface ResolvedStorage {
-  kind: StorageChoice;
+  kind: StorageChoice | 'friend';
   handle: FileSystemDirectoryHandle;
   /** Web-Lock scope: same folder ⇒ same id ⇒ same single-writer contention. */
   folderId: string;
@@ -468,6 +543,19 @@ export interface ResolvedStorage {
  * retry re-runs the gate.
  */
 export async function resolveStorageForBoot(): Promise<ResolvedStorage> {
+  // The override, before the remembered choice is even read: while the mode
+  // is on there is exactly one answer, and the real folder is not opened at
+  // all — not read, not locked, not listed.
+  if (readFriendMode()) {
+    const opfs = await navigator.storage.getDirectory();
+    const handle = await opfs.getDirectoryHandle(FRIEND_OPFS_FOLDER, { create: true });
+    return {
+      kind: 'friend',
+      handle,
+      folderId: FRIEND_OPFS_FOLDER_ID,
+      label: '(sample data — Show a friend mode)',
+    };
+  }
   const choice = readStorageChoice();
   if (choice === 'folder') {
     const saved = await loadFolderHandle();

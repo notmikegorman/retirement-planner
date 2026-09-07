@@ -210,7 +210,12 @@ export async function bootLocalBackend(): Promise<Api> {
    * same fact resolveBootGate computes: OPFS on a browser with no picker.
    */
   const demo = storage.kind === 'opfs' && !supportsFolderPicker();
-  const init = await stores.data.initDataDir({ seedStarterProfile: demo });
+  // Show a friend mode seeds the same fictional household for the same
+  // reason the demo does: a filled example is the entire point, and an empty
+  // folder would drop your friend on the setup step instead of the app.
+  const init = await stores.data.initDataDir({
+    seedStarterProfile: demo || storage.kind === 'friend',
+  });
   const services: Services = createServices(stores, createBrowserRunExecutor(), {
     // The beforeunload warning, armed exactly while any scoring is in flight
     // (scoringGuard.ts — the same discipline as the search guard).

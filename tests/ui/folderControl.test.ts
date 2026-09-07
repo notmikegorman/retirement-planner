@@ -181,6 +181,64 @@ describe('the switch keeps the guard discipline (source scans)', () => {
     expect(writerGuard).toContain('bfcache');
   });
 
+  it('Show a friend mode names ITSELF in the sidebar, ahead of any folder', () => {
+    // The label is the only thing on screen at all times that says the
+    // numbers are invented, and it is what stops a real edit being typed
+    // into the sample. It must therefore beat every other reading — even a
+    // picked folder whose name would otherwise win.
+    expect(
+      folderControlLabel({
+        mode: 'local',
+        choice: 'folder',
+        canPickFolder: true,
+        folderName: 'Retirment Planner',
+        friendMode: true,
+      }),
+    ).toBe('Show a friend mode');
+    expect(
+      folderControlLabel({
+        mode: 'local',
+        choice: 'opfs',
+        canPickFolder: true,
+        folderName: null,
+        friendMode: true,
+      }),
+    ).toBe('Show a friend mode');
+    // Off, the existing readings are untouched.
+    expect(
+      folderControlLabel({
+        mode: 'local',
+        choice: 'folder',
+        canPickFolder: true,
+        folderName: 'Retirment Planner',
+        friendMode: false,
+      }),
+    ).toBe('Retirment Planner');
+  });
+
+  it('the menu explains the mode instead of offering a switch it would ignore', () => {
+    // Picking a folder while the override is on would write a choice the
+    // next boot does not honour — a control that lies. So: a note.
+    expect(
+      folderMenuKind({
+        mode: 'local',
+        choice: 'folder',
+        canPickFolder: true,
+        folderName: 'x',
+        friendMode: true,
+      }),
+    ).toBe('friend-note');
+    expect(
+      folderMenuKind({
+        mode: 'local',
+        choice: 'folder',
+        canPickFolder: true,
+        folderName: 'x',
+        friendMode: false,
+      }),
+    ).toBe('switcher');
+  });
+
   it('loads the local machinery lazily — the HTTP bundle stays pure', () => {
     // The same discipline as api.ts's lazy backend: FolderControl renders in
     // every mode, so its static imports must not drag the local chunk in.

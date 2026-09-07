@@ -112,6 +112,26 @@ Whatever you do, **include `networth.json`**. Everything else can be retyped
 from statements; that file is the only record of what the portfolio was worth
 on past days, and nothing reconstructs it.
 
+### Show a friend
+
+**Settings → Advanced → Show a friend mode** runs the app on a complete
+invented household instead of yours, so you can show someone how the thing
+works without your finances on the screen.
+
+It is a storage switch, not a blur: while the mode is on your own data is not
+opened at all — not read, not listed, not locked — so there is no card,
+tooltip, chart axis or export that could leak a real figure of yours. What
+your friend sees is the same fictional household a first-time visitor gets
+(Alex and Jordan), and the simulations are really running, on really invented
+money.
+
+Your own data stays exactly where it is, and the folder you picked stays
+picked: turning the mode off brings everything back with no re-choosing and no
+permission prompt. Anything changed while the mode is on stays with the
+sample. The sidebar reads **Show a friend mode** for as long as it is on,
+which is how you avoid typing a real change into a household that is not
+yours.
+
 ### Sharing the folder between two machines
 
 Put the folder in iCloud Drive (or Dropbox) and two people can each point

@@ -31,6 +31,8 @@ export type FolderControlFacts =
       canPickFolder: boolean;
       /** The picked folder's name, when the choice is 'folder'. */
       folderName: string | null;
+      /** Show a friend mode: the sample household overrides the choice. */
+      friendMode?: boolean;
     };
 
 /**
@@ -55,6 +57,11 @@ export function folderControlLabel(facts: FolderControlFacts): string {
   if (facts.mode === 'http') {
     return facts.dataDir === null ? '…' : serverFolderName(facts.dataDir);
   }
+  // Ahead of the choice, because the mode overrides it — and because this
+  // line is the one thing on screen at all times that says the numbers are
+  // not yours. Forgetting the mode is on is the failure that matters here:
+  // it is how a session's real work gets typed into a throwaway folder.
+  if (facts.friendMode === true) return 'Show a friend mode';
   if (facts.choice === 'folder') return facts.folderName ?? 'your data folder';
   if (facts.choice === 'opfs') {
     return facts.canPickFolder ? 'Browser-private storage' : 'Demo storage';
@@ -68,10 +75,13 @@ export function folderControlLabel(facts: FolderControlFacts): string {
  * A remembered pre-cut 'opfs' choice on a picker browser still gets the
  * switcher — that user can move to folders; only the pickerless demo cannot.
  */
-export type FolderMenuKind = 'switcher' | 'demo-note' | 'server-note';
+export type FolderMenuKind = 'switcher' | 'demo-note' | 'server-note' | 'friend-note';
 
 export function folderMenuKind(facts: FolderControlFacts): FolderMenuKind {
   if (facts.mode === 'http') return 'server-note';
+  // The switcher would be a lie while the mode overrides the choice: picking
+  // a folder here would write a choice the boot then ignores.
+  if (facts.mode === 'local' && facts.friendMode === true) return 'friend-note';
   return facts.canPickFolder ? 'switcher' : 'demo-note';
 }
 
@@ -90,6 +100,12 @@ export const DEMO_FOLDER_NOTE =
   'Demo storage lives inside this browser profile — there is no folder connection to ' +
   'switch. The folder picker ships in Chrome, Edge, and Brave; open this page there for ' +
   'file-backed folders you can switch between.';
+
+/** Show a friend mode: the choice is overridden, so there is nothing to switch. */
+export const FRIEND_MODE_NOTE =
+  'Show a friend mode is on, so the app is running on the sample household and your own ' +
+  'data is not open at all. Anything you change here stays with the sample. Turn the mode ' +
+  'off on the Settings page to go back to your own data — it is exactly where you left it.';
 
 /** The hint under "New folder…" — why an empty pick is the fresh start. */
 export const NEW_FOLDER_HINT =

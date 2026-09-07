@@ -565,6 +565,70 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     await download.delete();
   }, 300_000);
 
+  it('Show a friend mode boots the sample household, and leaves the real folder untouched', async () => {
+    // The one claim worth proving in a real browser: while the mode is on
+    // the app is not merely HIDING your data — it never opens it. So:
+    // (1) what the app serves changes, (2) the real OPFS folder is
+    // byte-identical throughout, (3) turning it off brings it straight back
+    // with no chooser, no reconnect and no setup step.
+    //
+    // The discriminator is NOT a name: this walkthrough's own household is
+    // the starter profile with the path counts turned down (driveFixtures'
+    // driveProfile), so Alex and Jordan appear on both sides. The whole
+    // profile is the signature, and mcPathsInteractive is the positive
+    // identification — the sample's own 1,000 against the drive's 100.
+    const servedProfile = () =>
+      page.evaluate(() =>
+        (
+          window as unknown as {
+            __fplanApi: { getProfile(): Promise<Record<string, unknown>> };
+          }
+        ).__fplanApi.getProfile(),
+      );
+    /** The real folder's profile.json, read straight from OPFS. */
+    const realFolderProfile = () =>
+      page.evaluate(async () => {
+        const opfs = await navigator.storage.getDirectory();
+        const root = await opfs.getDirectoryHandle('fplan-data');
+        return (await (await (await root.getFileHandle('profile.json')).getFile()).text()) as string;
+      });
+
+    const mine = JSON.stringify(await servedProfile());
+    const realBefore = await realFolderProfile();
+
+    // The previous case ended in a reload, which lands on the remembered
+    // MODULE but not its tab — so re-open Advanced before reaching for a
+    // card that only exists there.
+    await page.getByRole('tab', { name: 'Advanced' }).click();
+    const card = page
+      .locator('.card')
+      .filter({ has: page.getByRole('heading', { name: 'Show a friend mode' }) });
+    await card.getByRole('button', { name: 'Turn on Show a friend mode' }).click();
+    await page.locator('.sideNav').waitFor({ state: 'visible', timeout: 120_000 });
+
+    // ON: a different household is served...
+    await expect
+      .poll(async () => JSON.stringify(await servedProfile()), { timeout: 120_000 })
+      .not.toBe(mine);
+    expect((await servedProfile()).settings).toMatchObject({
+      mcPathsInteractive: 1000,
+    });
+    // ...the sidebar says so the whole time, which is what stops a real edit
+    // being typed into the sample by mistake...
+    expect(await page.locator('.sideNav').innerText()).toContain('Show a friend mode');
+    // ...and the real folder was not written, not even touched.
+    expect(await realFolderProfile()).toBe(realBefore);
+
+    // OFF: straight back to exactly what was served before.
+    await page.getByRole('tab', { name: 'Advanced' }).click();
+    await card.getByRole('button', { name: 'Turn off and go back to my data' }).click();
+    await page.locator('.sideNav').waitFor({ state: 'visible', timeout: 120_000 });
+    await expect
+      .poll(async () => JSON.stringify(await servedProfile()), { timeout: 120_000 })
+      .toBe(mine);
+    expect(await page.locator('.sideNav').innerText()).not.toContain('Show a friend mode');
+  }, 300_000);
+
   it('a deep link under the base reloads through the 404 trick', async () => {
     const response = await page.goto(`${staticServer.origin}${BASE}/expenses`);
     // The status IS the proof: no file answered — the custom 404 page (a
