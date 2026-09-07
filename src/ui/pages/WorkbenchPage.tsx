@@ -30,6 +30,7 @@ import type {
   Scenario,
   SocialSecurityData,
 } from '../../shared/types';
+import { holdingsSymbols } from '../../shared/holdings';
 import { api, pollRun } from '../api';
 import { simulationReadiness } from '../firstRun';
 import {
@@ -556,15 +557,26 @@ export function WorkbenchPage({ route, navigate, storedTab }: PageProps) {
     setRunNow({ status: 'quotes' });
     let outcome: RunNowState = { status: 'idle' };
     try {
-      // PRICES FIRST, ALWAYS. No symbols means every symbol any account holds.
-      // A per-symbol failure comes back as data rather than an exception and is
-      // survivable — the previous quote stays on file and the run prices that
-      // holding at it — so it is reported beside the number instead of
-      // abandoning a run the user is waiting on.
-      const refreshed = await api.refreshQuotes();
-      if (!alive.current || requestId.current !== id) return;
-      const missed = refreshFailureNote(refreshed.results);
-      if (missed !== null) outcome = { status: 'error', message: missed };
+      // PRICES FIRST, WHEN THERE ARE ANY. A per-symbol failure comes back as
+      // data rather than an exception and is survivable — the previous quote
+      // stays on file and the run prices that holding at it — so it is
+      // reported beside the number instead of abandoning a run the user is
+      // waiting on.
+      //
+      // A household whose accounts are plain BALANCES holds no symbols at
+      // all, and refreshQuotes rightly refuses an empty batch (a refresh that
+      // "succeeded" over nothing would read as prices being current when none
+      // exist). But that refusal is an exception, and it was landing in the
+      // catch below — so Run now reported a failure AND never ran, for a
+      // household that simply has no prices to fetch. Nothing to refresh is
+      // not a failed refresh: skip it and run. (localBackend's own scoring
+      // path already guards the same call the same way.)
+      if (holdingsSymbols(profile).length > 0) {
+        const refreshed = await api.refreshQuotes();
+        if (!alive.current || requestId.current !== id) return;
+        const missed = refreshFailureNote(refreshed.results);
+        if (missed !== null) outcome = { status: 'error', message: missed };
+      }
       setRunNow({ status: 'running' });
       await runPlan(draft, finalRunParams(profile.settings), id);
     } catch (err) {

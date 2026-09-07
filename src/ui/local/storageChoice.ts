@@ -148,6 +148,52 @@ export function readFriendMode(): boolean {
  *
  * It touches ONLY the friend folder. The real storage is not named here.
  */
+export const SAMPLE_VERSION_FILE = '.sample-version';
+
+/**
+ * Re-seed the sample if the shipped defaults have moved since this copy was
+ * made — the repair that means the mode never needs looking after.
+ *
+ * Returns the handle to use: the same one when the copy is current, a fresh
+ * one when it was thrown away. Called before anything reads the folder.
+ *
+ * A dot-file, so the backup skips it as plumbing rather than data. Two tabs
+ * racing here both do the same idempotent thing to a folder whose whole
+ * contents are disposable, which is why this runs outside the writer guard.
+ */
+export async function ensureSampleIsCurrent(
+  handle: FileSystemDirectoryHandle,
+  fingerprint: string,
+): Promise<FileSystemDirectoryHandle> {
+  let stored: string | null = null;
+  try {
+    stored = (await (await (await handle.getFileHandle(SAMPLE_VERSION_FILE)).getFile()).text())
+      .trim();
+  } catch {
+    stored = null; // absent or unreadable: seeded before this existed, or damaged
+  }
+  if (stored === fingerprint) return handle;
+  await resetFriendFolder();
+  const opfs = await navigator.storage.getDirectory();
+  return opfs.getDirectoryHandle(FRIEND_OPFS_FOLDER, { create: true });
+}
+
+/** Record which defaults this copy was seeded from. Best-effort by design:
+ *  a failure costs one extra reseed on the next boot, never a broken demo. */
+export async function markSampleVersion(
+  handle: FileSystemDirectoryHandle,
+  fingerprint: string,
+): Promise<void> {
+  try {
+    const file = await handle.getFileHandle(SAMPLE_VERSION_FILE, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(`${fingerprint}\n`);
+    await writable.close();
+  } catch {
+    /* see above */
+  }
+}
+
 export async function resetFriendFolder(): Promise<void> {
   const opfs = await navigator.storage.getDirectory();
   try {

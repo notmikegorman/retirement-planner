@@ -2631,3 +2631,42 @@ Three tests that spread the seeded profile and then set `charitableMonthly` or
 lines exist they are the truth and the scalars are their sum, so those cases
 were setting fields the engine had stopped reading. They exercise the scalar
 path, which stays supported for every profile written before itemisation.
+
+## The sample looks after itself (2026-09-07, eighteenth pass)
+
+**"I want it to show data without me having to fix stuff."** Fair. Two things
+stood between opening the mode and talking someone through a plan, and
+neither should have been the owner's problem.
+
+**The sample now re-seeds itself when it is stale.** bundledDefaultsFingerprint
+hashes every shipped default, path and text, sorted; the friend folder carries
+the fingerprint it was seeded from in `.sample-version`, and a boot that finds
+a different one throws the folder away and starts over before the page is
+drawn. The folder is disposable by definition, so this costs nothing and means
+the mode never needs looking after: change the example household, and every
+browser holding an old copy picks it up on its next load.
+
+It also repairs the folder that was already wrong. The owner's copy predates
+the marker, so it cannot match — which is exactly the state that heals. That
+closes the loop the stash leak opened: the fix stopped new pollution, this
+removes the pollution already sitting in the one folder that had it, and the
+0.0% goes with it. Reproduced end to end, and now a walkthrough case: plant a
+$1.2M housing move in the sample's plan, delete the marker, reload, and the
+plan comes back clean.
+
+**Run now no longer fails on a household with no tickers.** The handler
+refreshed prices unconditionally, and defaultRefreshSymbols rightly refuses an
+empty batch — a refresh that "succeeded" over nothing would read as prices
+being current when none exist. But that refusal is an EXCEPTION, and it landed
+in the catch that reports "Run now failed", *and skipped the run entirely*. So
+a balance-only household — the example is one, and so is anyone who has not
+switched an account to holdings mode — pressed Run now and got a red banner
+and no answer. Nothing to refresh is not a failed refresh: the handler skips
+it and runs, which is the same guard localBackend's own scoring path already
+applied to the same call. The example now runs to Final quality · 10,000
+paths and reports 94.5%.
+
+The stamp is written AFTER seeding, so a boot interrupted mid-seed leaves the
+folder unmarked and the next one starts it over rather than trusting half a
+copy. Marking is best-effort: a failure costs one extra reseed, never a
+broken demo.

@@ -654,6 +654,54 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     // ...and the real folder was not written, not even touched.
     expect(await realFolderProfile()).toBe(realBefore);
 
+    // A STALE OR POLLUTED SAMPLE REPAIRS ITSELF, with nothing pressed. This
+    // is the promise the mode lives or dies on: the owner opens it to show
+    // someone, and it shows a working plan. It earned the test — a real
+    // housing move, leaked in by the mis-keyed stash, once bankrupted the
+    // invented household and reported 0.0%, and fixing the leak could not
+    // clean the folder already holding it.
+    await page.evaluate(async () => {
+      const opfs = await navigator.storage.getDirectory();
+      const root = await opfs.getDirectoryHandle('fplan-friend');
+      const handle = await root.getFileHandle('plan.json');
+      const plan = JSON.parse(await (await handle.getFile()).text()) as Record<string, unknown>;
+      plan.housing = {
+        sellDate: '2027-06',
+        purchasePrice: 1_200_000,
+        propertyTaxAnnual: 12_000,
+        insuranceAnnual: 3_600,
+        appreciationRate: 0.03,
+        rentMonthly: 2_500,
+        rentMonths: 2,
+        financing: { type: 'cash' },
+      };
+      const writable = await handle.createWritable();
+      await writable.write(`${JSON.stringify(plan, null, 2)}\n`);
+      await writable.close();
+      // The state the owner's own folder was in: seeded before the marker
+      // existed, so it cannot match the shipped defaults.
+      await root.removeEntry('.sample-version');
+    });
+    await page.reload();
+    await page.locator('.sideNav').waitFor({ state: 'visible', timeout: 240_000 });
+    // Asked of the APP, not the file: the reseed wipes the folder and
+    // plan.json is written lazily on first read, so "no file yet" and "a
+    // fresh plan" are the same healthy state, and this is the one the
+    // household actually gets served.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() =>
+            (
+              window as unknown as {
+                __fplanApi: { getPlan(): Promise<{ housing?: unknown }> };
+              }
+            ).__fplanApi.getPlan().then((pl) => pl.housing === undefined),
+          ),
+        { timeout: 120_000 },
+      )
+      .toBe(true);
+
     // OFF: straight back to exactly what was served before.
     await page.getByRole('tab', { name: 'Advanced' }).click();
     await card.getByRole('button', { name: 'Turn off and go back to my data' }).click();

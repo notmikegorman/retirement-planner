@@ -69,9 +69,14 @@ import { createSearchManager } from '../../store/searchManager';
 import type { FileStore } from '../../shared/fileStore';
 import { createFsaFileStore } from '../io/fsaFileStore';
 import { sweepSwapArtifacts } from '../io/swapArtifacts';
-import { resolveStorageForBoot, supportsFolderPicker } from './storageChoice';
+import {
+  ensureSampleIsCurrent,
+  markSampleVersion,
+  resolveStorageForBoot,
+  supportsFolderPicker,
+} from './storageChoice';
 import type { Api } from '../api';
-import { bundledDefaults } from './bundledDefaults';
+import { bundledDefaults, bundledDefaultsFingerprint } from './bundledDefaults';
 import { createBrowserRunExecutor } from './browserRunExecutor';
 import { createBrowserSearchRunner } from './searchClient';
 import { acquireBrowserWriterGuard } from '../io/browserWriterGuard';
@@ -179,7 +184,16 @@ export async function bootLocalBackend(): Promise<Api> {
   // real folder, or the OPFS folder the automated lane and the demo fallback
   // drive. Everything below is identical either way — the driver's own rule.
   const storage = await resolveStorageForBoot();
-  const handle = storage.handle;
+  // Show a friend mode: throw the sample away and start over whenever the
+  // shipped defaults have moved since this copy was made. The folder is
+  // disposable by definition, so the mode never needs looking after — and a
+  // copy carrying something it should not (see bundledDefaultsFingerprint)
+  // repairs itself here, before the page is drawn.
+  const sampleFingerprint = storage.kind === 'friend' ? bundledDefaultsFingerprint() : null;
+  const handle =
+    sampleFingerprint === null
+      ? storage.handle
+      : await ensureSampleIsCurrent(storage.handle, sampleFingerprint);
 
   // The guard FIRST — before initDataDir can touch a byte. One Web Lock,
   // scoped to this folder in this browser profile; browserWriterGuard.ts
@@ -216,6 +230,10 @@ export async function bootLocalBackend(): Promise<Api> {
   const init = await stores.data.initDataDir({
     seedStarterProfile: demo || storage.kind === 'friend',
   });
+  // Stamp AFTER seeding, so a boot interrupted mid-seed leaves the folder
+  // unmarked and the next one starts it over rather than trusting a half
+  // copy. Best-effort: a failure costs a reseed, never a broken demo.
+  if (sampleFingerprint !== null) await markSampleVersion(handle, sampleFingerprint);
   const services: Services = createServices(stores, createBrowserRunExecutor(), {
     // The beforeunload warning, armed exactly while any scoring is in flight
     // (scoringGuard.ts — the same discipline as the search guard).
