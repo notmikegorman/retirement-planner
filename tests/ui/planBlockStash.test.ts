@@ -198,3 +198,80 @@ describe('a restored value carries its condition (the provenance wordings)', () 
     expect(offer).toMatch(/Aug 29, 2026/);
   });
 });
+
+describe('Show a friend mode owns its own shelf (the 2026-09-07 leak)', () => {
+  // REPORTED FROM THE APP: "Model the move here" inside Show a friend mode
+  // rehydrated the owner's REAL housing block, figures and all. The mode
+  // boots a different folder, but localStorage is per ORIGIN — so a shelf
+  // keyed by the folder the CHOICE names, rather than the folder the app
+  // actually booted, hands the friend session the owner's own numbers. That
+  // is the exact failure the mode exists to prevent.
+  it('keys the shelf by the folder that BOOTED, not the one that is chosen', () => {
+    expect(
+      resolveStashFolderKey({
+        mode: 'local',
+        choice: 'folder',
+        folderId: 'folder-abc',
+        dataDir: null,
+        friendMode: true,
+      }),
+    ).toBe('opfs:fplan-friend');
+    // Including when the chosen storage is the real OPFS folder, whose key
+    // is otherwise one character away from the friend folder's.
+    expect(
+      resolveStashFolderKey({
+        mode: 'local',
+        choice: 'opfs',
+        folderId: null,
+        dataDir: null,
+        friendMode: true,
+      }),
+    ).toBe('opfs:fplan-friend');
+  });
+
+  it('is never the same shelf as the real folder — the property that matters', () => {
+    const real = resolveStashFolderKey({
+      mode: 'local',
+      choice: 'folder',
+      folderId: 'folder-abc',
+      dataDir: null,
+      friendMode: false,
+    });
+    const friend = resolveStashFolderKey({
+      mode: 'local',
+      choice: 'folder',
+      folderId: 'folder-abc',
+      dataDir: null,
+      friendMode: true,
+    });
+    expect(friend).not.toBe(real);
+    expect(stashKey(friend!, 'housing')).not.toBe(stashKey(real!, 'housing'));
+  });
+
+  it('leaves the parked HTTP server alone — it has no friend mode', () => {
+    expect(
+      resolveStashFolderKey({
+        mode: 'http',
+        choice: null,
+        folderId: null,
+        dataDir: '/x/data',
+        friendMode: true,
+      }),
+    ).toBe('/x/data');
+  });
+
+  it('off, or absent, keys exactly as it always did', () => {
+    expect(
+      resolveStashFolderKey({
+        mode: 'local',
+        choice: 'opfs',
+        folderId: null,
+        dataDir: null,
+        friendMode: false,
+      }),
+    ).toBe('opfs:fplan-data');
+    expect(
+      resolveStashFolderKey({ mode: 'local', choice: 'opfs', folderId: null, dataDir: null }),
+    ).toBe('opfs:fplan-data');
+  });
+});

@@ -855,6 +855,9 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
       ({ fixture }: { fixture: string }) => {
         try {
           localStorage.setItem('fplan-storage', 'opfs');
+          // Show a friend mode is ON by default (storageChoice.ts): this lane
+          // drives a user working on their OWN data, so it opts out explicitly.
+          localStorage.setItem('fplan-friend-mode', 'off');
         } catch {
           /* storage disabled: the gate will ask, and the drive will fail loudly */
         }

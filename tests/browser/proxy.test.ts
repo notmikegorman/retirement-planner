@@ -97,6 +97,8 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     await context.addInitScript((proxyUrl: string) => {
       localStorage.setItem('fplan-quote-proxy', proxyUrl);
       localStorage.setItem('fplan-storage', 'opfs');
+      // Friend mode defaults ON; this lane is a real-data session.
+      localStorage.setItem('fplan-friend-mode', 'off');
     }, proxy.origin);
 
     page = await context.newPage();

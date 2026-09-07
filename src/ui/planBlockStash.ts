@@ -28,14 +28,26 @@
  * mode — the server's dataDir path. One identity per folder, minted once,
  * reused everywhere a per-folder shelf is needed.
  *
+ * AND WHY SHOW A FRIEND MODE GETS ITS OWN (2026-09-07, a reported leak).
+ * The mode boots a different FOLDER, but localStorage is per ORIGIN, so a
+ * shelf keyed by the folder the CHOICE names — rather than the folder the
+ * app actually booted — hands the friend session the owner's real stashed
+ * housing block, in full, with the real figures in it. That is precisely
+ * what the mode exists to prevent, and it was reported from the app: "Model
+ * the move here" rehydrated the real move. So the friend folder's id is
+ * checked FIRST here, exactly as it is in resolveStorageForBoot, and the
+ * real folder's handle is not even loaded to find out what its key would be.
+ *
  * WIRED ONLY FOR HOUSING today, by the owner's scoping. The SEPP, insurance
  * and tithe toggles are candidates for the same treatment — see DECISIONS.md
  * ("The housing toggle keeps its configuration").
  */
 import { backendMode, api } from './api';
 import {
+  FRIEND_OPFS_FOLDER_ID,
   OPFS_FOLDER_ID,
   loadFolderHandle,
+  readFriendMode,
   readStorageChoice,
 } from './local/storageChoice';
 
@@ -124,7 +136,13 @@ export function resolveStashFolderKey(facts: {
   folderId: string | null;
   /** meta().dataDir in HTTP mode. */
   dataDir: string | null;
+  /** Show a friend mode: the booted folder, not the chosen one, owns the shelf. */
+  friendMode?: boolean;
 }): string | null {
+  // First, like the storage override it mirrors: while the mode is on, the
+  // app booted the friend folder, so the friend folder is what every
+  // per-folder shelf belongs to.
+  if (facts.mode === 'local' && facts.friendMode === true) return FRIEND_OPFS_FOLDER_ID;
   if (facts.mode === 'http') return facts.dataDir;
   if (facts.choice === 'opfs') return OPFS_FOLDER_ID;
   if (facts.choice === 'folder') return facts.folderId;
@@ -142,12 +160,17 @@ export async function stashFolderKey(): Promise<string | null> {
         dataDir: (await api.meta()).dataDir,
       });
     }
+    const friendMode = readFriendMode();
     const choice = readStorageChoice();
     return resolveStashFolderKey({
       mode: 'local',
       choice,
-      folderId: choice === 'folder' ? ((await loadFolderHandle())?.id ?? null) : null,
+      // Not loaded while the mode is on: the answer does not depend on it,
+      // and the mode's promise is that the real folder is not touched.
+      folderId:
+        choice === 'folder' && !friendMode ? ((await loadFolderHandle())?.id ?? null) : null,
       dataDir: null,
+      friendMode,
     });
   } catch {
     return null;

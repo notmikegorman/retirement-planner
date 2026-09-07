@@ -39,6 +39,7 @@ import {
   type PageProps,
   type SearchTabId,
 } from '../nav';
+import { stashFolderKey } from '../planBlockStash';
 import { useToast } from '../toast';
 import { SearchProgressView } from '../components/search/SearchProgressView';
 import { SearchReportView } from '../components/search/SearchReportView';
@@ -56,7 +57,25 @@ import {
 } from '../components/search/searchLogic';
 import { loadPlanIntoWorkbench } from './WorkbenchPage';
 
-const SPACE_STORAGE_KEY = 'fplan-search-space';
+/**
+ * The remembered search space — WHICH IS PER FOLDER, not per origin
+ * (2026-09-07). Its axes include `money` units, so the stored space can hold
+ * real figures: a spend sweep from $80k to $120k is a statement about the
+ * household that typed it. Keyed globally it leaked two ways — between two
+ * data folders, and, the one that was reported, into Show a friend mode,
+ * whose whole promise is that no real figure of the owner's reaches the
+ * screen. stashFolderKey() is the same per-folder identity the plan-block
+ * stash uses, and it already answers the friend folder while the mode is on.
+ *
+ * Null key (the gate not yet answered, storage disabled) means the space is
+ * simply not remembered — the honest degradation, and the same one the stash
+ * takes.
+ */
+const SPACE_STORAGE_PREFIX = 'fplan-search-space';
+
+function spaceStorageKey(folderKey: string): string {
+  return `${SPACE_STORAGE_PREFIX}:${folderKey}`;
+}
 
 /** How often a running search is re-read. It reports stages, not frames. */
 const POLL_MS = 1500;
@@ -158,6 +177,8 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
   const [history, setHistory] = useState<SearchSummary[]>([]);
 
   const alive = useRef(true);
+  /** The per-folder key for the remembered space; null = do not remember. */
+  const spaceKeyRef = useRef<string | null>(null);
   /**
    * The id of the search THIS page started and is waiting to show the report
    * for. An id rather than a boolean, and the difference is a real bug: with a
@@ -179,13 +200,20 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
   useEffect(() => {
     void (async () => {
       try {
-        const [loaded, profile] = await Promise.all([api.getPlan(), api.getProfile()]);
+        const [loaded, profile, folderKey] = await Promise.all([
+          api.getPlan(),
+          api.getProfile(),
+          stashFolderKey(),
+        ]);
         if (!alive.current) return;
+        spaceKeyRef.current = folderKey === null ? null : spaceStorageKey(folderKey);
         setFirstRun(simulationReadiness(profile).state === 'no-accounts');
         setPlan(loaded);
         const defaults = defaultAxisDrafts(loaded);
         const stored =
-          typeof localStorage === 'undefined' ? null : localStorage.getItem(SPACE_STORAGE_KEY);
+          typeof localStorage === 'undefined' || spaceKeyRef.current === null
+            ? null
+            : localStorage.getItem(spaceKeyRef.current);
         let restored: Partial<SpaceState> = {};
         try {
           restored = stored === null ? {} : (JSON.parse(stored) as Partial<SpaceState>);
@@ -216,8 +244,8 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
           // Rewrite the stored copy so the dead levels are gone for good and
           // the note below does not recur on the next load.
           try {
-            if (typeof localStorage !== 'undefined') {
-              localStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify(next));
+            if (typeof localStorage !== 'undefined' && spaceKeyRef.current !== null) {
+              localStorage.setItem(spaceKeyRef.current, JSON.stringify(next));
             }
           } catch {
             // Storage disabled: the healed space still runs, just unremembered.
@@ -236,8 +264,8 @@ export function SearchPage({ navigate, route, storedTab }: PageProps) {
       if (!s) return s;
       const next = { ...s, ...patch };
       try {
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(SPACE_STORAGE_KEY, JSON.stringify(next));
+        if (typeof localStorage !== 'undefined' && spaceKeyRef.current !== null) {
+          localStorage.setItem(spaceKeyRef.current, JSON.stringify(next));
         }
       } catch {
         // Storage disabled: the space is still editable, just not remembered.

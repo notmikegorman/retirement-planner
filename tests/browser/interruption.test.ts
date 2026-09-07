@@ -106,6 +106,9 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
         // would otherwise stop each world at the first-visit chooser).
         try {
           localStorage.setItem('fplan-storage', 'opfs');
+          // Show a friend mode is ON by default (storageChoice.ts): this lane
+          // drives a user working on their OWN data, so it opts out explicitly.
+          localStorage.setItem('fplan-friend-mode', 'off');
         } catch {
           /* storage disabled: the gate will ask, and the leg will fail loudly */
         }

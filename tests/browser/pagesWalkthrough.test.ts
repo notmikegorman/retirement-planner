@@ -151,7 +151,42 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     await staticServer?.close();
   });
 
-  it('a brand-new visit under the base asks THE question — one action, no OPFS door', async () => {
+  it('a brand-new visit lands in Show a friend mode — the app working, on nobody real', async () => {
+    // The mode is ON by default (storageChoice.ts): the first thing anyone
+    // sees is the app running on the invented household, not a question
+    // about where to put data they have not entered yet. Turning the mode
+    // off is what asks — the next leg.
+    await page.goto(`${staticServer.origin}${BASE}/`);
+    await page.locator('.sideNav').waitFor({ state: 'visible', timeout: 240_000 });
+    expect(await page.locator('.sideNav').innerText()).toContain('Show a friend mode');
+    expect(await chooserHeading().count()).toBe(0);
+    // It is the sample household, and it is REALLY there — seeded into its
+    // own OPFS folder, not the real one, which does not exist yet.
+    expect(
+      await page.evaluate(() =>
+        (
+          window as unknown as {
+            __fplanApi: { getProfile(): Promise<{ people: { name: string }[] }> };
+          }
+        ).__fplanApi.getProfile().then((p) => p.people[0]?.name ?? null),
+      ),
+    ).toBe('Alex');
+    expect(
+      await page.evaluate(async () => {
+        const opfs = await navigator.storage.getDirectory();
+        const names: string[] = [];
+        for await (const [name] of (
+          opfs as unknown as { entries(): AsyncIterable<[string, unknown]> }
+        ).entries()) {
+          names.push(name);
+        }
+        return names;
+      }),
+    ).toEqual(['fplan-friend']);
+  }, 300_000);
+
+  it('turning the mode off is what asks THE question — one action, no OPFS door', async () => {
+    await page.evaluate(() => localStorage.setItem('fplan-friend-mode', 'off'));
     await page.goto(`${staticServer.origin}${BASE}/`);
     await chooserHeading().waitFor({ state: 'visible', timeout: 60_000 });
     // Chromium ships the picker, so the folder action is THE answer…
@@ -679,6 +714,16 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
         value: undefined,
         configurable: true,
       });
+      // Show a friend mode is ON by default and overrides the gate, so a
+      // Safari user meets the sample household first, exactly like everyone
+      // else. This leg is about what is behind THAT — the D8 fallback the
+      // gate offers once the mode is off — so it opts out, which is what
+      // turning the mode off in Settings does.
+      try {
+        localStorage.setItem('fplan-friend-mode', 'off');
+      } catch {
+        /* storage disabled: the gate will ask, and the leg fails loudly */
+      }
     });
     const fbPage = await fallbackContext.newPage();
     fbPage.on('pageerror', (err) => pageErrors.push(String(err)));

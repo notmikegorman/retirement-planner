@@ -118,6 +118,11 @@ on past days, and nothing reconstructs it.
 invented household instead of yours, so you can show someone how the thing
 works without your finances on the screen.
 
+**It is on by default**, which is also what a first visit lands on: the app
+opens on the invented household rather than on a question about where to put
+data you have not entered yet. Turning the mode off is what asks that
+question — the right moment for it.
+
 It is a storage switch, not a blur: while the mode is on your own data is not
 opened at all — not read, not listed, not locked — so there is no card,
 tooltip, chart axis or export that could leak a real figure of yours. What
@@ -131,6 +136,12 @@ permission prompt. Anything changed while the mode is on stays with the
 sample. The sidebar reads **Show a friend mode** for as long as it is on,
 which is how you avoid typing a real change into a household that is not
 yours.
+
+That includes the two things the browser remembers per data folder rather
+than in it — the housing block the Housing toggle stashes when you turn it
+off, and the search space — which get their own shelf under the mode. Both
+are keyed by the folder the app actually booted, so neither can carry a real
+figure across.
 
 ### Sharing the folder between two machines
 

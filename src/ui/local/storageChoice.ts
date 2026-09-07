@@ -90,29 +90,59 @@ export const OPFS_FOLDER_ID = `opfs:${OPFS_FOLDER}`;
  */
 export const FRIEND_MODE_KEY = 'fplan-friend-mode';
 
+/**
+ * ON BY DEFAULT (the owner's call, 2026-09-07). The flag is stored as the
+ * explicit string 'off' to leave it; anything else — including a browser
+ * that has never heard of this app — reads as ON.
+ *
+ * WHAT THAT BUYS: the failure this feature exists to prevent is a real
+ * figure reaching a screen someone else is looking at, and every way that
+ * happens starts with the mode being OFF when the owner believed it was on.
+ * Defaulting to on inverts the risk: the worst a wrong default can now do is
+ * show the owner an invented household until he turns it off, which is
+ * obvious within a second and costs one click.
+ *
+ * WHAT IT CHANGES FOR A FIRST VISIT: the app opens on the sample household
+ * rather than the storage chooser, for everyone. That is not a detour around
+ * the boot question so much as a better order for it — the visitor sees the
+ * app actually working before being asked where their data should live, and
+ * turning the mode off is what asks. A browser that has never chosen storage
+ * lands on the chooser the moment the mode goes off, which is the right
+ * moment for it.
+ */
+const FRIEND_MODE_OFF = 'off';
+
 /** The OPFS directory the sample household lives in — never the real one. */
 export const FRIEND_OPFS_FOLDER = 'fplan-friend';
 
 /** Its own Web-Lock scope: a different folder is a different writer. */
 export const FRIEND_OPFS_FOLDER_ID = `opfs:${FRIEND_OPFS_FOLDER}`;
 
-/** Is the mode on? Storage being unreadable reads as OFF — the safe side is
- *  showing your own data to you, never the reverse. */
+/**
+ * Is the mode on? Only the explicit string 'off' turns it off, so an absent
+ * or unreadable value reads as ON — the direction that cannot leak. (The
+ * corner that costs: a browser where localStorage throws outright can never
+ * record the 'off', so it stays in the mode. Rare, and it fails towards
+ * privacy rather than away from it.)
+ */
 export function readFriendMode(): boolean {
   try {
-    return localStorage.getItem(FRIEND_MODE_KEY) === 'on';
+    return localStorage.getItem(FRIEND_MODE_KEY) !== FRIEND_MODE_OFF;
   } catch {
-    return false;
+    return true;
   }
 }
 
-/** Turn the mode on or off. The caller reloads; boot re-reads this. */
+/**
+ * Turn the mode on or off. Both states are written EXPLICITLY — removing the
+ * key would mean "on", which is the opposite of what turning it off means.
+ * The caller reloads; boot re-reads this.
+ */
 export function writeFriendMode(on: boolean): void {
   try {
-    if (on) localStorage.setItem(FRIEND_MODE_KEY, 'on');
-    else localStorage.removeItem(FRIEND_MODE_KEY);
+    localStorage.setItem(FRIEND_MODE_KEY, on ? 'on' : FRIEND_MODE_OFF);
   } catch {
-    /* storage disabled: the toggle cannot persist, and boot will read OFF */
+    /* storage disabled: the toggle cannot persist, and boot reads the default */
   }
 }
 
@@ -500,8 +530,27 @@ export function profileSetupNeeded(facts: {
   return !facts.profileExists;
 }
 
+/** The only facts that matter once the mode is on — the rule ignores the rest. */
+const FRIEND_GATE_FACTS = {
+  choice: null,
+  canPickFolder: false,
+  handleFound: false,
+  folderName: null,
+  permission: null,
+  friendMode: true,
+} as const;
+
 /** Gather the facts and apply the rule. Browser-side wrapper for main.tsx. */
 export async function computeBootGate(): Promise<BootGateState> {
+  // FIRST, before the choice is even read, and for the same reason
+  // resolveStorageForBoot checks it first: the mode overrides the choice, so
+  // no other row of the matrix can apply and the real folder's handle must
+  // not be loaded to decide. (Checking it further down cost a bug: the
+  // no-folder early return below had its own resolveBootGate call, so a
+  // brand-new visit — the exact case the ON-by-default is for — went
+  // straight to the chooser.)
+  const friendMode = readFriendMode();
+  if (friendMode) return resolveBootGate(FRIEND_GATE_FACTS);
   const choice = readStorageChoice();
   const canPickFolder = supportsFolderPicker();
   if (choice !== 'folder') {
@@ -519,7 +568,7 @@ export async function computeBootGate(): Promise<BootGateState> {
     handleFound: saved !== null,
     folderName: saved?.handle.name ?? null,
     permission,
-    friendMode: readFriendMode(),
+    friendMode,
   });
 }
 

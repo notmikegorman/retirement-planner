@@ -2532,3 +2532,56 @@ the mode off to see the original come back. It fails when the override is
 sabotaged. The discriminator is the whole profile, not a name — the
 walkthrough's own household IS the starter profile with the path counts
 turned down, so Alex and Jordan appear on both sides of the switch.
+
+## The friend mode's two leaks, and its new default (2026-09-07, sixteenth pass)
+
+**Reported from the app: "Model the move here" inside Show a friend mode
+rehydrated the owner's REAL housing block.** The mode boots a different
+FOLDER, and every store that lives in the folder was therefore already
+covered — but two things the browser remembers are keyed *by* the folder
+rather than kept *in* it, and localStorage is per ORIGIN, not per folder:
+
+  1. THE PLAN-BLOCK STASH (planBlockStash.ts). Its key came from
+     `readStorageChoice()` — the folder the choice NAMES, not the folder the
+     app BOOTED — so the friend session read the real folder's shelf and
+     handed back the real move, insurance quote and all. Worse in passing:
+     resolving that key called `loadFolderHandle()`, so the mode was touching
+     the real folder's handle after promising it would not.
+  2. THE SEARCH SPACE (SearchPage.tsx, `fplan-search-space`), which was not
+     folder-keyed at all. Its axes carry a `money` unit, so a stored space is
+     a statement about the household that typed it — a spend sweep from $80k
+     to $120k says plenty. Global, it leaked two ways: between two data
+     folders, and into the mode.
+
+Both now resolve through one friend-aware `resolveStashFolderKey`, which
+answers the friend folder FIRST — mirroring resolveStorageForBoot — and does
+not load the real handle to do it. The lesson worth keeping: the mode's
+guarantee is about the folder the app booted, so anything keyed by "which
+folder am I" has to ask that question the same way, and per-origin storage is
+where the exceptions hide. Anything added later that remembers a user VALUE
+outside the data folder needs the same key.
+
+**AND THE MODE IS NOW ON BY DEFAULT** (the owner's call). Only the explicit
+string 'off' turns it off; absent — a browser that has never heard of this
+app — reads as on. The reasoning is that every way this feature fails starts
+with the mode being OFF when the owner believed it was on, and defaulting to
+on inverts that risk: the worst a wrong default now does is show the owner an
+invented household until he clicks once, which is obvious immediately and
+costs nothing. A browser where localStorage throws outright can never record
+the 'off' and so stays in the mode — rare, and it fails towards privacy.
+
+**It changes what a first visit is**, and the walkthrough now documents that:
+the app opens on the sample household for everyone, and turning the mode off
+is what asks the storage question. That reads as a better order rather than a
+detour — the visitor sees the app actually working before being asked where
+their data should live, and a browser that has never chosen storage lands on
+the chooser the moment the mode goes off. The Safari/Firefox D8 fallback sits
+behind the same door and its leg opts out to reach it.
+
+One bug on the way in, worth recording because the shape recurs:
+computeBootGate had TWO resolveBootGate call sites — an early return for "no
+folder chosen" and the folder path below it — and the flag was threaded
+through only the second. The result was that a brand-new visit, the exact
+case the ON-by-default exists for, went straight to the chooser. The fix is
+the same shape as the rest of this feature: check the override FIRST, once,
+before any other fact is even read.
