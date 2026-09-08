@@ -138,3 +138,32 @@ Source: [Damodaran histretSP.xls](https://pages.stern.nyu.edu/~adamodar/pc/datas
 1931 stocks −43.84%, 2008 −36.55%, 1982 bonds +32.81%; geometric real returns: stocks
 **6.78%**, bonds 1.45%, bills 0.33%; CPI geometric mean 3.04%. Known vintage quirk: 2025
 stocks 17.72% (workbook) vs 17.78% (HTML) — workbook used.
+
+## Widow's Playbook — `src/content/widow-playbook.json`
+
+Checked **2026-09-08**. Unlike the tables above, this file is **not** seeded into
+the data folder: it is advice with statutory deadlines in it, read under stress
+by somebody who cannot check it, so a copy frozen in a folder seeded years ago
+would be a liability. It ships with the app and updates with it
+(`src/content/README.md` carries the reasoning).
+
+Only items making a claim about a number, a deadline or a rule are listed here.
+The rest of the file is conventional bereavement advice that asserts no fact —
+order extra death certificates, decide nothing irreversible — and carries no
+citation because there is nothing to cite.
+
+| Item | Claim | Source |
+|---|---|---|
+| `month/lump-sum` | SSA lump-sum death payment is **$255**; a surviving spouse living with the worker at death is eligible; must be applied for **within 2 years** of death and is never paid automatically | [SSA — Lump-sum death payment](https://www.ssa.gov/personal-record/when-someone-dies/lump-sum-death-payment); [CRS R43637](https://www.congress.gov/crs-product/R43637) |
+| `month/survivor-ss` | Survivor benefit may be claimed from **60** (50 if disabled); a surviving spouse may switch between the survivor benefit and their own **once**; survivor benefits **stop growing at survivor FRA** while an own benefit keeps growing to **70** | [SSA — Survivors benefits](https://www.ssa.gov/benefits/survivors/); [T. Rowe Price](https://www.troweprice.com/personal-investing/resources/insights/how-surviving-spouses-can-optimize-their-social-security-claiming-strategies.html); [Vanguard](https://investor.vanguard.com/investor-resources-education/social-security/survivors-benefits) |
+| `month/ira-decision` | A surviving spouse may treat an inherited IRA as her own **or** remain a beneficiary; remaining a beneficiary avoids the **10% early-withdrawal penalty before 59½**; a rollover defers RMDs to her own RMD age | [Kitces — spousal beneficiary RMD rules under SECURE 2.0](https://www.kitces.com/blog/rmd-spousal-election-secure-2-0-secure-act-rmd-rules-spousal-beneficiaries-retirement-account/); [Schwab](https://www.schwab.com/learn/story/inherited-ira-rules-secure-act-20-changes) |
+| `month/irmaa` | Death of a spouse is a qualifying IRMAA **life-changing event** (form **SSA-44**); SSA does **not** recalculate automatically | [SSA — Request to lower an IRMAA](https://www.ssa.gov/medicare/lower-irmaa) |
+| `year/filing-status` | Joint filing is allowed for the **year of death**; **Qualifying Surviving Spouse** for the two following years requires a **dependent child**; otherwise **Single** | [IRS VITA 4491, Filing Status](https://apps.irs.gov/app/vita/content/globalmedia/4491_filing_status.pdf); [H&R Block](https://www.hrblock.com/tax-center/filing/personal-tax-planning/qualifying-widow-or-widower/) |
+| `year/portability` | Form 706 portability (DSUE) election: ordinary deadline **9 months**, extendable to **15**; an estate not otherwise required to file has **5 years** under **Rev. Proc. 2022-32** | [The Tax Adviser](https://www.thetaxadviser.com/issues/2022/nov/updated-simplified-method-for-estate-portability-elections/); [IRS Instructions for Form 706](https://www.irs.gov/instructions/i706) |
+| `year/disclaimer` | A qualified disclaimer must be made within **9 months** of death | IRC §2518 (statutory) |
+
+⚠️ `ssa.gov` returns 403 to automated fetches, so the three SSA rows were
+confirmed from the agency's own pages as summarized in search results plus at
+least one independent corroborating source each, rather than by fetching the
+page directly. The figures ($255, two years, 60, one switch) are consistent
+across every source checked.

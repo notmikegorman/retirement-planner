@@ -1178,6 +1178,45 @@ export interface ProfileSettings {
   withdrawalPolicy: WithdrawalPolicy;
 }
 
+/**
+ * SOMEONE TO CALL — the Widow's Playbook's half of the profile, and the only
+ * part of it that is not a number.
+ *
+ * WHY IT IS PROFILE DATA. Everything else the playbook says it derives: the
+ * accounts, the survivor's income, whether the policy is still in force, what
+ * the plan says she can spend. What it cannot derive is the first thing she
+ * would actually reach for — who the attorney is, where the will is, which
+ * custodian holds the 401(k). The app knows every balance and not one phone
+ * number, and a playbook that says "call your attorney" to somebody who does
+ * not know the name has answered nothing.
+ *
+ * IT TRAVELS WITH THE FOLDER, which is the point and also the caution: these
+ * rows are names and phone numbers, so every copy of the data folder and
+ * every Save a copy carries them. That is the same bargain the balances
+ * already make, stated here so it is a decision rather than a surprise.
+ */
+export interface PlaybookContact {
+  /** Stable id, so edits and reorders never re-key a row. */
+  id: string;
+  /** What they are TO the household — "estate attorney", "CPA", "executor". */
+  role: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  /** Anything the name and number do not say: which firm, what they hold. */
+  notes?: string;
+}
+
+/** Where something lives. The playbook's answer to "where is the will?". */
+export interface PlaybookDocument {
+  id: string;
+  /** What it is — "Will", "Trust", "Deed", "Life policy", "Password manager". */
+  label: string;
+  /** Where to find it, in whatever words actually help: a drawer, a firm, a URL. */
+  location: string;
+  notes?: string;
+}
+
 export interface Profile {
   people: Person[];
   filing: { status: FilingStatus; state: StateCode };
@@ -1187,6 +1226,13 @@ export interface Profile {
   expenses: ProfileExpenses;
   health: HealthProfile;
   settings: ProfileSettings;
+  /**
+   * The Widow's Playbook's people and papers. ABSENT means none recorded —
+   * the playbook then shows the blanks by name rather than pretending, which
+   * is the honest reading of "nobody has filled this in yet".
+   */
+  contacts?: PlaybookContact[];
+  documents?: PlaybookDocument[];
 }
 
 // ---------------------------------------------------------------------------

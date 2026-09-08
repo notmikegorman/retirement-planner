@@ -56,7 +56,7 @@ const EVERY_ROUTE: Route[] = PAGES.flatMap((page) => [
 ]);
 
 describe('the vocabulary', () => {
-  it('covers the twelve modules: Plan first, the rest alphabetical', () => {
+  it('covers the thirteen modules: Plan first, the rest alphabetical', () => {
     // The owner's rules (2026-08-30): the old Profile page's tabs each
     // became a module, joined by Plan (id 'workbench' — the label changed,
     // the URL vocabulary did not) and Net worth. Plan sits FIRST, above the
@@ -65,7 +65,8 @@ describe('the vocabulary', () => {
     // the sidebar footer; App.tsx carries both rules. 'dashboard',
     // 'methodology', 'profile' and 'health' (its fields moved onto the
     // Settings page the same day) are tombstones, asserted with the
-    // unknown/legacy paths below.
+    // unknown/legacy paths below. Widow's Playbook joined on 2026-09-08 and
+    // lands last, which is where alphabetical puts it.
     expect([...PAGES]).toEqual([
       'workbench',
       'accounts',
@@ -79,6 +80,7 @@ describe('the vocabulary', () => {
       'search',
       'settings',
       'tithing',
+      'widow-playbook',
     ]);
     // Alphabetical below Plan is the rule, not a coincidence of the list.
     const rest = [...PAGES].slice(1);
@@ -291,8 +293,9 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 12 pages + 10 results tabs + 4 search tabs + 3 net-worth tabs = 29.
-    expect(paths.length).toBe(29);
+    // 13 pages + 10 results tabs + 4 search tabs + 3 net-worth tabs
+    // + 5 Widow's Playbook tabs = 35.
+    expect(paths.length).toBe(35);
   });
 });
 
@@ -565,7 +568,11 @@ describe('the pages render the vocabulary they are addressed by', () => {
     const start = source.indexOf(declaration);
     expect(start).toBeGreaterThanOrEqual(0);
     const body = source.slice(start, source.indexOf('};', start));
-    return [...body.matchAll(/^ {2}([a-z][a-z0-9]*):/gm)].map((m) => m[1]);
+    // Keys may be QUOTED — a hyphenated page id ('widow-playbook') cannot be
+    // a bare identifier — so the quotes are optional and stripped here. A
+    // pattern that only matched bare keys would report the label as missing
+    // when it is present, which is the least useful way for this to fail.
+    return [...body.matchAll(/^ {2}'?([a-z][a-z0-9-]*)'?:/gm)].map((m) => m[1]);
   }
 
   it('labels every page and every tab, in the order the URL vocabulary lists', () => {

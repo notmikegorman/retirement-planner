@@ -1,0 +1,150 @@
+{
+  "meta": {
+    "year": 2026,
+    "verified_on": "2026-09-08",
+    "source": "See VERIFICATIONS.md, 'Widow's Playbook' — every item carrying a number or a deadline cites its own source there.",
+    "notes": "The conventional half of the playbook. Items are advice, not computation: the app pairs each phase with what the plan knows about this household. Nothing here is legal or tax advice; items that need a professional say so."
+  },
+  "phases": [
+    {
+      "id": "week",
+      "label": "The first week",
+      "heading": "Almost nothing has a deadline this week",
+      "intro": "Two things need doing and the rest can wait, including everything involving money. The urgency you feel is real and almost none of it belongs to the paperwork.",
+      "items": [
+        {
+          "id": "certificates",
+          "text": "Order more certified death certificates than you think you need — ten to fifteen. The funeral home usually orders them.",
+          "why": "Nearly every institution wants an original and will not give it back. A second order later costs weeks at the worst possible time."
+        },
+        {
+          "id": "no-decisions",
+          "text": "Decide nothing irreversible. Do not sell the house, move, pay off debts early, buy an annuity, or accept an offer that has a deadline attached.",
+          "why": "This is the single most repeated piece of advice from people who have done it. The plan is built to survive a year of you doing nothing; it is not built to survive a decision made this week."
+        },
+        {
+          "id": "tell-ssa",
+          "text": "Report the death to Social Security — the funeral director normally does it, but confirm it happened.",
+          "why": "Benefits paid for the month of death onward have to be returned, and it is far easier to stop them than to unwind them.",
+          "source": "ssa.gov — Survivors benefits"
+        },
+        {
+          "id": "employer",
+          "text": "Tell his employer, if he was still working. Ask specifically about the final paycheck, unused leave, any group life cover, and what happens to your health coverage.",
+          "why": "Group life is frequently forgotten because nobody sees a policy document for it."
+        },
+        {
+          "id": "dont-close",
+          "text": "Do not close the joint bank account, and do not let anyone talk you into moving money yet.",
+          "why": "Direct debits still run through it, and the account is where the death benefits will land."
+        }
+      ]
+    },
+    {
+      "id": "month",
+      "label": "The first month",
+      "heading": "Claim what is time-limited; leave the rest",
+      "intro": "The claims below have real deadlines. The decisions do not, and separating the two is most of the work of this month.",
+      "items": [
+        {
+          "id": "lump-sum",
+          "text": "Claim the Social Security lump-sum death payment — $255. You must apply within two years of the date of death; it is never paid automatically.",
+          "why": "Small, and the one item on this page that vanishes permanently if it is missed. A surviving spouse living with him at his death is eligible.",
+          "source": "ssa.gov — Lump-sum death payment; CRS report R43637"
+        },
+        {
+          "id": "survivor-ss",
+          "text": "Ask Social Security to run BOTH numbers for you: the survivor benefit on his record, and your own retirement benefit. Do not let the first office visit end with you claiming whichever is bigger today.",
+          "why": "You may take one now and switch to the other once, later. Survivor benefits stop growing at your survivor full retirement age; your own keeps growing to 70. Taking the smaller one first and letting the larger grow is often worth a great deal — see the Plan page for what this plan assumes.",
+          "source": "ssa.gov — Survivors benefits; T. Rowe Price and Vanguard survivor-claiming guidance",
+          "needsProfessional": false
+        },
+        {
+          "id": "life-claims",
+          "text": "File the life insurance claims. Take the lump sum into a plain savings account unless someone independent has told you otherwise.",
+          "why": "Insurers often default the payout into a retained-asset account of their own. That is a product, not a neutral holding place."
+        },
+        {
+          "id": "ira-decision",
+          "text": "Do NOT roll his IRA into your own yet. Ask what your options are and when each one has to be chosen.",
+          "why": "A surviving spouse can treat the account as her own or stay a beneficiary of it. Staying a beneficiary keeps withdrawals free of the 10% early-withdrawal penalty before 59½; rolling it over lets it sit untouched until your own RMD age. Which is better depends on your age and whether you need the money — and it is very hard to reverse.",
+          "source": "SECURE 2.0 spousal-election rules; Kitces, Schwab",
+          "needsProfessional": true
+        },
+        {
+          "id": "irmaa",
+          "text": "If either of you is on Medicare, file form SSA-44 to have the premium surcharge recalculated on your income alone.",
+          "why": "Social Security does not reset this when a spouse dies. Without the form, the surcharge keeps being charged off a joint return from two years ago.",
+          "source": "ssa.gov — Request to lower an IRMAA (SSA-44)"
+        }
+      ]
+    },
+    {
+      "id": "year",
+      "label": "The first year",
+      "heading": "The year the tax rules change under you",
+      "intro": "Two deadlines sit in this year, and one tax change that surprises almost everyone.",
+      "items": [
+        {
+          "id": "filing-status",
+          "text": "Expect your tax bill to rise even though your income fell. You file jointly for the year he dies; unless you have a dependent child, you file as Single from the year after.",
+          "why": "Single brackets and the single standard deduction are roughly half the joint ones, so the same income is taxed harder. This is the 'widow's penalty', and it is the reason the plan models your taxes separately.",
+          "source": "IRS Pub 501 — filing status; qualifying surviving spouse requires a dependent child"
+        },
+        {
+          "id": "portability",
+          "text": "Ask an estate attorney whether to file Form 706 to carry over his unused federal estate-tax exemption, even though the estate owes no tax.",
+          "why": "The election is only available by filing. An estate not otherwise required to file has five years to make it under Rev. Proc. 2022-32; the ordinary deadline is nine months, extendable to fifteen. It costs a filing now and can be worth a great deal later.",
+          "source": "Rev. Proc. 2022-32; IRS Instructions for Form 706",
+          "needsProfessional": true
+        },
+        {
+          "id": "disclaimer",
+          "text": "If anything was left to you that you would rather passed to the children, say so within nine months.",
+          "why": "A qualified disclaimer must be made within nine months of the death. After that the choice is gone.",
+          "source": "IRC §2518",
+          "needsProfessional": true
+        },
+        {
+          "id": "retitle",
+          "text": "Retitle what needs retitling — house, cars, joint accounts — and update the beneficiaries on everything that is now yours.",
+          "why": "Beneficiary designations override the will. His name sitting on yours is the most common unforced error of this year."
+        },
+        {
+          "id": "own-will",
+          "text": "Write your own will again. The old one almost certainly leaves everything to him.",
+          "needsProfessional": true
+        }
+      ]
+    },
+    {
+      "id": "later",
+      "label": "After the first year",
+      "heading": "Now the decisions you postponed",
+      "intro": "The advice not to decide anything has an expiry. These are the questions worth opening once the first year is behind you.",
+      "items": [
+        {
+          "id": "housing",
+          "text": "Revisit the house. Now, not in the first year — but do actually revisit it.",
+          "why": "Staying is a real choice with a real cost, and so is moving. The plan can price both; see what it says below."
+        },
+        {
+          "id": "ss-switch",
+          "text": "If you took one Social Security benefit and left the other to grow, diarise the date you intend to switch.",
+          "why": "The switch does not happen by itself, and there is no credit for delaying past the point where growth stops."
+        },
+        {
+          "id": "review-plan",
+          "text": "Bring this plan up to date with what actually happened, and re-run it.",
+          "why": "Every number on the other pages assumed a household of two. The plan is only worth what its inputs are worth."
+        },
+        {
+          "id": "advisor",
+          "text": "If you want a professional, choose a fee-only fiduciary and take the recommendation away to think about it.",
+          "why": "A widow with a lump sum is the most heavily marketed-to person in retail finance. Nothing good needs to be signed on the day it is explained.",
+          "needsProfessional": true
+        }
+      ]
+    }
+  ]
+}

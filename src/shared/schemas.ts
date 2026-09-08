@@ -343,6 +343,28 @@ export const profileSchema: z.ZodType<Profile> = z.object({
     /** Absent = no pot, like every profile that never chose the bundled rule. */
     untithedPot: untithedPotSchema.optional(),
   }),
+  contacts: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        role: z.string().min(1),
+        name: z.string().min(1),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        notes: z.string().optional(),
+      }),
+    )
+    .optional(),
+  documents: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        location: z.string().min(1),
+        notes: z.string().optional(),
+      }),
+    )
+    .optional(),
   health: z.object({
     acaBenchmarkMonthly: z.number().min(0),
     acaQuoteYear: z.number().int().min(2024).max(2100),

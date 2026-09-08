@@ -87,6 +87,16 @@ export const MODULE_ICONS: Record<Page, ReactNode> = {
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" />
     </Glyph>
   ),
+  // An open book with a bookmark: a playbook to be read, not a chart to be
+  // steered. Deliberately unlike the money glyphs around it — this module is
+  // the only one written for somebody other than the owner.
+  'widow-playbook': (
+    <Glyph>
+      <path d="M4 5.5C4 4.7 4.7 4 5.5 4H10a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H5.5A1.5 1.5 0 0 1 4 15.5z" />
+      <path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H14a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h4.5a1.5 1.5 0 0 0 1.5-1.5z" />
+      <path d="M16 4v6l1.75-1.4L19.5 10V4" />
+    </Glyph>
+  ),
   tithing: (
     <Glyph>
       <rect x="4" y="9" width="16" height="11" rx="1" />

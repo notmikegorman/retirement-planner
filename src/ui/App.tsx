@@ -18,6 +18,7 @@ import { InsuranceModule } from './modules/InsuranceModule';
 import { InvestingModule } from './modules/InvestingModule';
 import { SettingsModule } from './modules/SettingsModule';
 import { TithingModule } from './modules/TithingModule';
+import { WidowPlaybookModule } from './modules/WidowPlaybookModule';
 
 /**
  * THE SHELL (the owner's layout, 2026-08-30, modeled on smplmark): a narrow
@@ -48,6 +49,7 @@ const NAV_LABELS: Record<Page, string> = {
   search: 'Search',
   settings: 'Settings',
   tithing: 'Tithing',
+  'widow-playbook': "Widow's Playbook",
 };
 
 /**
@@ -172,6 +174,7 @@ export function App() {
             {page === 'investing' && <InvestingModule />}
             {page === 'settings' && <SettingsModule />}
             {page === 'tithing' && <TithingModule />}
+            {page === 'widow-playbook' && <WidowPlaybookModule />}
           </main>
           <SwUpdateBar />
         </div>

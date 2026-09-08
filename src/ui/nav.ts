@@ -64,6 +64,7 @@ export const PAGES = [
   'search',
   'settings',
   'tithing',
+  'widow-playbook',
 ] as const;
 
 export type Page = (typeof PAGES)[number];
@@ -132,6 +133,20 @@ export const RESULTS_TAB_IDS = [
 export const SEARCH_TAB_IDS = ['space', 'progress', 'report', 'history'] as const;
 
 /**
+ * The Widow's Playbook, cut by HOW LONG AFTER. The phases are the shape of
+ * the advice — what is urgent, what merely feels urgent, and what must not be
+ * decided yet — so they are the tabs, and 'contacts' is the page's one
+ * editable surface (who to call, where the documents are).
+ */
+export const WIDOW_PLAYBOOK_TAB_IDS = [
+  'week',
+  'month',
+  'year',
+  'later',
+  'contacts',
+] as const;
+
+/**
  * The Net worth ledger's three views: the stacked-bar trend, and the two score
  * plots — 'trend' first because the picture is what the page exists to show.
  *
@@ -168,6 +183,7 @@ export const PAGE_TABS = {
   search: SEARCH_TAB_IDS,
   settings: [],
   tithing: [],
+  'widow-playbook': WIDOW_PLAYBOOK_TAB_IDS,
   workbench: RESULTS_TAB_IDS,
 } as const satisfies Record<Page, readonly string[]>;
 
@@ -388,6 +404,7 @@ export function historyAction(currentPath: string, nextPath: string): 'push' | '
  * flight keeps its place on the first load after this change.
  */
 export const RESULTS_TAB_STORAGE_KEY = 'fplan-results-tab';
+const WIDOW_PLAYBOOK_TAB_STORAGE_KEY = 'fplan-widow-playbook-tab';
 export const SEARCH_TAB_STORAGE_KEY = 'fplan-search-tab';
 export const NETWORTH_TAB_STORAGE_KEY = 'fplan-networth-tab';
 
@@ -438,6 +455,7 @@ export const PAGE_TAB_STORAGE_KEY = {
   search: SEARCH_TAB_STORAGE_KEY,
   settings: null,
   tithing: null,
+  'widow-playbook': WIDOW_PLAYBOOK_TAB_STORAGE_KEY,
   workbench: RESULTS_TAB_STORAGE_KEY,
 } as const satisfies Record<Page, string | null>;
 

@@ -2714,3 +2714,63 @@ create-on-commit branch already sitting under them, which makes the first
 giving or investing row precisely because the rest of the budget is already
 there. BudgetCard went from 884 lines to 677. The scalar-cache write-path
 count in the homogeneity test drops from five to four with the seeding.
+
+## The Widow's Playbook (2026-09-08, twentieth pass)
+
+**A module written for somebody other than the owner** — what his wife should
+do in the first week, the first month, the first year, and after. It is the
+only page in the app that is not an instrument: no knobs, no score, short
+sentences, the reason underneath each one.
+
+**TWO HALVES, KEPT VISIBLY APART.** The conventional half is advice anybody
+would give, cut into phases by how long after. The plan-aware half sits under
+its own heading, *What this plan knows*, so nothing on the page is ambiguous
+about whether it is advice or arithmetic: which accounts carry an
+inherited-account decision and whose they are, whether the survivor is under
+59½ (which is what that decision turns on), what the budget's survivor column
+says she spends, what cover is on file.
+
+**THE CONVENTIONAL HALF IS SOURCED AND DATED, like the tax tables**, and this
+was the condition of building it at all. Half of it makes claims about the law
+with hard deadlines — the $255 lump sum and its two-year window, the nine-month
+disclaimer, Form 706 portability and Rev. Proc. 2022-32's five years, SSA-44,
+the joint-to-single filing cliff — and those go stale exactly the way a bracket
+does. Written as prose in a component it would have been the one part of this
+app with no verification discipline, and the part read under stress by somebody
+who cannot check it. It is data, and VERIFICATIONS.md carries every source. The
+SSA rows are marked ⚠️: ssa.gov returns 403 to automated fetches, so they were
+confirmed from the agency's pages as summarized plus independent corroboration
+rather than fetched directly.
+
+**IT IS NOT SEEDED INTO THE DATA FOLDER**, which breaks the rule every other
+reference file follows. `assumptions/` is copied into the owner's folder
+precisely so the numbers become his; that bargain is wrong for statutory
+deadlines, where a copy frozen in a folder seeded years ago is a liability
+rather than a courtesy. So it lives in src/content and ships with the build.
+src/content/README.md carries the distinction, and it is the directory's whole
+reason to exist.
+
+**WHERE THE FILE IS SILENT THE PAGE SAYS SO.** No survivor column in the
+budget renders as "the plan assumes her costs are the household's, unchanged —
+that is the honest default and is usually too high", not as a number. No
+contacts renders as "nobody recorded". The test file is about this property
+and almost nothing else: the arithmetic is trivial, and a figure this page
+invents will be believed.
+
+**IT COMPUTES NO PROBABILITY.** The survivor's odds already have a home in the
+Widow tab's curve, which runs a real simulation per candidate year. A second
+answer here, arrived at differently, would eventually disagree with it.
+
+**THE ONE PLACE THE PROFILE HOLDS WORDS.** `contacts` and `documents` are new,
+optional, and the module's only editable surface. The app knew every balance
+and not one phone number, and "call your attorney" answers nothing said to
+somebody who does not know the name. They edit by get-mutate-put on blur
+rather than through the modules' Edit/Save draft, because the failure that
+matters here is a number typed and lost, not one typed and regretted. They
+travel with the folder like everything else, and the card says so rather than
+letting it be discovered.
+
+Nav: thirteen modules now, Plan first and the rest alphabetical, so it lands
+last. The label map's keys had to accept quotes — 'widow-playbook' cannot be a
+bare identifier — and the nav test's extractor was reporting the label missing
+when it was present.

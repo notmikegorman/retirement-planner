@@ -78,6 +78,33 @@ without that step, open the page in Chrome, Edge, or Brave.
 | `assumptions/` | market, tax, Social Security, Medicare, ACA tables — yours to edit |
 | `runs/`, `searches/` | caches. Deletable; they cost you recomputation and nothing else |
 
+### The Widow's Playbook
+
+A module written for somebody other than you: what your spouse should do in
+the first week, the first month, the first year, and after that.
+
+Half of it is conventional — order more death certificates than you think,
+decide nothing irreversible, claim the $255 lump sum before the two years run
+out. That half ships with the app, dated and sourced in VERIFICATIONS.md,
+because it is full of statutory deadlines that go stale exactly the way a tax
+bracket does. The other half, in blocks headed **What this plan knows**, is
+read off your plan: which accounts carry an inherited-IRA decision and whose
+they are, whether she is under 59½ (which is what that decision turns on),
+what the budget's "if I die" column says she spends, what cover is on file.
+
+Where the plan is silent the page says so rather than guessing — a number
+invented on that page would be believed.
+
+Its **Who to call** tab is the one place in the app that stores words instead
+of money: the attorney, the executor, where the will is. The plan knows every
+balance and not one phone number, and a playbook that says "call your
+attorney" to somebody who does not know the name has answered nothing. Those
+rows live in `profile.json` with everything else, so they travel with every
+backup and every Save a copy.
+
+It computes no probability. The survivor's odds already have a home — the Plan
+page's **Widow** tab, which runs a real simulation per candidate year.
+
 ### Save a copy, on any browser
 
 **Settings → Save a copy** downloads everything above — records, assumptions,
