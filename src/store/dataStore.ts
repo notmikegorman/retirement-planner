@@ -42,6 +42,7 @@
  * see the note on planStore's header.
  */
 import type { z } from 'zod';
+import type { ProfileExpenses } from '../shared/types';
 import type {
   AcaData,
   Assumptions,
@@ -58,6 +59,7 @@ import type {
 } from '../shared/types';
 import { parseOrThrow, profileSchema, quotesFileSchema } from '../shared/schemas';
 import { resolveAccounts, type HoldingsResolution } from '../shared/holdings';
+import { seedLinesFromStreams } from '../shared/expenses';
 import { titheBundleToPair, type TitheAccountRule } from '../shared/giving';
 import { FileNotFoundError, parentDirOf, type FileStore } from '../shared/fileStore';
 
@@ -240,6 +242,36 @@ export function migrateProfile(raw: unknown): { profile: unknown; changed: strin
     delete expenses.categories;
     changed.push(
       `expenses.annualBaseline ${String(old)} → livingMonthly ${String(expenses.livingMonthly)}/mo + charitableMonthly/investingMonthly 0`,
+    );
+  }
+
+  /*
+   * ONE ENTRY MODE FOR THE BUDGET (2026-09-08). `expenses.lines` used to be
+   * optional: present it was the truth, absent the three scalar streams were,
+   * and the Expenses tab rendered a different form for each. Two ways to say
+   * one thing is one too many — and the scalar form cannot say the thing that
+   * matters, which is that the car payment does not fall when one of you dies.
+   *
+   * So the table is the only way in, and a profile that has never been
+   * itemised is brought to it HERE rather than being asked to press a button.
+   * The migration is exactly what "Start from these three streams" always did
+   * (seedLinesFromStreams, now shared so the store and the UI cannot drift):
+   * one row per stream, carrying the same figures. Nothing is lost, nothing
+   * is invented, and the derived totals are identical by construction — which
+   * is what lets it run unannounced on every load.
+   *
+   * ABSENT ONLY. An explicit `[]` is an itemised budget someone emptied, and
+   * re-seeding it would resurrect rows they deleted.
+   */
+  // AFTER the annualBaseline migration above, which is what puts the three
+  // scalars on a profile old enough not to have them: itemising first would
+  // seed rows from figures that did not exist yet.
+  if (isPlainObject(expenses) && !('lines' in expenses)) {
+    const seeded = seedLinesFromStreams(expenses as unknown as ProfileExpenses);
+    expenses.lines = seeded as unknown as Record<string, unknown>[];
+    changed.push(
+      `expenses: itemised into ${seeded.length} rows from the three streams ` +
+        '(one entry mode — the figures are unchanged)',
     );
   }
 

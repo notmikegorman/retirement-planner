@@ -236,3 +236,56 @@ export function rentingLivingMonthly(
   }
   return { working, retired };
 }
+
+/**
+ * One row per stream, so an owner who has only ever typed three numbers loses
+ * nothing by itemising.
+ *
+ * IT LIVES HERE, not in the UI, because the STORE calls it now: since
+ * 2026-09-08 there is one way to enter a budget — the table — and a profile
+ * that has never been itemised is migrated on load rather than offered a
+ * second, scalar form (migrateProfile, dataStore.ts). The UI still calls it
+ * too; both must produce the same rows, which one function guarantees.
+ *
+ * The investing row still carries an EXPLICIT retired figure so the FILE says
+ * what the engine assumes: since 2026-08-31 investing stops at retirement
+ * whatever the row says (the app's standing rule — the retired cell is
+ * transcribed, never dollars), and before that a row's blank retired cell
+ * meant "same as now". The seed writes the 0 (or whatever the profile says)
+ * rather than inheriting.
+ *
+ * Giving gets no retired figure for the opposite reason: its after-work answer
+ * is the Tithing rule, and a number here would be ignored.
+ *
+ * NO 'insurance' row is seeded any more, even when the profile carries a
+ * premium. That category has no tab, so a seeded row would be a line in
+ * profile.json that no screen shows and no control can delete — and the
+ * premium it names is already charged, visibly, from the Insurance tab.
+ */
+export function seedLinesFromStreams(expenses: ProfileExpenses): ExpenseLine[] {
+  const living: ExpenseLine = {
+    id: 'living',
+    label: 'Living expenses',
+    category: 'living',
+    monthlyNow: expenses.livingMonthly,
+  };
+  if (expenses.livingMonthlyRetired !== undefined) {
+    living.monthlyRetired = expenses.livingMonthlyRetired;
+  }
+  return [
+    living,
+    {
+      id: 'charitable',
+      label: 'Charitable giving',
+      category: 'charitable',
+      monthlyNow: expenses.charitableMonthly,
+    },
+    {
+      id: 'investing',
+      label: 'Investing / savings',
+      category: 'investing',
+      monthlyNow: expenses.investingMonthly,
+      monthlyRetired: expenses.investingMonthlyRetired ?? 0,
+    },
+  ];
+}

@@ -24,6 +24,8 @@ import {
   saveProfile,
 } from '../../src/server/dataStore';
 import { loadPlan, savePlan } from '../../src/server/planStore';
+import { deriveExpenseStreams } from '../../src/shared/expenses';
+import type { ProfileExpenses } from '../../src/shared/types';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const defaultsDir = path.join(repoRoot, 'data-defaults');
@@ -330,7 +332,18 @@ describe('profile migration', () => {
     expect(p.accounts[0].allowsPartialWithdrawals).toBeNull();
 
     // Expense streams: annualBaseline 72000 → 6000/mo living + zeroed new streams.
-    expect(p.expenses).toEqual({ livingMonthly: 6000, charitableMonthly: 0, investingMonthly: 0 });
+    // The scalars the annualBaseline migration produced, plus the itemisation
+    // that now always follows it — three rows carrying exactly those figures.
+    expect(p.expenses).toMatchObject({
+      livingMonthly: 6000,
+      charitableMonthly: 0,
+      investingMonthly: 0,
+    });
+    expect(deriveExpenseStreams(p.expenses as unknown as ProfileExpenses)).toMatchObject({
+      livingMonthly: 6000,
+      charitableMonthly: 0,
+      investingMonthly: 0,
+    });
 
     // Health: exact 1750 placeholder → the starter's 1480 benchmark; employer
     // share defaults to 0.
@@ -365,12 +378,17 @@ describe('profile migration', () => {
   });
 
   it("leaves the OWNER's profile completely alone — no paired values are invented (note 19)", async () => {
-    // The user's real shape: living 8,450/mo, giving 2,300/mo, investing
-    // 1,250/mo, and NONE of the retired counterparts named. Migration must be
-    // a pure no-op: the retired sides are optional and their absence already
-    // means the right thing (living unchanged, investing 0, giving 'continue',
-    // retirement income 0), so writing anything into the file would either add
-    // noise or, worse, silently rewrite their plan.
+    // The user's real shape: living 8,200/mo, giving 2,300/mo, investing
+    // 1,250/mo, and NONE of the retired counterparts named. Migration must
+    // INVENT nothing: the retired sides are optional and their absence
+    // already means the right thing (living unchanged, investing 0, giving
+    // 'continue', retirement income 0), so writing anything into those would
+    // either add noise or, worse, silently rewrite their plan.
+    //
+    // The one thing it DOES add, since the table became the only way to enter
+    // a budget (2026-09-08), is the itemisation itself: three rows carrying
+    // exactly these three figures. That is a shape change and not a value
+    // change, which is what the derived-totals assertion below pins.
     const starter = JSON.parse(
       await fs.readFile(path.join(defaultsDir, 'profile.starter.json'), 'utf8'),
     ) as Record<string, any>;
@@ -380,10 +398,25 @@ describe('profile migration', () => {
     };
     const before = JSON.stringify(owner);
     const { profile, changed } = migrateProfile(owner);
-    expect(changed).toEqual([]);
-    expect(profile).toEqual(owner);
-    // Byte-identical, key order included — nothing added, nothing reordered.
-    expect(JSON.stringify(profile)).toBe(before);
+    expect(changed).toEqual([
+      'expenses: itemised into 3 rows from the three streams (one entry mode — the figures are unchanged)',
+    ]);
+    // The FIGURES are untouched: what the engine reads off the itemised
+    // budget is what it read off the scalars.
+    const derived = deriveExpenseStreams(
+      (profile as { expenses: ProfileExpenses }).expenses,
+    );
+    expect(derived.livingMonthly).toBe(8200);
+    expect(derived.charitableMonthly).toBe(2300);
+    expect(derived.investingMonthly).toBe(1250);
+    expect(derived.livingMonthlyRetired).toBeUndefined();
+    // Everything OUTSIDE expenses is byte-identical.
+    const strip = (v: unknown): string => {
+      const o = JSON.parse(JSON.stringify(v)) as Record<string, unknown>;
+      delete o.expenses;
+      return JSON.stringify(o);
+    };
+    expect(strip(profile)).toBe(strip(owner));
     // In particular, none of the new optional fields materialized.
     const p = profile as { expenses: Record<string, unknown>; income: Record<string, unknown> };
     expect(p.expenses).not.toHaveProperty('livingMonthlyRetired');
@@ -418,8 +451,27 @@ describe('profile migration', () => {
       },
     };
     const { profile, changed } = migrateProfile(filled);
-    expect(changed).toEqual([]);
-    expect(profile).toEqual(filled);
+    // The itemisation is the only change, and it is a shape change: the
+    // filled retired cells are carried through it, not normalised or dropped.
+    expect(changed).toEqual([
+      'expenses: itemised into 3 rows from the three streams (one entry mode — the figures are unchanged)',
+    ]);
+    const after = (profile as { expenses: ProfileExpenses }).expenses;
+    expect(deriveExpenseStreams(after)).toMatchObject({
+      livingMonthly: 8200,
+      livingMonthlyRetired: 7200,
+      charitableMonthly: 2300,
+      investingMonthly: 1250,
+      investingMonthlyRetired: 400,
+    });
+    expect(after.retirementGiving).toEqual({ type: 'amount', monthly: 1800 });
+    // And everything outside expenses is untouched, retirement income included.
+    const strip = (v: unknown): string => {
+      const o = JSON.parse(JSON.stringify(v)) as Record<string, unknown>;
+      delete o.expenses;
+      return JSON.stringify(o);
+    };
+    expect(strip(profile)).toBe(strip(filled));
   });
 
   it('loadProfile migrates old files in place: parses, saves back pretty JSON', async () => {

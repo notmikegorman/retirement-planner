@@ -21,6 +21,8 @@
  * own.
  */
 import type { FileStore } from '../../src/shared/fileStore';
+import { deriveExpenseStreams } from '../../src/shared/expenses';
+import type { ProfileExpenses } from '../../src/shared/types';
 import type { Stores } from '../../src/store';
 import {
   NotFoundError,
@@ -1041,7 +1043,11 @@ export function storeSuiteCases(): StoreCase[] {
     is('piaMonthlyAtFra' in p.people[0], false, 'old key deleted');
     is(p.accounts[0].name, 'k401', 'account name defaulted to id');
     is(p.accounts[0].ruleOf55Eligible, true, 'deprecated fields tolerated in place');
-    eq(p.expenses, { livingMonthly: 6000, charitableMonthly: 0, investingMonthly: 0 }, 'annualBaseline split');
+    const split = deriveExpenseStreams(p.expenses as unknown as ProfileExpenses);
+    is(split.livingMonthly, 6000, 'annualBaseline split into living');
+    is(split.charitableMonthly, 0, 'giving 0');
+    is(split.investingMonthly, 0, 'investing 0');
+    ok((p.expenses.lines as unknown[] | undefined)?.length === 3, 'and itemised after the split');
     is(p.health.acaBenchmarkMonthly, 1480, 'exact 1750 placeholder rewritten');
     is(p.health.employerPremiumShareMonthly, 0, 'employer share defaulted');
     ok(changed.includes('acaBenchmarkMonthly 1750→1480 (starter SLCSP benchmark)'), 'change named');
@@ -1074,9 +1080,22 @@ export function storeSuiteCases(): StoreCase[] {
     };
     const before = JSON.stringify(owner);
     const { profile, changed } = migrateProfile(owner);
-    eq(changed, [], 'a pure no-op');
-    is(JSON.stringify(profile), before, 'byte-identical, key order included');
+    // Since the table became the only way to enter a budget (2026-09-08) the
+    // itemisation is added here — a SHAPE change carrying the same figures,
+    // which is what the derived totals below pin. Nothing else moves.
+    eq(changed, ['expenses: itemised into 3 rows from the three streams (one entry mode — the figures are unchanged)'], 'only the itemisation');
     const p = profile as { expenses: Record<string, unknown>; income: Record<string, unknown> };
+    const d = deriveExpenseStreams(p.expenses as unknown as ProfileExpenses);
+    is(d.livingMonthly, 8200, 'living carried through the itemisation');
+    is(d.charitableMonthly, 2300, 'giving carried through');
+    is(d.investingMonthly, 1250, 'investing carried through');
+    is(d.livingMonthlyRetired, undefined, 'and no retired side invented');
+    const strip = (v: unknown): string => {
+      const o = JSON.parse(JSON.stringify(v)) as Record<string, unknown>;
+      delete o.expenses;
+      return JSON.stringify(o);
+    };
+    is(strip(profile), strip(owner), 'everything outside expenses byte-identical');
     for (const key of ['livingMonthlyRetired', 'investingMonthlyRetired', 'retirementGiving']) {
       is(key in p.expenses, false, `${key} must not materialize`);
     }
@@ -1101,8 +1120,19 @@ export function storeSuiteCases(): StoreCase[] {
       income: { ...starter.income, retirementMonthly: 2000, retirementIncomeTaxable: false },
     };
     const { profile, changed } = migrateProfile(filled);
-    eq(changed, [], 'no normalization');
-    eq(profile, filled, 'nothing rounded or dropped');
+    eq(changed, ['expenses: itemised into 3 rows from the three streams (one entry mode — the figures are unchanged)'], 'only the itemisation');
+    const after = (profile as { expenses: ProfileExpenses }).expenses;
+    const d2 = deriveExpenseStreams(after);
+    is(d2.livingMonthly, 8200, 'living carried');
+    is(d2.livingMonthlyRetired, 7200, 'the retired side carried, not dropped');
+    is(d2.investingMonthlyRetired, 400, 'investing retired carried');
+    is(JSON.stringify(after.retirementGiving), '{"type":"amount","monthly":1800}', 'giving rule kept');
+    const strip2 = (v: unknown): string => {
+      const o = JSON.parse(JSON.stringify(v)) as Record<string, unknown>;
+      delete o.expenses;
+      return JSON.stringify(o);
+    };
+    is(strip2(profile), strip2(filled), 'retirement income untouched');
   });
 
   c('loadProfile: migrates old files in place — parses, saves back pretty JSON', async (ctx) => {
@@ -1111,6 +1141,7 @@ export function storeSuiteCases(): StoreCase[] {
     const loaded = await ctx.stores.data.loadProfile();
     is(loaded.people[0].piaMonthlyAtFraIfWorkingTo62, 3180, 'migrated');
     is(loaded.expenses.livingMonthly, 6000, 'expenses split');
+    ok((loaded.expenses.lines ?? []).length > 0, 'and itemised on the way in');
     is(loaded.health.acaBenchmarkMonthly, 1480, 'placeholder rewritten');
     is(loaded.settings.withdrawalPolicy.pretaxPreference, 'ira_first', 'policy migrated');
     const raw = await ctx.files.readText('profile.json');

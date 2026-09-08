@@ -25,7 +25,11 @@ import type {
   YearMonth,
 } from '../../../shared/types';
 import { SUMMED_EXPENSE_CATEGORIES } from '../../../shared/types';
-import { deriveExpenseStreams, effectiveLineMonthly } from '../../../shared/expenses';
+import {
+  deriveExpenseStreams,
+  effectiveLineMonthly,
+  seedLinesFromStreams,
+} from '../../../shared/expenses';
 // The engine's own purchase-date derivation, so the window this tab names is
 // the window the run actually prices (the HousingCard rule, applied here too).
 import { purchaseDate } from '../../../engine/housingPlan';
@@ -257,7 +261,28 @@ export function categoryTotals(
  */
 export function applyDerivedStreams(expenses: ProfileExpenses): void {
   const lines = expenses.lines;
-  if (!lines || lines.length === 0) return; // the scalars ARE the truth here
+  if (!lines) return; // no table at all: nothing to derive from
+  if (lines.length === 0) {
+    /*
+     * AN EMPTIED TABLE SPENDS NOTHING (2026-09-08). It used to collapse back
+     * into the three scalars, which was right when a profile without rows was
+     * one that had never been itemised. Since the table became the only way
+     * in — every profile is itemised on load — an empty array can only mean
+     * someone deleted every row, and leaving the last totals standing would
+     * make a budget the screen shows as empty go on being charged in full.
+     *
+     * Written as zeroed SCALARS rather than by changing what an empty array
+     * means to the engine: deriveExpenseStreams reads the scalars in this
+     * case, several tests pin that, and it stays true — the scalars just say
+     * zero now, which is what the screen says.
+     */
+    expenses.livingMonthly = 0;
+    expenses.charitableMonthly = 0;
+    expenses.investingMonthly = 0;
+    delete expenses.livingMonthlyRetired;
+    delete expenses.investingMonthlyRetired;
+    return;
+  }
   const d = deriveExpenseStreams(expenses);
   expenses.livingMonthly = d.livingMonthly;
   expenses.charitableMonthly = d.charitableMonthly;
@@ -267,6 +292,13 @@ export function applyDerivedStreams(expenses: ProfileExpenses): void {
   if (d.investingMonthlyRetired === undefined) delete expenses.investingMonthlyRetired;
   else expenses.investingMonthlyRetired = d.investingMonthlyRetired;
 }
+
+/**
+ * Re-exported from shared/expenses, where it moved when the STORE started
+ * calling it too (one entry mode: a profile that has never been itemised is
+ * migrated on load). Callers here are unchanged.
+ */
+export { seedLinesFromStreams };
 
 // ---------------------------------------------------------------------------
 // Editing rows
@@ -327,52 +359,6 @@ export function moveLineWithinCategory(
   return out;
 }
 
-/**
- * One row per stream, so an owner who has only ever typed three numbers loses
- * nothing by itemising.
- *
- * The investing row still carries an EXPLICIT retired figure so the FILE says
- * what the engine assumes: since 2026-08-31 investing stops at retirement
- * whatever the row says (the app's standing rule — the retired cell is
- * transcribed, never dollars), and before that a row's blank retired cell
- * meant "same as now". The seed writes the 0 (or whatever the profile says)
- * rather than inheriting.
- *
- * Giving gets no retired figure for the opposite reason: its after-work answer
- * is the Tithing rule, and a number here would be ignored.
- *
- * NO 'insurance' row is seeded any more, even when the profile carries a
- * premium. That category has no tab, so a seeded row would be a line in
- * profile.json that no screen shows and no control can delete — and the
- * premium it names is already charged, visibly, from the Insurance tab.
- */
-export function seedLinesFromStreams(expenses: ProfileExpenses): ExpenseLine[] {
-  const living: ExpenseLine = {
-    id: 'living',
-    label: 'Living expenses',
-    category: 'living',
-    monthlyNow: expenses.livingMonthly,
-  };
-  if (expenses.livingMonthlyRetired !== undefined) {
-    living.monthlyRetired = expenses.livingMonthlyRetired;
-  }
-  return [
-    living,
-    {
-      id: 'charitable',
-      label: 'Charitable giving',
-      category: 'charitable',
-      monthlyNow: expenses.charitableMonthly,
-    },
-    {
-      id: 'investing',
-      label: 'Investing / savings',
-      category: 'investing',
-      monthlyNow: expenses.investingMonthly,
-      monthlyRetired: expenses.investingMonthlyRetired ?? 0,
-    },
-  ];
-}
 
 // ---------------------------------------------------------------------------
 // Policies

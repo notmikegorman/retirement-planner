@@ -2670,3 +2670,47 @@ The stamp is written AFTER seeding, so a boot interrupted mid-seed leaves the
 folder unmarked and the next one starts it over rather than trusting half a
 copy. Marking is best-effort: a failure costs one extra reseed, never a
 broken demo.
+
+## One way to enter a budget (2026-09-08, nineteenth pass)
+
+**The scalar streams form is gone; the table is the only door.** `expenses.lines`
+used to be optional — present it was the truth and the Expenses tab drew the
+four-column table, absent the three scalars were and it drew a form with an
+"Itemise this budget" pitch underneath. Two ways to say one thing is one too
+many, and the owner had just watched the wrong one greet him in Show a friend
+mode. The deciding argument is not tidiness though: the scalar form cannot say
+the thing the table exists for. One number for living expenses cannot express
+that the car payment does not fall when one of you dies and the groceries do,
+which is the whole reason the survivor column was built.
+
+**Nobody presses a button to get there.** migrateProfile itemises any profile
+whose expenses have no `lines` key, using the same seedLinesFromStreams the
+old button called — moved to shared/expenses.ts so the store and the UI cannot
+drift. One row per stream carrying the same figures, so the derived totals are
+identical by construction, which is what lets it run unannounced on every
+load. It sits AFTER the annualBaseline migration, which is what puts the three
+scalars on a profile old enough to lack them: itemising first would seed rows
+from figures that did not exist yet. Verified end to end on a planted legacy
+profile — living 4,321, giving 250, investing 100 came back as three rows of
+exactly those, written back to disk.
+
+**ABSENT, NOT EMPTY, is what gets migrated.** An explicit `[]` is an itemised
+budget somebody emptied, and re-seeding it would resurrect the rows they just
+deleted. Which is also why emptying the table now STORES `[]` instead of
+deleting the key: the two used to mean the same thing and no longer do.
+
+**An emptied table spends nothing.** It used to collapse back into the three
+scalars — right when a profile with no rows was one that had never been
+itemised, wrong now that it can only mean someone deleted every row, because
+the last totals would go on being charged for a budget the screen shows as
+empty. Written as ZEROED SCALARS rather than by changing what an empty array
+means to the engine: deriveExpenseStreams reads the scalars in that case and
+several tests pin it, so the contract stands and the scalars simply say zero.
+
+**What came out with it:** StreamsCard, the itemise pitch and its tip, four
+help constants, RetiredMonthlyField, and the `lines.length === 0` scalar
+branches on the Tithing and Investing tabs — those two fell through to the
+create-on-commit branch already sitting under them, which makes the first
+giving or investing row precisely because the rest of the budget is already
+there. BudgetCard went from 884 lines to 677. The scalar-cache write-path
+count in the homogeneity test drops from five to four with the seeding.

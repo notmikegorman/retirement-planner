@@ -70,7 +70,7 @@ without that step, open the page in Chrome, Edge, or Brave.
 
 | | |
 |---|---|
-| `profile.json` | the household. **No history — an overwrite is gone.** |
+| `profile.json` | the household, budget table included. **No history — an overwrite is gone.** |
 | `plan.json` | the current plan |
 | `plan-history.json` | every previous version, filed automatically on the day's first change |
 | `networth.json` | the snapshot ledger. **The irreplaceable one** — each row records prices from a day that has passed |

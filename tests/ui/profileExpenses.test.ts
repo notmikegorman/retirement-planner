@@ -497,17 +497,31 @@ describe('applyDerivedStreams', () => {
     expect(e.investingMonthlyRetired).toBe(0);
   });
 
-  it('does not touch a profile that has no rows', () => {
-    // Every profile written before the table existed must come back BYTE for
-    // byte: the scalars are the truth there, and nothing may rewrite them.
+  it('does not touch a profile with no lines key at all', () => {
+    // No table to derive from, so nothing to write. In the app this shape no
+    // longer survives a load — migrateProfile itemises it — but the function
+    // must still be a no-op rather than inventing zeros for a caller holding
+    // a profile mid-migration.
     const before = expenses({ livingMonthlyRetired: 5_000 });
     const after = expenses({ livingMonthlyRetired: 5_000 });
     applyDerivedStreams(after);
     expect(after).toEqual(before);
-    // An empty array means the same thing as no array at all.
-    const emptied = expenses({ lines: [] });
+  });
+
+  it('zeroes the streams when the table is EMPTIED — an empty budget spends nothing', () => {
+    // The behaviour that changed with one entry mode (2026-09-08). An empty
+    // array used to collapse back into the scalars, which was right when a
+    // profile with no rows was one that had never been itemised. Now every
+    // profile is itemised on load, so `[]` can only mean someone deleted
+    // every row — and leaving the last totals standing would go on charging a
+    // budget the screen shows as empty.
+    const emptied = expenses({ lines: [], livingMonthlyRetired: 5_000 });
     applyDerivedStreams(emptied);
-    expect(emptied.livingMonthly).toBe(7_100);
+    expect(emptied.livingMonthly).toBe(0);
+    expect(emptied.charitableMonthly).toBe(0);
+    expect(emptied.investingMonthly).toBe(0);
+    expect(emptied).not.toHaveProperty('livingMonthlyRetired');
+    expect(emptied).not.toHaveProperty('investingMonthlyRetired');
   });
 });
 
@@ -997,19 +1011,30 @@ describe('the Expenses / Tithing / Investing / Insurance split', () => {
     }
   });
 
-  it('still reaches every control the one Expenses tab used to carry', () => {
-    // The budget's money fields moved to the Expenses tab's empty state,
-    // where a profile with no itemised rows still edits its streams.
-    // (Investing lost its after-work field on 2026-08-31: investing stops at
-    // retirement, the app's standing rule, and no surface may offer the box.)
-    for (const label of [
+  it('offers ONE way to enter a budget — the table, and no scalar form beside it', () => {
+    // The scalar streams form and its "Itemise this budget" pitch were
+    // deleted on 2026-09-08: two ways to say one thing is one too many, and
+    // the form could not say the thing the table exists for (that the car
+    // payment does not fall when one of you dies). Every profile is itemised
+    // on load instead, so there is nothing left for the form to edit.
+    for (const gone of [
+      // The streams form's own fields, and the pitch that offered to leave it.
       'Living expenses ($/mo)',
       'Living after you stop working ($/mo)',
-      'Charitable giving ($/mo)',
-      'Investing / savings ($/mo)',
+      'Itemise this budget',
+      'Start from these three streams',
+      'Start with one empty row',
+      'Press Edit, top right, to start itemising.',
+      // And every write that edited a scalar directly instead of a row. (The
+      // "Charitable giving ($/mo)" LABEL survives — the itemised path uses it
+      // for the field that creates the first giving row.)
+      'p.expenses.charitableMonthly = v ?? 0;',
+      'p.expenses.investingMonthly = v ?? 0;',
     ]) {
-      expect(budgetCard, `budget control "${label}" went missing in the split`).toContain(label);
+      expect(budgetCard, `the scalar entry form still offers "${gone}"`).not.toContain(gone);
     }
+    // (Investing lost its after-work field on 2026-08-31: investing stops at
+    // retirement, the app's standing rule, and no surface may offer the box.)
     expect(budgetCard).not.toContain('Investing after you stop working');
     expect(budgetCard).not.toContain('After the last paycheck');
     // The four policy fields moved to Insurance, unchanged.
@@ -1070,16 +1095,18 @@ describe('the budget tabs are homogeneous', () => {
     // scalars stale — invisible to the engine (it derives from the lines) but
     // exactly what "delete every row and the streams keep their last totals"
     // would then restore wrongly.
-    // EXACTLY the five write paths: editLinesWith (the tables), editLineById
-    // (the per-line fields), and the three create-on-commit branches
-    // (investing's pair shares one via createWith; giving's has its own) —
-    // plus the itemise seeding, which writes the same values by construction.
-    // Exact, not >=: a sixth site should be a deliberate decision here, and
-    // a fourth means a write path lost the discipline.
+    // EXACTLY the four write paths: editLinesWith (the tables), editLineById
+    // (the per-line fields), and the two create-on-commit branches (giving's,
+    // and investing's pair sharing one via createWith). It was five until
+    // 2026-09-08, when the itemise seeding went with the scalar form it
+    // belonged to — every profile is itemised on load now, so there is
+    // nothing left to seed from a button. Exact, not >=: a fifth site should
+    // be a deliberate decision here, and a third means a write path lost the
+    // discipline.
     expect(
       budgetCard.match(/applyDerivedStreams\(p\.expenses\);/g)?.length,
       'BudgetCard line-write paths and the scalar-cache rewrite drifted apart',
-    ).toBe(5);
+    ).toBe(4);
     expect(read('../../src/ui/modules/ExpensesModule.tsx')).toContain(
       'applyDerivedStreams(p.expenses);',
     );
@@ -1143,16 +1170,18 @@ describe('the budget tabs are homogeneous', () => {
     expect(givingFields).not.toContain('LinesTable');
     expect(givingFields).not.toContain('+ Add row');
 
-    // BRANCH ORDER IS LOAD-BEARING: the scalar branch (no lines at all —
-    // edit charitableMonthly directly, creating nothing) must be tested
-    // BEFORE the charitable filter, or a pre-itemisation commit would
-    // manufacture the budget's first line and quietly make the near-empty
-    // table the truth for living and investing too.
-    const scalarAt = givingFields.indexOf('lines.length === 0');
-    const filterAt = givingFields.indexOf("l.category === 'charitable'");
-    expect(scalarAt).toBeGreaterThan(-1);
-    expect(filterAt).toBeGreaterThan(scalarAt);
-    expect(givingFields).toContain('p.expenses.charitableMonthly = v ?? 0;');
+    // THE SCALAR BRANCH IS GONE (2026-09-08). It existed for a profile with
+    // no lines at all, editing charitableMonthly directly so that a
+    // pre-itemisation commit could not manufacture the budget's first row
+    // and quietly make a near-empty table the truth for living and investing
+    // too. There is no such profile any more — every one is itemised on load
+    // — so what is left is the create-on-commit branch, which is allowed to
+    // make the first GIVING row precisely because the rest of the budget is
+    // already there.
+    expect(givingFields).not.toContain('lines.length === 0');
+    expect(givingFields).not.toContain('p.expenses.charitableMonthly = v ?? 0;');
+    expect(givingFields).toContain("l.category === 'charitable'");
+    expect(givingFields).toContain('giving.length === 0');
 
     // The Tithing module renders it for BOTH branches — no itemised gate.
     const tithingModule2 = read('../../src/ui/modules/TithingModule.tsx');

@@ -55,7 +55,6 @@ import {
   moveLineWithinCategory,
   rentingInheritanceSplits,
   rentingMonthly,
-  seedLinesFromStreams,
   survivorInheritanceSplits,
   survivorMonthly,
   type RentingWindow,
@@ -108,33 +107,6 @@ const SURVIVOR_TIP =
   'whichever state is in force, so it shows the after-work figure here and says when a death ' +
   'while still working would inherit something different.';
 
-const ITEMISE_TIP =
-  'One row per stream to start with, holding exactly the numbers above, so nothing changes on the ' +
-  'day you itemise. From then on THE TABLE IS THE TRUTH: these three figures become a sum of it ' +
-  'and are rewritten on every edit. Delete every row and they stay at their last totals, so the ' +
-  'itemisation collapses back into the streams it came from rather than being lost.';
-
-// --- The scalar streams (help copy moved here with the fields it explains) --
-
-const EXPENSE_SPLIT_NOTE =
-  'These three streams replace the old single “annual baseline spending” number — re-enter your ' +
-  'living expenses with giving and investing carved out, or you will double-count them. Living ' +
-  'has a value in play while working and a value afterwards; investing stops at retirement, and ' +
-  'giving’s afterwards is a rule on the Tithing page. The Plan page’s Spending card shows the ' +
-  'same figures and can override them for one plan.';
-const RETIRED_SWITCH_NOTE =
-  'Every stream switches on ONE signal: the first year in which nobody in the household earns a ' +
-  'salary. The retirement year itself is split — the working figure for the months worked, the ' +
-  'after-work behavior for the rest (living’s after-work figure; investing stops; giving follows ' +
-  'the Tithing rule).';
-const LIVING_HELP =
-  'Everyday consumption only: excludes health premiums, housing (property tax, insurance, ' +
-  'maintenance, rent, mortgage), charitable giving and investing — all modeled separately.';
-const LIVING_RETIRED_HELP =
-  'What everyday consumption becomes once nobody is earning. LEAVE IT EMPTY and it stays at the ' +
-  'working figure, which is the honest default — groceries, utilities and insurance do not fall ' +
-  'the day the salary stops. (Under the fixed-percent spending policy neither figure is ' +
-  'consulted: the policy sets living spending outright.)';
 const CHARITABLE_HELP =
   'Your giving while anyone is still earning. It feeds the charitable tax deductions, and — ' +
   'unlike investing below — it does not stop by itself when the paychecks do: the rule on the ' +
@@ -148,42 +120,21 @@ const INVESTING_HELP =
 
 
 /**
- * The retired half of the LIVING pair, as the household's own baseline —
- * living is the only stream that still has one (investing stops at
- * retirement, the app's standing rule; giving's retired side is a rule on
- * the Tithing page).
+ * The Expenses tab: the living lines. THE ONLY WAY TO ENTER A BUDGET.
  *
- * It is OPTIONAL on purpose: an empty box leaves the field absent from
- * profile.json, and absence already carries the right meaning — living stays
- * at the working figure. The placeholder says so, and the annual note prices
- * whichever value the engine will actually use, rather than showing a
- * hopeful $0.
+ * There used to be two. A profile without `expenses.lines` got a form of
+ * three scalar streams plus a pitch to itemise; one with lines got this
+ * table. Two ways to say one thing is one too many, and the scalar form
+ * could not say the thing the table exists for — that the car payment does
+ * not fall when one of you dies. So it is gone, and a profile that has never
+ * been itemised is migrated on load instead of being asked to press a button
+ * (migrateProfile in dataStore.ts, using the same seedLinesFromStreams the
+ * old button called, so the figures are identical by construction).
+ *
+ * An EMPTY table is therefore a budget someone emptied, not a budget that
+ * was never written — and it renders as a table with no rows and an invite
+ * to add one, never as the old form.
  */
-function RetiredMonthlyField(props: {
-  label: string;
-  working: number;
-  value: number | undefined;
-  tip: string;
-  onCommit: (value: number | undefined) => void;
-}) {
-  const effective = effectiveRetiredMonthly(props.working, props.value, undefined);
-  return (
-    <>
-      <NumberField
-        label={props.label}
-        allowEmpty
-        placeholder={retiredPlaceholder(undefined)}
-        value={props.value}
-        width={230}
-        tip={props.tip}
-        onCommit={props.onCommit}
-      />
-      <FieldNote className="muted">= {formatUSD(annualFromMonthly(effective))}/yr</FieldNote>
-    </>
-  );
-}
-
-/** The Expenses tab: the living lines, or the pre-itemisation streams. */
 export function BudgetCard({
   expenses,
   update,
@@ -199,130 +150,11 @@ export function BudgetCard({
   rentingWindow?: RentingWindow | null;
 }) {
   const lines = expenses.lines ?? [];
-  return lines.length === 0 ? (
-    <StreamsCard expenses={expenses} update={update} />
-  ) : (
+  return (
     <LivingCard lines={lines} expenses={expenses} update={update} rentingWindow={rentingWindow} />
   );
 }
 
-/**
- * The pre-itemisation editor, and the offer to itemise.
- *
- * It is still here, unchanged, because a profile with no rows is one the three
- * scalars ARE the truth for — every profile written before the table existed —
- * and deleting the last row has to land somewhere that can still be edited.
- */
-function StreamsCard({ expenses, update }: { expenses: ProfileExpenses; update: UpdateFn }) {
-  return (
-    <div className="card">
-      {/* No "Expenses" heading: the banner already says where you are. */}
-      <p className="muted" style={{ marginTop: 0 }}>
-        Three monthly streams in today’s dollars, each modeled differently. Living has a value in
-        play while working and a value afterwards; investing stops at retirement; giving’s
-        afterwards is the Tithing page’s rule.
-        <InfoTip label="the expense streams" text={EXPENSE_SPLIT_NOTE} />
-        <InfoTip label="the working/after-work switch" text={RETIRED_SWITCH_NOTE} />
-      </p>
-      <div className="row">
-        <MonthlyMoneyField
-          label="Living expenses ($/mo)"
-          value={expenses.livingMonthly}
-          tip={LIVING_HELP}
-          onCommit={(v) =>
-            update((p) => {
-              p.expenses.livingMonthly = v;
-            })
-          }
-        />
-        <RetiredMonthlyField
-          label="Living after you stop working ($/mo)"
-          working={expenses.livingMonthly}
-          value={expenses.livingMonthlyRetired}
-          tip={LIVING_RETIRED_HELP}
-          onCommit={(v) =>
-            update((p) => {
-              if (v == null) delete p.expenses.livingMonthlyRetired;
-              else p.expenses.livingMonthlyRetired = v;
-            })
-          }
-        />
-      </div>
-      <div className="row">
-        <MonthlyMoneyField
-          label="Charitable giving ($/mo)"
-          value={expenses.charitableMonthly}
-          tip={CHARITABLE_HELP}
-          onCommit={(v) =>
-            update((p) => {
-              p.expenses.charitableMonthly = v;
-            })
-          }
-        />
-        <FieldNote className="muted">
-          giving after you stop working is a rule — see the Tithing page
-        </FieldNote>
-      </div>
-      <div className="row">
-        <MonthlyMoneyField
-          label="Investing / savings ($/mo)"
-          value={expenses.investingMonthly}
-          tip={INVESTING_HELP}
-          onCommit={(v) =>
-            update((p) => {
-              p.expenses.investingMonthly = v;
-            })
-          }
-        />
-        <FieldNote className="muted">investing stops at retirement</FieldNote>
-      </div>
-
-      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-        <h3 style={{ margin: '0 0 4px' }}>
-          Itemise this budget
-          <InfoTip label="itemising the budget" text={ITEMISE_TIP} />
-        </h3>
-        <p className="field-help" style={{ marginTop: 0 }}>
-          Transcribe the real budget line by line and each line gets its own answer for “if I stop
-          working” and “if I die” — which is the only way to say that the car payment does not fall
-          when one of you dies. The lines land on their own tabs: living here, giving on Tithing,
-          investing on Investing. Seeding loses nothing: the three figures above become the first
-          three rows.
-        </p>
-        <div className="row inlineRow">
-          <button
-            className="primary"
-            onClick={() =>
-              update((p) => {
-                p.expenses.lines = seedLinesFromStreams(p.expenses);
-              })
-            }
-          >
-            Start from these three streams
-          </button>
-          <button
-            onClick={() =>
-              update((p) => {
-                p.expenses.lines = [makeExpenseLine([], 'living')];
-                applyDerivedStreams(p.expenses);
-              })
-            }
-          >
-            Start with one empty row
-          </button>
-          <span className="muted">
-            An empty row makes the table the truth at once — the three figures above become a sum of
-            it, so seeding is the safe way in.
-          </span>
-        </div>
-        {/* Visible only inside a DISABLED fieldset (view mode), where the two
-            start buttons above hide: a pitch whose call to action vanished
-            reads as broken. The stylesheet owns the toggle (.editHint). */}
-        <p className="field-help editHint">Press Edit, top right, to start itemising.</p>
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // The shared table machinery
@@ -333,9 +165,12 @@ type EditLinesFn = (mutate: (lines: ExpenseLine[]) => ExpenseLine[] | void) => v
 /**
  * Every edit rewrites the scalar cache (applyDerivedStreams) so the file and
  * the Workbench never hold a second, staler answer to "what do you spend".
- * Emptying the table deletes the key rather than storing `[]`: absent and
- * empty mean the same thing to the engine, and absent is the quieter of the
- * two in profile.json.
+ * Emptying the table now STORES `[]` rather than deleting the key. The two
+ * used to mean the same thing; since the table became the only way in they
+ * do not — absent means "never itemised" and is migrated back into rows on
+ * the next load, which would resurrect every row just deleted. `[]` is an
+ * itemised budget with nothing in it, and applyDerivedStreams zeroes the
+ * scalars to match.
  *
  * One factory shared by all three tabs, because they edit ONE array — a tab
  * that wrote lines without re-deriving would leave the other two tabs (and
@@ -346,8 +181,7 @@ function editLinesWith(update: UpdateFn): EditLinesFn {
     update((p) => {
       const current = p.expenses.lines ?? [];
       const next = mutate(current) ?? current;
-      if (next.length === 0) delete p.expenses.lines;
-      else p.expenses.lines = next;
+      p.expenses.lines = next;
       applyDerivedStreams(p.expenses);
     });
 }
@@ -696,26 +530,6 @@ export function GivingFields({
   update: UpdateFn;
 }) {
   const lines = expenses.lines ?? [];
-  if (lines.length === 0) {
-    return (
-      <div className="card">
-        <div className="row">
-          <NumberField
-            label="Charitable giving ($/mo)"
-            value={expenses.charitableMonthly}
-            width={190}
-            min={0}
-            tip={CHARITABLE_HELP}
-            onCommit={(v) =>
-              update((p) => {
-                p.expenses.charitableMonthly = v ?? 0;
-              })
-            }
-          />
-        </div>
-      </div>
-    );
-  }
   const giving = lines.filter((l) => l.category === 'charitable');
   if (giving.length === 0) {
     // An itemised budget with no giving row: the first commit creates it.
@@ -792,27 +606,6 @@ export function InvestingFields({
   update: UpdateFn;
 }) {
   const lines = expenses.lines ?? [];
-  if (lines.length === 0) {
-    return (
-      <div className="card">
-        <div className="row">
-          <NumberField
-            label="Investing / savings ($/mo)"
-            value={expenses.investingMonthly}
-            width={200}
-            min={0}
-            tip={INVESTING_HELP}
-            onCommit={(v) =>
-              update((p) => {
-                p.expenses.investingMonthly = v ?? 0;
-              })
-            }
-          />
-          <FieldNote className="muted">stops at retirement</FieldNote>
-        </div>
-      </div>
-    );
-  }
   const investingLines = lines.filter((l) => l.category === 'investing');
   if (investingLines.length === 0) {
     // An itemised budget with no investing row: the first commit creates the
