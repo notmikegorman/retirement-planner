@@ -19,6 +19,7 @@
  *    the same way — and the previously stored quote survives untouched, with
  *    its honest fetchedAt.
  */
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -32,6 +33,12 @@ import { serveStatic, type StaticServer } from './staticServer';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const distUi = path.join(repoRoot, 'dist', 'ui');
+
+/** Yahoo's real ^GSPC response, captured through the deployed proxy (2026-09-11). */
+const GSPC_FIXTURE_TEXT = readFileSync(
+  path.join(repoRoot, 'tests', 'fixtures', 'yahoo-chart-gspc.json'),
+  'utf8',
+);
 
 /** The seeded quote's fetchedAt — what a successful refresh must move. */
 const SEEDED_FETCHED_AT = '2026-08-28T12:00:00.000Z';
@@ -51,6 +58,8 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
   let upstream: Server;
   let proxy: MountedProxy;
   const pageErrors: string[] = [];
+  /** Upstream requests for ^GSPC — the sidebar ticker's, and only its. */
+  let gspcHits = 0;
 
   beforeAll(async () => {
     await build({ configFile: path.join(repoRoot, 'vite.config.ts'), logLevel: 'warn' });
@@ -60,6 +69,11 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     // The Yahoo double: the captured VTI fixture, and Yahoo's own
     // unknown-symbol shape (HTTP 404 + chart.error) for anything else.
     upstream = createServer((req, res) => {
+      if ((req.url ?? '').startsWith('/v8/finance/chart/%5EGSPC')) {
+        gspcHits += 1;
+        res.writeHead(200, { 'content-type': 'application/json' }).end(GSPC_FIXTURE_TEXT);
+        return;
+      }
       if ((req.url ?? '').startsWith('/v8/finance/chart/VTI')) {
         res.writeHead(200, { 'content-type': 'application/json' }).end(VTI_FIXTURE_TEXT);
         return;
@@ -178,6 +192,61 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     expect(answer.status).toBe(400);
     expect(answer.body.error).toContain('ticker symbol');
   }, 60_000);
+
+  it('the sidebar S&P 500 ticker: fetched through the proxy, skipped within the hour, refetched when stale', async () => {
+    const ticker = page.locator('.marketTicker');
+    await ticker.waitFor({ state: 'visible', timeout: 60_000 });
+    await expect.poll(() => ticker.innerText(), { timeout: 30_000 }).toContain('7,656.98');
+    const text = await ticker.innerText();
+    expect(text).toContain('S&P 500');
+    // The day's move, signed, percentage in parentheses — and green.
+    expect(text).toContain('+65.28 (+0.86%)');
+    expect(await ticker.locator('.marketTickerChange.up').count()).toBe(1);
+    // The fetch time, in Eastern time with the season's own abbreviation.
+    expect(text).toMatch(/\b(EDT|EST)\b/);
+
+    // Placement: directly under Widow's Playbook, behind a separator.
+    const trail = await page
+      .locator('.sideNavItems > *')
+      .evaluateAll((els) => els.map((e) => `${e.className}|${(e.textContent ?? '').trim()}`));
+    const at = trail.findIndex((t) => t.startsWith('marketTicker|'));
+    expect(trail[at - 1]).toMatch(/^sideNavSep\|/);
+    expect(trail[at - 2]).toContain("Widow's Playbook");
+
+    // Launch fetched exactly once, however many activation events boot fired.
+    expect(gspcHits).toBe(1);
+
+    // An activation within the hour does NOT refetch...
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(1_000);
+    expect(gspcHits).toBe(1);
+
+    // ...but a stale value does. A fetchedAt years old refetches whatever the
+    // real clock says: during a session it is past the hour, and after the
+    // close it predates the settled close. So this leg cannot depend on when
+    // CI happens to run — and it proves the no-refetch above was the rule, not
+    // a dead listener.
+    await page.evaluate(() => {
+      const stale = JSON.parse(localStorage.getItem('fplan-sp500') ?? '{}') as Record<string, unknown>;
+      stale.fetchedAt = '2020-01-06T15:00:00.000Z';
+      localStorage.setItem('fplan-sp500', JSON.stringify(stale));
+      window.dispatchEvent(new Event('focus'));
+    });
+    await expect.poll(() => gspcHits, { timeout: 30_000 }).toBe(2);
+    // The refetch replaced the stale value rather than merely requesting one.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (JSON.parse(localStorage.getItem('fplan-sp500') ?? '{}') as { fetchedAt?: string })
+              .fetchedAt ?? '',
+        ),
+      )
+      .not.toMatch(/^2020-/);
+  }, 120_000);
 
   it('a DOWN upstream fails per-symbol and the stored quote survives untouched', async () => {
     const before = await page.evaluate(() =>

@@ -4,6 +4,7 @@ import { useSwUpdate } from './pwa';
 import { ThemeContext, useThemeController } from './theme';
 import { ToastProvider } from './toast';
 import { FolderControl } from './components/topbar/FolderControl';
+import { MarketTicker } from './components/topbar/MarketTicker';
 import { MODULE_ICONS } from './modules/icons';
 import { ModuleBanner } from './modules/ModuleBanner';
 import { WorkbenchPage } from './pages/WorkbenchPage';
@@ -122,6 +123,9 @@ export function App() {
                   </Fragment>
                 ),
               )}
+              {/* The S&P 500, under the last module behind its own separator
+                  (both render nothing when no quote proxy is configured). */}
+              <MarketTicker />
             </nav>
             {/* Settings at the very bottom (owner's placement), then where
                 the data on screen lives — File > New / File > Open. The

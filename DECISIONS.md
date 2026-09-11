@@ -2774,3 +2774,68 @@ Nav: thirteen modules now, Plan first and the rest alphabetical, so it lands
 last. The label map's keys had to accept quotes — 'widow-playbook' cannot be a
 bare identifier — and the nav test's extractor was reporting the label missing
 when it was present.
+
+## The S&P 500 in the sidebar (2026-09-11, twenty-first pass)
+
+**Under Widow's Playbook, behind the same separator that sets Plan apart: the
+S&P 500's level, the day's move with its percentage in parentheses in green or
+red, and when the app last fetched it, in EST or EDT as the date requires.** It
+is the one number on screen that is not about the household.
+
+**IT FETCHES ON ACTIVATION, AND THREE EVENTS MEAN ACTIVATION.** An installed PWA
+runs in its own window with no tab strip, so "clicking on the tab" there is
+switching to that window: switching apps fires `focus`, minimising and
+restoring or changing macOS Spaces fires `visibilitychange`, and a browser tab
+restored from the back-forward cache fires `pageshow` without remounting React.
+Any one can fire alone and they often fire together; an in-flight guard and the
+hour rule make the duplicates free. It does not poll while the window stays
+focused — the ask was an update on activation, and a timer would spend the
+proxy's quota on a number nobody is looking away from.
+
+**THE CLOSE RULE NEEDED ONE REFINEMENT.** The owner's rule was: skip if updated
+within the hour, or if the market has closed. Read literally, "closed" strands a
+value fetched at 2 PM for the whole evening, when after the bell the ONE fetch
+worth making is the one that captures the closing value. So after the close the
+ticker fetches while the value on hand predates the settled close, and stops the
+moment it has it — through the weekend and Monday's pre-market, until 9:30. The
+hour floor applies throughout. "Settled" is 5:00 PM, an hour after the bell,
+because Yahoo stamped the captured close at 4:46 PM; a 4:05 fetch can still hold
+a provisional number, and the price of caution is at most one extra evening
+fetch.
+
+**THE CLOCK DOES THE WORK, NOT A HOLIDAY TABLE.** Open is weekdays 9:30–16:00
+Eastern, and nothing else. A holiday or a 1 PM early close is not in that rule
+and does not need to be: the only error either can cause is an extra fetch that
+returns the same number, never a missed one, because no NYSE session runs past
+4:00 PM. A holiday list would be a file that goes stale every January to save a
+handful of requests. The Eastern arithmetic compares WALL-CLOCK times rather
+than instants, which needs no offset maths and is only non-monotonic during the
+1–2 AM November hour, nowhere near the 5 PM it is compared against. The unit
+tests write every instant with its explicit offset and include the winter cases
+a wrong offset would get backwards (9:15 AM EST is pre-market; read as EDT it
+would be "open").
+
+**THE TIMESTAMP IS THE FETCH TIME**, as asked. After the close it is therefore
+when the closing value was fetched — "Sep 11, 5:03 PM EDT" beside Friday's
+close — not the time of the last trade. `Intl` supplies EST/EDT; newer ICU puts
+a narrow no-break space before PM, swapped for a plain one so the text reads
+and tests predictably.
+
+**THE PROXY SEES ONE SYMBOL.** It goes through the same quote proxy as Refresh
+prices, asking only for ^GSPC, so it learns nothing about the household. With
+no proxy configured — a local dev build, every offline test lane — the ticker
+renders nothing, separator included, and makes no request; that is also what
+keeps the lanes' "no off-origin request" assertions true. The last good value
+lives in localStorage (`fplan-sp500`): market data, so per browser rather than
+per folder, and Show a friend mode has nothing to hide in it. A failed fetch
+keeps the last value on screen and says it was not refreshed.
+
+**README's privacy section changed with it**: "the app never connects to
+anything" is no longer true once a proxy is configured, because activation now
+asks for ^GSPC. It says so.
+
+The proxy lane serves a captured ^GSPC response and counts upstream hits: one
+fetch at launch however many activation events boot fires, none for an
+activation within the hour, and one when the stored value is made stale — with
+a fetchedAt years old, so that leg refetches whatever the real clock says and
+cannot depend on when CI happens to run.

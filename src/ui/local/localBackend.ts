@@ -24,7 +24,7 @@
  *
  * QUOTES GO THROUGH THE PHASE-6 PROXY, once one is configured. Browsers
  * cannot call Yahoo's endpoint directly (no CORS header, mandatory
- * User-Agent), so the one network step routes through the ~15-line Cloudflare
+ * User-Agent), so quote fetches route through the ~15-line Cloudflare
  * Worker in workers/quote-proxy via proxyQuoteFetcher.ts — which also owns
  * where the proxy URL comes from (VITE_FPLAN_QUOTE_PROXY at build time, the
  * localStorage override for deploy-then-point without a rebuild). Until a URL

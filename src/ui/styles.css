@@ -150,6 +150,54 @@ body {
   margin: 6px 8px;
 }
 
+/* The S&P 500 ticker, under Widow's Playbook behind the same separator that
+   sets Plan apart. Not a nav item, so none of the item chrome: a label, the
+   level with the day's move beside it, and when the app last fetched it. */
+.marketTicker {
+  padding: 2px 10px 8px;
+}
+
+.marketTickerLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.marketTickerLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.marketTickerPrice {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.marketTickerChange {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.marketTickerChange.up {
+  color: var(--good);
+}
+
+.marketTickerChange.down {
+  color: var(--bad);
+}
+
+.marketTickerTime {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
 /* The app's 'you are here' vocabulary — accent-soft fill, accent text —
    shared with .tab.is-active's inset edge, here on the leading side. */
 .sideNavItem.active {

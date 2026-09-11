@@ -193,21 +193,25 @@ one for this case — letting the sync settle is the whole discipline.
 | **Chrome, Edge, Brave** (Chromium ≥122) | Everything: the folder picker, the durable storage, installing as an app |
 | **Safari, Firefox** | Demo mode: the full app in browser-private storage, with a standing banner saying so — these browsers don't ship the folder picker (the File System Access API), so they cannot hold a durable folder connection. **Settings → Save a copy** exports the whole folder as one JSON file and Restore reads it back, which is how data gets in and out |
 
-## Privacy, and the one network step
+## Privacy, and the network
 
-Simulations, tax math, file IO: all local, always. The single thing that ever
-touches the network is the **price refresh** (the Refresh button on the
-Accounts table, and Run now on the Plan page), which sends your holdings'
-**ticker symbols** — nothing else — through a tiny Cloudflare Worker proxy to
-Yahoo Finance's public quote endpoint. The proxy exists because browsers
-cannot call Yahoo directly; it validates the symbol, relays the JSON, and
-logs nothing.
+Simulations, tax math, file IO: all local, always. Two things touch the
+network, and both go through a tiny Cloudflare Worker proxy to Yahoo Finance's
+public quote endpoint — browsers cannot call Yahoo directly, so the proxy
+validates the symbol, relays the JSON, and logs nothing:
 
-**The proxy is not deployed yet.** Until the owner runs the one command in
-[`workers/quote-proxy/README.md`](workers/quote-proxy/README.md), a quote
-refresh reports a per-symbol failure explaining exactly that, stored quotes
-keep working with their recorded as-of dates, and everything else is
-unaffected. Never refresh, and the app never connects to anything at all.
+- the **price refresh** (Refresh prices on Accounts, Run now on the Plan page),
+  which sends your holdings' **ticker symbols** — nothing else;
+- the **S&P 500 in the sidebar**, which asks for exactly one symbol, `^GSPC`,
+  when the app opens or you switch back to it — at most once an hour, and after
+  the close only until the closing value is in. It carries nothing about your
+  household.
+
+The deployed app is pointed at the owner's proxy when it is built. A build with
+no proxy configured — a local `npm run dev`, the test lanes — hides the ticker
+and makes neither request: a quote refresh reports a per-symbol failure saying
+how to deploy one ([`workers/quote-proxy/README.md`](workers/quote-proxy/README.md)),
+stored quotes keep their recorded as-of dates, and nothing else is affected.
 
 ## Living with it
 
