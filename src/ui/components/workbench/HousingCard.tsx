@@ -54,7 +54,7 @@ import {
 import { clamp, formatPct, formatUSD, parseYearMonth } from '../../../shared/util';
 // The engine's own figures, not lookalikes: what is displayed here IS what is
 // modelled (see the module comment).
-import { annuityMonthlyPayment, projectedPayoffLump } from '../../../engine/housing';
+import { annuityMonthlyPayment, projectedPayoffSchedule } from '../../../engine/housing';
 import { SIM_START_YEAR } from '../../../engine/household';
 import {
   DEFAULT_DOWN_PCT,
@@ -178,6 +178,12 @@ const PAYOFF_TIP =
   'insurance continue. Blank = pay the full term. A year the portfolio cannot afford follows ' +
   'the ordinary shortfall path, like any other big expense.';
 
+const PAYOFF_OVER_TIP =
+  'Spread the payoff over this many years instead of one lump: the first slice lands at "Pay off ' +
+  'after", then one a year in the same month. Each slice is an equal share of what is still owed ' +
+  'and the regular payment continues until the last slice clears the loan. Spreading keeps each ' +
+  'year\u2019s IRA draw in lower tax brackets than a single lump would. Blank or 1 = one lump.';
+
 const LEFTOVER_CASH_NOTE =
   'Cash left over after the down payment stays invested and is still spent before the IRA is ' +
   'touched — the ordering is unchanged, the money just earns a market return instead of the ' +
@@ -260,12 +266,12 @@ interface MortgageFigures {
   /** Below 20% down the engine charges PMI; the card has to say so. */
   pmi: boolean;
   /**
-   * The lump a scheduled payoff will draw — the ENGINE's projection
-   * (projectedPayoffLump wraps the same amortization loop the simulation
-   * runs), so the readout and the simulated outflow are the same figure.
-   * Null when no payoff is scheduled.
+   * The slices a scheduled payoff will draw — the ENGINE's projection
+   * (projectedPayoffSchedule runs the same amortization loop the simulation
+   * runs), so the readout and the simulated outflows are the same figures.
+   * One entry for a single lump; empty when no payoff is scheduled.
    */
-  payoffLump: number | null;
+  payoffSlices: Array<{ yearsAfter: number; amount: number }>;
 }
 
 /** Down payment, loan and monthly principal-and-interest for a financed purchase. */
@@ -283,15 +289,13 @@ function mortgageFigures(price: number, financing: MortgageFinancing): MortgageF
     rate,
     termYears,
     pmi: downPct < DEFAULT_DOWN_PCT,
-    payoffLump:
-      financing.payoffAfterYears !== undefined
-        ? projectedPayoffLump(price, {
-            downPct,
-            rate,
-            termYears,
-            payoffAfterYears: financing.payoffAfterYears,
-          })
-        : null,
+    payoffSlices: projectedPayoffSchedule(price, {
+      downPct,
+      rate,
+      termYears,
+      payoffAfterYears: financing.payoffAfterYears,
+      payoffOverYears: financing.payoffOverYears,
+    }),
   };
 }
 
@@ -434,6 +438,9 @@ export function seedHousingPlan(
           // would silently lengthen the loan back to full term.
           ...(buy.financing.payoffAfterYears !== undefined
             ? { payoffAfterYears: buy.financing.payoffAfterYears }
+            : {}),
+          ...(buy.financing.payoffOverYears !== undefined
+            ? { payoffOverYears: buy.financing.payoffOverYears }
             : {}),
         }
       : { type: 'cash' };
@@ -1115,7 +1122,13 @@ function MortgageFields({
    */
   const set = (patch: Partial<Omit<MortgageFinancing, 'type'>>) => {
     const next: MortgageFinancing = { ...financing, ...patch };
-    for (const key of ['downPct', 'rate', 'termYears', 'payoffAfterYears'] as const) {
+    for (const key of [
+      'downPct',
+      'rate',
+      'termYears',
+      'payoffAfterYears',
+      'payoffOverYears',
+    ] as const) {
       if (key in patch && patch[key] === undefined) delete next[key];
     }
     /*
@@ -1130,6 +1143,19 @@ function MortgageFields({
     if (next.payoffAfterYears !== undefined && next.payoffAfterYears >= effTerm) {
       if (effTerm > 1) next.payoffAfterYears = effTerm - 1;
       else delete next.payoffAfterYears;
+    }
+    /*
+     * The pay-down follows the same rules one level down: it means nothing
+     * without a payoff to spread (so it leaves with one), and its last slice
+     * must stay strictly inside the term, so a term or payoff edit that
+     * squeezes it clamps it. A spread of 1 is the single lump, stored as
+     * absent.
+     */
+    if (next.payoffAfterYears === undefined) delete next.payoffOverYears;
+    else if (next.payoffOverYears !== undefined) {
+      const maxOver = effTerm - next.payoffAfterYears;
+      if (next.payoffOverYears > maxOver) next.payoffOverYears = maxOver;
+      if (next.payoffOverYears <= 1) delete next.payoffOverYears;
     }
     onChange(next);
   };
@@ -1172,6 +1198,21 @@ function MortgageFields({
             })
           }
         />
+        {financing.payoffAfterYears !== undefined && (
+          <NumberField
+            key={`payoffOver:${financing.payoffOverYears ?? 'default'}`}
+            label="Spread over (years)"
+            width={140}
+            int
+            allowEmpty
+            placeholder="1"
+            tip={PAYOFF_OVER_TIP}
+            value={financing.payoffOverYears}
+            onCommit={(v) =>
+              set({ payoffOverYears: v === undefined ? undefined : Math.round(clamp(v, 1, 29)) })
+            }
+          />
+        )}
         <NumberField
           key={`rate:${financing.rate ?? 'default'}`}
           label="Rate %"
@@ -1209,14 +1250,7 @@ function MortgageFields({
           },
           // The engine's own projection of the lump (see MortgageFigures) — a
           // planned six-figure outflow the user should see before the run does.
-          ...(figures.payoffLump !== null && financing.payoffAfterYears !== undefined
-            ? [
-                {
-                  label: `Payoff lump after ${financing.payoffAfterYears} years (from the portfolio)`,
-                  value: formatUSD(figures.payoffLump),
-                },
-              ]
-            : []),
+          ...payoffReadout(figures.payoffSlices),
         ]}
       />
       {figures.pmi && (
@@ -1230,6 +1264,43 @@ function MortgageFields({
       </div>
     </>
   );
+}
+
+/**
+ * The payoff's readout lines: the lump for a single payoff; for a pay-down,
+ * its span and the range its slices cover (they shrink a little each year as
+ * the regular payment keeps working on the balance between them).
+ */
+function payoffReadout(
+  slices: Array<{ yearsAfter: number; amount: number }>,
+): Array<{ label: string; value: string }> {
+  if (slices.length === 0) return [];
+  const first = slices[0];
+  if (slices.length === 1) {
+    return [
+      {
+        label: `Payoff lump after ${first.yearsAfter} years (from the portfolio)`,
+        value: formatUSD(first.amount),
+      },
+    ];
+  }
+  const last = slices[slices.length - 1];
+  const amounts = slices.map((sl) => sl.amount);
+  const lo = Math.min(...amounts);
+  const hi = Math.max(...amounts);
+  return [
+    {
+      label: `Pay-down, years ${first.yearsAfter}–${last.yearsAfter} (${slices.length} yearly slices from the portfolio)`,
+      value:
+        Math.round(lo) === Math.round(hi)
+          ? `${formatUSD(lo)}/yr`
+          : `${formatUSD(lo)}–${formatUSD(hi)}/yr`,
+    },
+    {
+      label: 'Pay-down total',
+      value: formatUSD(amounts.reduce((a, b) => a + b, 0)),
+    },
+  ];
 }
 
 /** What a cash purchase costs up front and to hold. */

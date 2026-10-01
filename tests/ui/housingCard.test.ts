@@ -136,6 +136,19 @@ describe('seedHousingPlan lifts the scheduled payoff from a hand-written event',
     const plan = seedHousingPlan(home, events(), null);
     expect(plan.financing.type).toBe('mortgage');
     expect('payoffAfterYears' in plan.financing).toBe(false);
+    expect('payoffOverYears' in plan.financing).toBe(false);
+  });
+
+  it('lifts a pay-down with its payoff — the button must not collapse it to one lump', () => {
+    const evs = events(5);
+    const buy = evs[1] as Extract<ScenarioEvent, { type: 'buy_house' }>;
+    (buy.financing as { payoffOverYears?: number }).payoffOverYears = 4;
+    const plan = seedHousingPlan(home, evs, null);
+    expect(plan.financing).toMatchObject({
+      type: 'mortgage',
+      payoffAfterYears: 5,
+      payoffOverYears: 4,
+    });
   });
 });
 

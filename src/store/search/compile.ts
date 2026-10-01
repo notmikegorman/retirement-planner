@@ -486,10 +486,10 @@ function applyHousing(ctx: CompileCtx, out: Scenario, assignment: SearchAssignme
      * that cannot act (the same reason canonicalise() strips the survivor
      * price from a 'none' purchase).
      */
-    const basePayoff =
-      ctx.base.housing?.financing.type === 'mortgage'
-        ? ctx.base.housing.financing.payoffAfterYears
-        : undefined;
+    const baseFin = ctx.base.housing?.financing;
+    const basePayoff = baseFin?.type === 'mortgage' ? baseFin.payoffAfterYears : undefined;
+    // The pay-down rides with the payoff it spreads, for the same reason.
+    const baseOver = baseFin?.type === 'mortgage' ? baseFin.payoffOverYears : undefined;
     plan.financing =
       finAxis.levels[finIdx] === 'cash'
         ? { type: 'cash' }
@@ -497,6 +497,9 @@ function applyHousing(ctx: CompileCtx, out: Scenario, assignment: SearchAssignme
             type: 'mortgage',
             downPct: 0.2,
             ...(basePayoff !== undefined ? { payoffAfterYears: basePayoff } : {}),
+            ...(basePayoff !== undefined && baseOver !== undefined
+              ? { payoffOverYears: baseOver }
+              : {}),
           };
   }
 

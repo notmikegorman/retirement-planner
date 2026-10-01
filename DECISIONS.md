@@ -2839,3 +2839,48 @@ fetch at launch however many activation events boot fires, none for an
 activation within the hour, and one when the stored value is made stale — with
 a fetchedAt years old, so that leg refetches whatever the real clock says and
 cannot depend on when CI happens to run.
+
+## The mortgage pay-down (2026-10-01, engine 1.25.0)
+
+**The question that forced it.** Before 59½, a large cash purchase funded from a
+traditional IRA pays the 10% penalty and lands a seven-figure draw in one tax year's
+top brackets. Financing with the loan sized to the gap avoids both, and the natural
+follow-up is "borrow until the IRA is penalty-free, then retire the loan". The
+engine could already pay a loan off — but only in ONE lump (`payoffAfterYears`),
+which brings back exactly the bracket bunching the loan existed to avoid. Measured on
+a representative plan, a penalty-free lump payoff scored below simply keeping the
+loan at 6–7%, because the lump stacked a large pre-tax draw into one year.
+
+**What it is.** `financing.payoffOverYears` spreads the scheduled payoff over N yearly
+slices: the first at `payoffAfterYears`, then one a year in the purchase's calendar
+month. Each slice retires `balance / slicesLeft` — an equal share of what is still
+owed at that moment — and the regular monthly payment continues unchanged between
+slices. The last slice clears the loan. Absent or 1 is the single lump, bit-identical.
+
+Decisions in the build, each commented at its site:
+
+- **The payment is not re-amortized after a slice.** A prepayment shortens a real
+  loan; it does not lower the payment. A consequence worth knowing: on a short or
+  late schedule the regular payment can finish a halved balance before the next
+  slot, so the schedule ends early. The engine never charges a slice on a loan that
+  is already paid.
+- **Equal shares of what is owed, not equal dollars or bracket-targeted amounts.**
+  Simple, monotone, and the last slice provably clears the loan. Sizing each slice
+  to fill a bracket is a larger feature (it needs the year's other income), and the
+  plain version already captures most of the bracket smoothing.
+- **The slot month's own payment is made after the slice**, so a slice year still
+  pays twelve payments; only the final slice replaces its month's payment, exactly
+  as the single lump always did. PMI is charged on the pre-slice months of a slice
+  year only.
+- **The 72(t) calendar reserve counts every slice in its own year**, for future buys
+  and for the held loan, through `payoffSchedule` / `projectedPayoffSchedule` — the
+  same amortize loop the engine charges with, so a projection and a charge are the
+  same floats. A one-slice schedule prices exactly what `remainingBalanceAfterPayments`
+  did, which is why every golden digest held without a re-pin.
+- **A sale ends the schedule**: the sale's net retires what is owed, and the sale
+  wins a same-month tie with a slice, as it always did with the lump.
+- **A schedule that runs past the term is shortened**, not rejected, in the engine
+  (`originationPayoff`); the schema rejects a stated violation against a stated term,
+  and the Housing card clamps the field when the term or payoff is edited.
+- **Intermediate slices fire `mortgage-paydown`**; the last fires `mortgage-payoff`.
+  Both chips read the slice amount from the trace line, as the lump's always did.

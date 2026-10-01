@@ -71,7 +71,7 @@ export type YearMonth = string;
  * tests/shared/engineVersion.test.ts now fails when the engine's source
  * changes without this constant moving.
  */
-export const ENGINE_VERSION = '1.24.0';
+export const ENGINE_VERSION = '1.25.0';
 
 // ---------------------------------------------------------------------------
 // Profile
@@ -1812,6 +1812,12 @@ export type ScenarioEvent =
              * (the schedule already amortizes to zero by then).
              */
             payoffAfterYears?: number;
+            /**
+             * Spread the payoff over this many yearly slices, the first at
+             * payoffAfterYears (see HousingFinancing.payoffOverYears).
+             * ABSENT or 1 = the single lump. Requires payoffAfterYears.
+             */
+            payoffOverYears?: number;
           };
       propertyTaxAnnual: number;
       insuranceAnnual: number;
@@ -1917,6 +1923,28 @@ export type HousingFinancing =
        * make one impossible to state).
        */
       payoffAfterYears?: number;
+      /**
+       * PAY THE LOAN DOWN over this many years instead of in one lump: the
+       * payoff becomes N yearly slices, the first at `payoffAfterYears` and one
+       * a year after it in the same calendar month. Each slice retires an equal
+       * share of the principal still owed at that moment (balance / slices
+       * left), so the last one clears the loan; between slices the regular
+       * monthly payment carries on unchanged. Every slice is a committed cash
+       * need of its year exactly like the single lump — drawn through the
+       * ordinary withdrawal order, seen by the 72(t) calendar-aware carve.
+       *
+       * WHY IT EXISTS: retiring a large loan in one year stacks a large pre-tax
+       * draw into one tax year's top brackets. Spreading it lets the draws sit
+       * in lower brackets while still ending the interest years early — the
+       * point of borrowing to avoid a pre-59 1/2 penalty and then retiring the
+       * loan once the IRA is penalty-free.
+       *
+       * ABSENT or 1 = the single lump, bit-identical to before this field
+       * existed. Requires `payoffAfterYears`. The last slice (payoffAfterYears
+       * + payoffOverYears - 1) must land strictly before the term; the engine
+       * shortens a schedule that would not.
+       */
+      payoffOverYears?: number;
     };
 
 /**

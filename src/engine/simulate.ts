@@ -553,8 +553,8 @@ import {
 import {
   cloneHousingState,
   initHousingState,
-  projectedPayoffLump,
-  remainingBalanceAfterPayments,
+  payoffSchedule,
+  projectedPayoffSchedule,
   runHousingYear,
   type HousingState,
 } from './housing';
@@ -3071,12 +3071,11 @@ export function simulatePath(
         committed += buy.financing === 'cash' ? price : price * buy.financing.downPct;
         // A financed buy's scheduled payoff (payoffAfterYears) is a SECOND
         // committed outflow of the same purchase, landing N years later —
-        // priced off the same `price` the down payment just used.
-        if (buy.financing !== 'cash' && buy.financing.payoffAfterYears !== undefined) {
-          const lumpYi = by + buy.financing.payoffAfterYears;
-          if (lumpYi < bridgeEndYi) {
-            const lump = projectedPayoffLump(price, buy.financing);
-            if (lump !== null) committed += lump;
+        // priced off the same `price` the down payment just used. A pay-down
+        // (payoffOverYears) is several: each slice counts in its own year.
+        if (buy.financing !== 'cash') {
+          for (const slice of projectedPayoffSchedule(price, buy.financing)) {
+            if (by + slice.yearsAfter < bridgeEndYi) committed += slice.amount;
           }
         }
       }
@@ -3097,19 +3096,13 @@ export function simulatePath(
        */
       committed += hres.mortgagePayoff;
       const heldMort = housing.home?.mortgage ?? null;
-      if (heldMort !== null && heldMort.payoffAfterMonths !== null) {
-        const monthsToGo = heldMort.payoffAfterMonths - heldMort.monthsElapsed;
-        // Housing already ran this year, so monthsElapsed is the end-of-year
-        // count and the lump lands monthsToGo months into NEXT year.
-        const lumpYi = yi + 1 + Math.floor(monthsToGo / 12);
-        if (lumpYi < bridgeEndYi) {
-          committed += remainingBalanceAfterPayments(
-            heldMort.balance,
-            heldMort.rate,
-            heldMort.monthlyPayment,
-            monthsToGo,
-          );
-        }
+      // Housing already ran this year, so monthsElapsed is the end-of-year
+      // count and a slice monthsAhead payments away lands monthsAhead months
+      // into NEXT year. A single lump is a one-slice schedule, priced by the
+      // same amortize loop the engine will charge it with.
+      const heldSlices = heldMort !== null ? payoffSchedule(heldMort) : [];
+      for (const slice of heldSlices) {
+        if (yi + 1 + Math.floor(slice.monthsAhead / 12) < bridgeEndYi) committed += slice.amount;
       }
       accessible = Math.max(0, accessible - committed);
 
@@ -3155,12 +3148,11 @@ export function simulatePath(
         // The buy's scheduled payoff inside the same lock window (Fix A must
         // see it: the lump is exactly the kind of committed draw the 0.0%
         // incident's carve swallowed the principal for).
-        if (buy.financing !== 'cash' && buy.financing.payoffAfterYears !== undefined) {
-          const lumpYi = by + buy.financing.payoffAfterYears;
-          if (lumpYi <= lockEndYi) {
-            const lump = projectedPayoffLump(price, buy.financing);
-            if (lump !== null) {
-              committedInLock += lump;
+        if (buy.financing !== 'cash') {
+          for (const slice of projectedPayoffSchedule(price, buy.financing)) {
+            const lumpYi = by + slice.yearsAfter;
+            if (lumpYi <= lockEndYi) {
+              committedInLock += slice.amount;
               lastCommitYi = Math.max(lastCommitYi, lumpYi);
             }
           }
@@ -3180,16 +3172,10 @@ export function simulatePath(
        * nothing backstops a carve that proves too large).
        */
       committedInLock += hres.mortgagePayoff;
-      if (heldMort !== null && heldMort.payoffAfterMonths !== null) {
-        const monthsToGo = heldMort.payoffAfterMonths - heldMort.monthsElapsed;
-        const lumpYi = yi + 1 + Math.floor(monthsToGo / 12);
+      for (const slice of heldSlices) {
+        const lumpYi = yi + 1 + Math.floor(slice.monthsAhead / 12);
         if (lumpYi <= lockEndYi) {
-          committedInLock += remainingBalanceAfterPayments(
-            heldMort.balance,
-            heldMort.rate,
-            heldMort.monthlyPayment,
-            monthsToGo,
-          );
+          committedInLock += slice.amount;
           lastCommitYi = Math.max(lastCommitYi, lumpYi);
         }
       }
@@ -4041,15 +4027,28 @@ export function simulatePath(
     // new YearRow field, the purchaseFunding convention, so every
     // absent-field row keeps its exact shape and the golden digests hold.
     if (taxes.trace && hres.mortgagePayoff > 0) {
-      taxes.trace.push({
-        label: 'Mortgage paid off early — remaining principal in one lump',
-        amount: hres.mortgagePayoff,
-        note:
-          'scheduled N years after origination (payoffAfterYears); drawn through the ordinary ' +
-          'withdrawal order — taxed, and penalized under 59 1/2 where a draw is penalizable. ' +
-          'Interest, payments and any PMI stop from the payoff month; property tax, insurance ' +
-          'and maintenance continue with the house',
-      });
+      taxes.trace.push(
+        hres.mortgagePayoffFinal
+          ? {
+              label: 'Mortgage paid off early — remaining principal in one lump',
+              amount: hres.mortgagePayoff,
+              note:
+                'scheduled N years after origination (payoffAfterYears; the last slice of a ' +
+                'pay-down when payoffOverYears is set); drawn through the ordinary withdrawal ' +
+                'order — taxed, and penalized under 59 1/2 where a draw is penalizable. ' +
+                'Interest, payments and any PMI stop from the payoff month; property tax, ' +
+                'insurance and maintenance continue with the house',
+            }
+          : {
+              label: 'Mortgage paid off early — pay-down slice of the remaining principal',
+              amount: hres.mortgagePayoff,
+              note:
+                'one yearly slice of a scheduled pay-down (payoffOverYears): an equal share of ' +
+                'the principal still owed, drawn through the ordinary withdrawal order — taxed, ' +
+                'and penalized under 59 1/2 where a draw is penalizable. The regular payment ' +
+                'continues on the smaller balance until the last slice clears the loan',
+            },
+      );
     }
     // SPEC §7 auditability, note 16: every year a 72(t) series pays, the trace
     // shows the payment and the amortization inputs behind it.
@@ -4979,7 +4978,9 @@ export function simulatePath(
       // A six-figure planned outflow deserves the same visibility as the
       // election that funds it: the year the lump retires the loan gets a
       // chip, with the amount in the tooltip (read from the trace line above).
-      if (hres.mortgagePayoff > 0) inPathEvents.push('mortgage-payoff');
+      if (hres.mortgagePayoff > 0) {
+        inPathEvents.push(hres.mortgagePayoffFinal ? 'mortgage-payoff' : 'mortgage-paydown');
+      }
       if (death !== null && death.year === year) inPathEvents.push('spousal-rollover');
       if (titheAccountId !== null && titheHistory.firstRetiredYi === yi) {
         inPathEvents.push('tithe-seeded');

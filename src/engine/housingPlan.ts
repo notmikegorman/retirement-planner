@@ -241,6 +241,9 @@ export function compileHousingPlan(plan: HousingPlan, horizonMonths?: number): S
             ...(plan.financing.payoffAfterYears !== undefined
               ? { payoffAfterYears: plan.financing.payoffAfterYears }
               : {}),
+            ...(plan.financing.payoffOverYears !== undefined
+              ? { payoffOverYears: plan.financing.payoffOverYears }
+              : {}),
           },
     propertyTaxAnnual: plan.propertyTaxAnnual,
     insuranceAnnual: planInsuranceAnnual(plan),

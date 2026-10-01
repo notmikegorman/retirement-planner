@@ -544,6 +544,30 @@ describe('buildEvent', () => {
     const junk = mortgageFields();
     junk.payoffAfterYears = 'soonish';
     expect(buildEvent(junk).ok).toBe(false);
+    // A pay-down is written beside its payoff, round-trips, and is checked
+    // against the term; blank or 1 stays the single lump (no key).
+    const spread = mortgageFields();
+    spread.payoffAfterYears = '5';
+    spread.payoffOverYears = '4';
+    const spreadOk = buildEvent(spread);
+    expect(spreadOk.ok).toBe(true);
+    if (spreadOk.ok && spreadOk.event.type === 'buy_house' && spreadOk.event.financing !== 'cash') {
+      expect(spreadOk.event.financing).toMatchObject({ payoffAfterYears: 5, payoffOverYears: 4 });
+      expect(eventFieldsFrom(spreadOk.event).payoffOverYears).toBe('4');
+    }
+    const one = mortgageFields();
+    one.payoffAfterYears = '5';
+    one.payoffOverYears = '1';
+    const oneOk = buildEvent(one);
+    if (oneOk.ok && oneOk.event.type === 'buy_house' && oneOk.event.financing !== 'cash') {
+      expect('payoffOverYears' in oneOk.event.financing).toBe(false);
+    }
+    const overTerm = mortgageFields();
+    overTerm.payoffAfterYears = '25';
+    overTerm.payoffOverYears = '6';
+    const overBad = buildEvent(overTerm);
+    expect(overBad.ok).toBe(false);
+    if (!overBad.ok) expect(overBad.error).toMatch(/inside the term/);
     // Stale payoff text under CASH financing must not block the save — the
     // form no longer shows the field, so it cannot be the user's statement.
     const cash = mortgageFields();

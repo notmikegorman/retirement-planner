@@ -188,6 +188,13 @@ projections are only as good as these numbers — replace them and the plan reco
   no brokerage account fall back to savings.
 - Spending policy `fixed_real`; success target 85%; horizon age 95; seed 20260812;
   1,000 MC paths interactive / 10,000 final.
+- **Paying a mortgage off early.** A financed purchase can schedule its payoff N years
+  after buying ("Pay off after") as one lump, or spread it over several years ("Spread
+  over"): each year in the purchase month an equal share of the principal still owed is
+  paid from the portfolio through the ordinary withdrawal order — taxed, and penalized
+  before 59½ where a draw is penalizable — while the regular payment continues until the
+  last slice clears the loan. Spreading keeps each year's IRA draw in lower brackets than
+  a single lump. The automatic 72(t) reserves for every slice inside its lock window.
 - Figures used while developing the move/rent/mortgage events, if you build them: rent
   $2,800/mo, expense multiplier 0.85× after a move, mortgage 6.5% 30-yr with 20% down. All
   placeholders — replace them with real quotes. (Your plan starts with no such events: the

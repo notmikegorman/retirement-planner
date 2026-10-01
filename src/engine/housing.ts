@@ -51,8 +51,21 @@ export interface MortgageState {
    * purchase, N years later, in the slot payment N x 12 + 1 would have
    * occupied). Null = amortize the full term (every pre-existing loan, and
    * every financed purchase without the field).
+   *
+   * With a pay-down schedule (`payoffOverYears` > 1) this is the slot of the
+   * NEXT slice: each non-final slice advances it by 12, so the slices land in
+   * the purchase's calendar month, one a year.
    */
   payoffAfterMonths: number | null;
+  /**
+   * Slices of the scheduled payoff still to come (`payoffOverYears`; 1 = the
+   * single lump). Each slice retires balance / slicesLeft — equal shares of
+   * whatever principal is left at that moment — and the regular monthly
+   * payment carries on unchanged between slices (a prepayment shortens a
+   * loan, it does not re-amortize it). The last slice retires the rest and
+   * the loan is gone. Ignored while payoffAfterMonths is null.
+   */
+  payoffSlicesLeft: number;
 }
 
 export interface HomeState {
@@ -112,6 +125,7 @@ function fromProfileMortgage(m: Mortgage): MortgageState {
     downPctAtOrigination: 0.2, // assumed no-PMI for pre-existing loans (documented)
     monthsElapsed: 0,
     payoffAfterMonths: null, // profile loans carry no scheduled payoff
+    payoffSlicesLeft: 1,
   };
 }
 
@@ -175,6 +189,7 @@ export function remainingBalanceAfterPayments(
     downPctAtOrigination: 0.2, // irrelevant to amortization
     monthsElapsed: 0,
     payoffAfterMonths: null,
+    payoffSlicesLeft: 1,
   };
   amortize(m, Math.max(0, payments));
   return m.balance;
@@ -200,6 +215,92 @@ export function projectedPayoffLump(
     annuityMonthlyPayment(principal, financing.rate, financing.termYears),
     financing.payoffAfterYears * 12,
   );
+}
+
+/** One scheduled payoff slice: when it lands and what it retires. */
+export interface PayoffSlice {
+  /** Monthly payments made before the slice, counted from the state's own monthsElapsed. */
+  monthsAhead: number;
+  amount: number;
+}
+
+/**
+ * Every slice a loan's scheduled payoff will still demand, projected by
+ * running the SAME arithmetic runHousingYear will (amortize to the slot, retire
+ * balance / slicesLeft, keep paying, repeat) on a copy — so a projection and
+ * the slices the engine later charges are the same floats. Empty when the loan
+ * carries no payoff.
+ *
+ * `monthsAhead` is measured from the state as given: the slice lands in the
+ * month after that many further payments.
+ */
+export function payoffSchedule(m: MortgageState): PayoffSlice[] {
+  if (m.payoffAfterMonths === null) return [];
+  const c: MortgageState = { ...m };
+  const out: PayoffSlice[] = [];
+  let ahead = 0;
+  while (c.payoffAfterMonths !== null && c.balance > 0) {
+    const months = Math.max(0, c.payoffAfterMonths - c.monthsElapsed);
+    amortize(c, months);
+    ahead += months;
+    if (c.balance <= 0) break;
+    const amount = c.payoffSlicesLeft <= 1 ? c.balance : c.balance / c.payoffSlicesLeft;
+    out.push({ monthsAhead: ahead, amount });
+    c.balance -= amount;
+    if (c.payoffSlicesLeft <= 1) break;
+    c.payoffSlicesLeft -= 1;
+    c.payoffAfterMonths += 12;
+  }
+  return out;
+}
+
+/**
+ * The payoff state a financed purchase originates with: the slot of the first
+ * slice and how many slices there are, after the engine clamp (see the
+ * runHousingYear purchase block). A payoff at/past the term is no payoff at
+ * all; a pay-down whose last slice would land at/past the term is shortened so
+ * its last slice lands in the final year before maturity.
+ */
+export function originationPayoff(financing: {
+  termYears: number;
+  payoffAfterYears?: number;
+  payoffOverYears?: number;
+}): { payoffAfterMonths: number | null; payoffSlicesLeft: number } {
+  const after = financing.payoffAfterYears;
+  if (after === undefined || after >= financing.termYears) {
+    return { payoffAfterMonths: null, payoffSlicesLeft: 1 };
+  }
+  const over = Math.max(1, Math.min(financing.payoffOverYears ?? 1, financing.termYears - after));
+  return { payoffAfterMonths: after * 12, payoffSlicesLeft: over };
+}
+
+/**
+ * The slices a financed purchase's scheduled payoff will demand, in whole
+ * years after origination (slice k lands payoffAfterYears + k years later, in
+ * the purchase's calendar month). Empty when the financing carries no payoff.
+ */
+export function projectedPayoffSchedule(
+  price: number,
+  financing: {
+    downPct: number;
+    rate: number;
+    termYears: number;
+    payoffAfterYears?: number;
+    payoffOverYears?: number;
+  },
+): Array<{ yearsAfter: number; amount: number }> {
+  const principal = price * (1 - financing.downPct);
+  if (principal <= 0) return [];
+  const start = originationPayoff(financing);
+  if (start.payoffAfterMonths === null) return [];
+  return payoffSchedule({
+    balance: principal,
+    rate: financing.rate,
+    monthlyPayment: annuityMonthlyPayment(principal, financing.rate, financing.termYears),
+    downPctAtOrigination: 0.2, // irrelevant to amortization
+    monthsElapsed: 0,
+    ...start,
+  }).map((sl) => ({ yearsAfter: sl.monthsAhead / 12, amount: sl.amount }));
 }
 
 export interface HousingYearArgs {
@@ -269,6 +370,12 @@ export interface HousingYearResult {
    * withdrawal solve as its own term, exactly as it feeds the purchase.
    */
   mortgagePayoff: number;
+  /**
+   * True when this year's `mortgagePayoff` was the LAST slice — the loan is
+   * gone. False for a pay-down's intermediate slices (and in years with no
+   * payoff), which retire a share of the principal while the loan carries on.
+   */
+  mortgagePayoffFinal: boolean;
   /** Updated tracked sale proceeds (consumed by any purchase this year). */
   saleProceedsRemaining: number;
   /**
@@ -306,6 +413,7 @@ export function runHousingYear(state: HousingState, args: HousingYearArgs): Hous
     saleExclusionUsed: 0,
     purchaseOutflow: 0,
     mortgagePayoff: 0,
+    mortgagePayoffFinal: false,
     saleProceedsRemaining: args.saleProceedsAvailable,
     proceedsToInvest: 0,
     totalCosts: 0,
@@ -367,9 +475,33 @@ export function runHousingYear(state: HousingState, args: HousingYearArgs): Hous
         (args.sellMonth === null || payoffSlot < args.sellMonth) &&
         mort.balance > 0
       ) {
-        res.mortgagePayoff += mort.balance;
-        mort.balance = 0;
-        home.mortgage = null;
+        if (mort.payoffSlicesLeft <= 1) {
+          res.mortgagePayoff += mort.balance;
+          res.mortgagePayoffFinal = true;
+          mort.balance = 0;
+          home.mortgage = null;
+        } else {
+          /*
+           * A PAY-DOWN slice: retire an equal share of what is left, then
+           * keep paying. The regular payment is unchanged (a prepayment
+           * shortens the loan rather than re-amortizing it), and the slot
+           * month's own payment is made after the slice — the remaining
+           * active months, slot month included, amortize below. The next
+           * slice lands in the same calendar month a year on. PMI was charged
+           * above on the pre-slice months only and is not re-charged for the
+           * rest of this year: a simplification in the household's disfavour
+           * would be the opposite choice, and a loan being paid down hard is
+           * the one most likely to have shed it.
+           */
+          const slice = mort.balance / mort.payoffSlicesLeft;
+          res.mortgagePayoff += slice;
+          mort.balance -= slice;
+          mort.payoffSlicesLeft -= 1;
+          mort.payoffAfterMonths = (mort.payoffAfterMonths as number) + 12;
+          const rest = amortize(mort, activeMonths - payMonths);
+          res.mortgagePayment += rest.payment;
+          res.mortgageInterest += rest.interest;
+        }
       }
     }
   }
@@ -434,17 +566,16 @@ export function runHousingYear(state: HousingState, args: HousingYearArgs): Hous
        * phantom payoff chip on the year. Null is the only reading that
        * changes nothing.
        */
-      const payoffYears = buy.financing.payoffAfterYears;
       mortgage = {
         balance: price - down,
         rate: buy.financing.rate,
         monthlyPayment: annuityMonthlyPayment(price - down, buy.financing.rate, buy.financing.termYears),
         downPctAtOrigination: buy.financing.downPct,
         monthsElapsed: 0,
-        payoffAfterMonths:
-          payoffYears !== undefined && payoffYears < buy.financing.termYears
-            ? payoffYears * 12
-            : null,
+        // The clamp above, and the pay-down's (a last slice at/past the term
+        // shortens the schedule), live in originationPayoff so the 72(t)
+        // reserve and the Housing card project the same schedule.
+        ...originationPayoff(buy.financing),
       };
     }
     // A purchase consumes the tracked sale proceeds: the price (or the down

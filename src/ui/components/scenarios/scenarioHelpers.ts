@@ -207,7 +207,11 @@ export function summarizeEvent(
               // A scheduled lump payoff changes what the loan IS; the summary
               // line must not read as a full-term note.
               e.financing.payoffAfterYears !== undefined
-                ? `, paid off yr ${e.financing.payoffAfterYears}`
+                ? e.financing.payoffOverYears !== undefined && e.financing.payoffOverYears > 1
+                  ? `, paid down yrs ${e.financing.payoffAfterYears}–${
+                      e.financing.payoffAfterYears + e.financing.payoffOverYears - 1
+                    }`
+                  : `, paid off yr ${e.financing.payoffAfterYears}`
                 : ''
             }`;
       return `${price}, ${fin}`;
@@ -362,6 +366,7 @@ export interface EventFields {
   termYears: string;
   /** buy_house mortgage: lump payoff N years after origination ('' = pay the full term). */
   payoffAfterYears: string;
+  payoffOverYears: string;
   propertyTaxAnnual: string;
   insuranceAnnual: string;
   mix: AssetMix;
@@ -418,6 +423,7 @@ export function defaultEventFields(date: YearMonth = DEFAULT_EVENT_DATE): EventF
     rate: '0.065',
     termYears: '30',
     payoffAfterYears: '',
+    payoffOverYears: '',
     propertyTaxAnnual: '3000',
     insuranceAnnual: '1500',
     mix: { stocks: 0.6, bonds: 0.4, bills: 0 },
@@ -500,6 +506,8 @@ export function eventFieldsFrom(e: ScenarioEvent): EventFields {
         // absent default into a stated instruction on the next save.
         f.payoffAfterYears =
           e.financing.payoffAfterYears !== undefined ? String(e.financing.payoffAfterYears) : '';
+        f.payoffOverYears =
+          e.financing.payoffOverYears !== undefined ? String(e.financing.payoffOverYears) : '';
       }
       f.propertyTaxAnnual = String(e.propertyTaxAnnual);
       f.insuranceAnnual = String(e.insuranceAnnual);
@@ -636,6 +644,23 @@ export function buildEvent(f: EventFields): BuildEventResult {
           }
         }
       }
+      // The pay-down spreads a payoff, so it is read only beside one; its last
+      // slice must also land inside the term.
+      const over = parseNumber(f.payoffOverYears);
+      const spreads =
+        f.financingMode === 'mortgage' &&
+        f.payoffAfterYears.trim() !== '' &&
+        f.payoffOverYears.trim() !== '';
+      if (spreads) {
+        if (over === null || over < 1) {
+          errs.push('spread over must be a number of years, 1 or more (or blank for one lump)');
+        } else if (payoff !== null) {
+          const term = parseNumber(f.termYears);
+          if (term !== null && Math.trunc(payoff) + Math.trunc(over) - 1 >= Math.trunc(term)) {
+            errs.push('the pay-down’s last year must be strictly inside the term');
+          }
+        }
+      }
       event = {
         type: 'buy_house',
         date: f.date,
@@ -649,6 +674,9 @@ export function buildEvent(f: EventFields): BuildEventResult {
                 termYears: int('term years', f.termYears),
                 ...(f.payoffAfterYears.trim() !== '' && payoff !== null
                   ? { payoffAfterYears: Math.trunc(payoff) }
+                  : {}),
+                ...(spreads && payoff !== null && over !== null && Math.trunc(over) > 1
+                  ? { payoffOverYears: Math.trunc(over) }
                   : {}),
               },
         propertyTaxAnnual: num('property tax', f.propertyTaxAnnual),

@@ -38,7 +38,13 @@ export interface ParsedBuyHouse {
   price: number | 'sale_proceeds';
   financing:
     | 'cash'
-    | { downPct: number; rate: number; termYears: number; payoffAfterYears?: number };
+    | {
+        downPct: number;
+        rate: number;
+        termYears: number;
+        payoffAfterYears?: number;
+        payoffOverYears?: number;
+      };
   propertyTaxAnnual: number;
   insuranceAnnual: number;
 }

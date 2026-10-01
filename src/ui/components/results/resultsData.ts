@@ -275,6 +275,14 @@ const CHIP_INFO: Record<string, ChipInfo> = {
       '59½ where a draw is penalizable. From the payoff month the payment, interest and any PMI ' +
       'stop; property tax, insurance and maintenance continue.',
   },
+  'mortgage-paydown': {
+    label: 'mortgage paid down',
+    title:
+      'One yearly slice of the scheduled pay-down fired this year: an equal share of the principal ' +
+      'still owed was paid from the portfolio through the ordinary withdrawal order — taxed draws, ' +
+      'penalized before 59½ where a draw is penalizable. The regular payment continues on the ' +
+      'smaller balance until the last slice clears the loan.',
+  },
   'aca-cliff': {
     label: 'ACA cliff',
     title: 'MAGI crossed 400% of the federal poverty level and the entire premium tax credit was lost.',
@@ -412,7 +420,7 @@ export function chipInfo(
     if (cost === null) return base;
     return { ...base, title: `${base.title} Recapture charged this year: ${formatUSD(cost)}.` };
   }
-  if (marker === 'mortgage-payoff') {
+  if (marker === 'mortgage-payoff' || marker === 'mortgage-paydown') {
     // The one figure the user wants here is the lump itself.
     const lump = mortgagePayoffInYear(row);
     if (lump === null) return base;

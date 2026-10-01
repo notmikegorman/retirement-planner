@@ -408,6 +408,30 @@ export const profileSchema: z.ZodType<Profile> = z.object({
   }),
 }) as z.ZodType<Profile>;
 
+/**
+ * The pay-down's cross-field rules, shared by the buy_house event and the
+ * housing plan: slices need a payoff to start from, and the last slice
+ * (payoffAfterYears + payoffOverYears - 1) must land strictly inside a STATED
+ * term — an absent term is the engine's default, checked by the engine's own
+ * clamp for the same reason payoffAfterYears is (see the housing plan's
+ * superRefine). Null when the shape is fine.
+ */
+function payoffSpreadIssue(f: {
+  termYears?: number;
+  payoffAfterYears?: number;
+  payoffOverYears?: number;
+}): string | null {
+  if (f.payoffOverYears === undefined || f.payoffOverYears <= 1) return null;
+  if (f.payoffAfterYears === undefined) {
+    return `payoffOverYears (${f.payoffOverYears}) needs payoffAfterYears — the pay-down starts from a scheduled payoff`;
+  }
+  const last = f.payoffAfterYears + f.payoffOverYears - 1;
+  if (f.termYears !== undefined && last >= f.termYears) {
+    return `the pay-down's last slice lands in year ${last}, which must be strictly below termYears (${f.termYears})`;
+  }
+  return null;
+}
+
 const eventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('retire'), person: z.string(), date: yearMonth }),
   z.object({ type: z.literal('claim_social_security'), person: z.string(), date: yearMonth }),
@@ -456,6 +480,9 @@ const eventSchema = z.discriminatedUnion('type', [
           // The cross-field bound is enforced below — termYears is REQUIRED on
           // an event, so "strictly inside the term" is always expressible here.
           payoffAfterYears: z.number().int().min(1).max(29).optional(),
+          // Pay-down slices: 1 = the single lump; the cross-field bounds are
+          // payoffSpreadIssue's, shared with the housing plan below.
+          payoffOverYears: z.number().int().min(1).max(29).optional(),
         })
         .superRefine((f, ctx) => {
           if (f.payoffAfterYears !== undefined && f.payoffAfterYears >= f.termYears) {
@@ -464,6 +491,10 @@ const eventSchema = z.discriminatedUnion('type', [
               path: ['payoffAfterYears'],
               message: `payoffAfterYears (${f.payoffAfterYears}) must be strictly below termYears (${f.termYears}) — at or past maturity there is no principal left to pay off`,
             });
+          }
+          const spread = payoffSpreadIssue(f);
+          if (spread !== null) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['payoffOverYears'], message: spread });
           }
         }),
     ]),
@@ -566,6 +597,7 @@ const housingPlanSchema = z.object({
       rate: z.number().min(0).max(0.25).optional(),
       termYears: z.number().int().min(1).max(50).optional(),
       payoffAfterYears: z.number().int().min(1).max(29).optional(),
+      payoffOverYears: z.number().int().min(1).max(29).optional(),
     }),
   ]),
 })
@@ -595,6 +627,16 @@ const housingPlanSchema = z.object({
         path: ['financing', 'payoffAfterYears'],
         message: `payoffAfterYears (${f.payoffAfterYears}) must be strictly below termYears (${f.termYears}) — at or past maturity there is no principal left to pay off`,
       });
+    }
+    if (f.type === 'mortgage') {
+      const spread = payoffSpreadIssue(f);
+      if (spread !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['financing', 'payoffOverYears'],
+          message: spread,
+        });
+      }
     }
   });
 

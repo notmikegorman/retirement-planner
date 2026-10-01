@@ -190,8 +190,10 @@ For each simulated year:
    In a retirement year the 401(k) rolls into the traditional IRA before anything else.
 3. **Expenses**: living × inflation × active `expense_change` multipliers, plus the
    charitable stream (which also feeds the tax engine), plus the housing module (property
-   tax/insurance/maintenance, rent, mortgage amortization) and the health module (ACA
-   benchmark scaled by the federal age curve and medical trend, with per-state Medicaid
+   tax/insurance/maintenance, rent, mortgage amortization; a scheduled payoff — one lump,
+   or yearly pay-down slices — is a capital outflow fed to the withdrawal solve, not an
+   expense) and the health module (ACA benchmark scaled by the federal age curve and
+   medical trend, with per-state Medicaid
    rules; Medicare + IRMAA from 2036 with the 6/6 transition-year proration). Investing is
    *not* an expense — it is a surplus-capped transfer into the brokerage, and while anyone
    still earns it is the *only* thing that accumulates (leftover pay beyond it is consumed

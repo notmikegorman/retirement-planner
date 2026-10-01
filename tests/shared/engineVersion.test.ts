@@ -319,10 +319,21 @@ const PINNED = {
   // parsed but ignored) — a plan or profile carrying either answers
   // differently.
   //
+  // 1.25.0: THE MORTGAGE PAY-DOWN (financing.payoffOverYears). A scheduled
+  // payoff can be spread over N yearly slices — the first at payoffAfterYears,
+  // each an equal share of the principal still owed, the regular payment
+  // continuing between them — so the draws that retire the loan can sit in
+  // lower brackets than one lump. The 72(t) calendar-aware carve counts every
+  // slice in its own year (payoffSchedule / projectedPayoffSchedule, the same
+  // amortize loop the engine charges with). Plans without the field are
+  // bit-for-bit unchanged: a one-slice schedule prices exactly what
+  // remainingBalanceAfterPayments did, and every golden digest held WITHOUT
+  // a re-pin.
+  //
   // 1.13.0 was the tithe account's soft window; 1.12.0 per-policy
   // life-insurance dispositions; 1.11.0 the itemised budget.
-  version: '1.24.0',
-  engineSourceSha256: 'a136835c3b58691ed3fd7a80d1577fcacc31342ea6da898f5e4907b794c08a87',
+  version: '1.25.0',
+  engineSourceSha256: 'ae1df42ed538bcbc2c246c08d0feb4cfa964acac334a78ddf69e9130dba0550c',
 };
 
 describe('ENGINE_VERSION and the run cache', () => {

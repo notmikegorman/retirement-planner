@@ -51,6 +51,7 @@ type StringKey =
   | 'rate'
   | 'termYears'
   | 'payoffAfterYears'
+  | 'payoffOverYears'
   | 'propertyTaxAnnual'
   | 'insuranceAnnual'
   | 'amount'
@@ -381,6 +382,7 @@ export function EventForm({
               {text('Rate (decimal)', 'rate', 100, 'e.g. 0.065')}
               {text('Term (years)', 'termYears', 90, 'e.g. 30')}
               {text('Pay off after (yrs)', 'payoffAfterYears', 110, 'blank = full term')}
+              {text('Spread over (yrs)', 'payoffOverYears', 110, 'blank = one lump')}
             </div>
           )}
           <div className="row">

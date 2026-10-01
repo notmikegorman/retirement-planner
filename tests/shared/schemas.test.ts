@@ -792,6 +792,75 @@ describe('scenario housing plan (the move as configuration)', () => {
   });
 });
 
+describe('housing plan + buy_house: the pay-down (payoffOverYears)', () => {
+  const housingPlan = (financing: unknown) => ({
+    name: 'x',
+    events: [],
+    housing: {
+      sellDate: '2027-06',
+      rentMonths: 12,
+      rentMonthly: 3000,
+      purchasePrice: 900_000,
+      propertyTaxAnnual: 7500,
+      financing,
+    },
+  });
+  const eventWith = (financing: unknown) => ({
+    name: 'x',
+    events: [
+      {
+        type: 'buy_house',
+        date: '2028-06',
+        price: 500000,
+        financing,
+        propertyTaxAnnual: 0,
+        insuranceAnnual: 0,
+      },
+    ],
+  });
+  const err = (v: unknown) => {
+    const r = scenarioSchema.safeParse(v);
+    return r.success ? null : JSON.stringify(r.error.issues);
+  };
+
+  it('accepts a pay-down beside a payoff, and 1 as the single lump', () => {
+    expect(
+      err(housingPlan({ type: 'mortgage', payoffAfterYears: 3, payoffOverYears: 5 })),
+    ).toBeNull();
+    expect(
+      err(housingPlan({ type: 'mortgage', payoffAfterYears: 3, payoffOverYears: 1 })),
+    ).toBeNull();
+    expect(
+      err(eventWith({ downPct: 0.2, rate: 0.06, termYears: 30, payoffAfterYears: 3, payoffOverYears: 5 })),
+    ).toBeNull();
+  });
+
+  it('rejects a pay-down with no payoff to spread', () => {
+    expect(err(housingPlan({ type: 'mortgage', payoffOverYears: 5 }))).toMatch(/payoffOverYears/);
+    expect(
+      err(eventWith({ downPct: 0.2, rate: 0.06, termYears: 30, payoffOverYears: 5 })),
+    ).toMatch(/payoffOverYears/);
+  });
+
+  it('rejects a last slice at/past a stated term, and out-of-band values', () => {
+    expect(
+      err(housingPlan({ type: 'mortgage', termYears: 15, payoffAfterYears: 10, payoffOverYears: 6 })),
+    ).toMatch(/payoffOverYears/);
+    expect(
+      err(housingPlan({ type: 'mortgage', termYears: 15, payoffAfterYears: 10, payoffOverYears: 5 })),
+    ).toBeNull();
+    expect(
+      err(eventWith({ downPct: 0.2, rate: 0.06, termYears: 15, payoffAfterYears: 10, payoffOverYears: 6 })),
+    ).toMatch(/payoffOverYears/);
+    expect(
+      err(housingPlan({ type: 'mortgage', payoffAfterYears: 3, payoffOverYears: 0 })),
+    ).toMatch(/payoffOverYears/);
+    expect(
+      err(housingPlan({ type: 'mortgage', payoffAfterYears: 3, payoffOverYears: 2.5 })),
+    ).toMatch(/payoffOverYears/);
+  });
+});
+
 describe('profile schema: starter profile and joint ownership', () => {
   it('accepts the shipped starter profile (joint brokerage + savings included)', () => {
     const p = starterProfile();
