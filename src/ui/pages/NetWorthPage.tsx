@@ -72,9 +72,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { NetWorthSnapshot, SnapshotScore } from '../../shared/types';
+import type { NetWorthSnapshot, Profile, SnapshotScore } from '../../shared/types';
 import { formatUSD } from '../../shared/util';
 import { api } from '../api';
+import { ensureTodaysSnapshot, snapshotTakenToday } from '../dailySnapshot';
 import { NET_WORTH_FIRST_RUN, simulationReadiness } from '../firstRun';
 import {
   NETWORTH_TAB_IDS,
@@ -784,9 +785,12 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
    * mount (the ref), never while the zero-start gate is up, and with the
    * same home value the dialog would have offered (the last snapshot's
    * figure, the profile's only for the very first). The manual button stays
-   * for a second snapshot in a day, or a different home value.
+   * for a second snapshot in a day, or a different home value. The rule
+   * itself lives in ../dailySnapshot.ts since the Dashboard (2026-11-21)
+   * takes the same snapshot: one module so the two doors share one day.
    */
   const autoTried = useRef(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [autoTaking, setAutoTaking] = useState(false);
   const [autoError, setAutoError] = useState<string | null>(null);
 
@@ -841,6 +845,7 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
     try {
       const [list, profile] = await Promise.all([api.getNetWorth(), api.getProfile()]);
       setSnapshots(list);
+      setProfile(profile);
       setHomeValue((prev) => prev ?? list[list.length - 1]?.homeValue ?? profile.home.value);
       setSnapshotGated(simulationReadiness(profile).state === 'no-accounts');
     } catch (e) {
@@ -909,25 +914,24 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
   useEffect(() => {
     if (autoTried.current) return;
     // Not before the load has answered, and never while the gate is up.
-    if (snapshots === null || homeValue === null || snapshotGated) return;
-    const now = new Date();
-    const takenToday = snapshots.some((s) => {
-      const d = new Date(s.takenAt);
-      return (
-        d.getFullYear() === now.getFullYear() &&
-        d.getMonth() === now.getMonth() &&
-        d.getDate() === now.getDate()
-      );
-    });
+    if (snapshots === null || profile === null || snapshotGated) return;
     autoTried.current = true;
-    if (takenToday) return;
+    if (snapshotTakenToday(snapshots, new Date())) return;
     setAutoTaking(true);
     setAutoError(null);
     void (async () => {
       try {
-        const snapshot = await api.takeNetWorthSnapshot({ homeValue });
-        setSnapshots((prev) => [...(prev ?? []), snapshot]);
-        setScoringIds([...scoringRef.current, snapshot.id]);
+        // Joins the Dashboard's snapshot when it is already on its way.
+        const snapshot = await ensureTodaysSnapshot({ snapshots, profile });
+        if (snapshot === null) {
+          // Taken by the other door after this page read its list.
+          await load();
+          return;
+        }
+        setSnapshots((prev) =>
+          (prev ?? []).some((s) => s.id === snapshot.id) ? prev : [...(prev ?? []), snapshot],
+        );
+        setScoringIds([...scoringRef.current.filter((x) => x !== snapshot.id), snapshot.id]);
         showToast(`Snapshot recorded: ${formatUSD(snapshot.total)}`);
       } catch (e) {
         setAutoError(e instanceof Error ? e.message : String(e));
@@ -935,7 +939,7 @@ export function NetWorthPage({ route, navigate, storedTab }: PageProps) {
         setAutoTaking(false);
       }
     })();
-  }, [snapshots, homeValue, snapshotGated, setScoringIds, showToast]);
+  }, [snapshots, profile, snapshotGated, load, setScoringIds, showToast]);
 
   const openDialog = () => {
     setTakeError(null);

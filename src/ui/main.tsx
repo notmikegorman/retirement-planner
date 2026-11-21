@@ -107,8 +107,11 @@ async function chooseOtherStorage(): Promise<void> {
  * whatever input tab the OLD plan was last touching (the owner hit exactly
  * that: a brand-new plan opening on Housing instead of Plan). Dropping the
  * keys lets every strip fall back to its first tab; the URL is reset to the
- * app root for the same reason, since a leftover /workbench/cashflow — or a
- * path from a page that no longer exists — is also the old folder's position.
+ * bare Plan page for the same reason, since a leftover /workbench/cashflow —
+ * or a path from a page that no longer exists — is also the old folder's
+ * position. Plan, not the root: the root is the Dashboard (2026-11-21), and a
+ * household that has just been typed in has no score to show there — Plan is
+ * where it learns what is missing.
  * <App/> has not mounted yet on this path, so its one storage snapshot reads
  * the cleared state.
  */
@@ -131,8 +134,8 @@ function resetRememberedViews(): void {
   } catch {
     // Storage disabled: the stale-tab hazard cannot exist without storage.
   }
-  const root = withBase('/', appBase()) || '/';
-  if (window.location.pathname !== root) window.history.replaceState(null, '', root);
+  const plan = withBase('/workbench', appBase());
+  if (window.location.pathname !== plan) window.history.replaceState(null, '', plan);
 }
 
 /**

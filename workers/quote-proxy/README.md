@@ -12,7 +12,14 @@ Yahoo shape change is an app fix, not a proxy redeploy.
 
 ```
 GET https://<your-worker>.workers.dev/?symbol=VTI
+GET https://<your-worker>.workers.dev/?symbol=%5EGSPC&range=10y
 ```
+
+- `range` is optional: `1d` (the default — a quote refresh) or `10y` (the
+  Dashboard's S&P 500 history, for its 12-month, 3-year and 5-year windows).
+  Anything else is a `400`. A Worker deployed before `range` existed ignores it
+  and answers one day; the Dashboard says it needs redeploying rather than
+  showing a wrong number.
 
 - `symbol` must match the app's own discipline — uppercase letters, digits,
   `.^-`, at most 10 characters (`BRK.B`, `^GSPC`, `BF-B` all pass). Anything

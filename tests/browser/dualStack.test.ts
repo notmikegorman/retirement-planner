@@ -817,7 +817,7 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
     await restrictContext(nodeContext, origin);
     const page = await nodeContext.newPage();
     wirePage(page);
-    nodeState = await driveSession(page, `${origin}/`);
+    nodeState = await driveSession(page, `${origin}/workbench`);
     await nodeContext.close();
     nodeContext = undefined;
 
@@ -896,7 +896,7 @@ describe('dual-stack drive: one UI, two backends, same session, same bytes', () 
       }
     }, driveSeedFiles());
 
-    localState = await driveSession(localPage, `${origin}/?backend=local`);
+    localState = await driveSession(localPage, `${origin}/workbench?backend=local`);
 
     // The same search, in the coordinator worker over the same folder — then
     // the OPFS snapshot at the same moment the node leg took its own (after

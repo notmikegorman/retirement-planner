@@ -1,5 +1,5 @@
 /**
- * THE S&P 500 TICKER'S RULES (src/shared/marketIndex.ts).
+ * THE DASHBOARD'S MARKET-WINDOW RULES (src/shared/marketIndex.ts).
  *
  * Every instant below is written with its explicit UTC offset — -04:00 for
  * EDT, -05:00 for EST — so the tests pin the Eastern-time arithmetic rather
@@ -12,16 +12,23 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import * as marketIndex from '../../src/shared/marketIndex';
 import {
+  HistoryTooShortError,
+  formatCloseDate,
   formatEtTimestamp,
-  formatIndexChange,
-  formatIndexLevel,
-  indexChange,
+  formatSignedPct,
   indexRefreshDecision,
-  parseIndexChart,
+  parseIndexHistory,
+  trailingReturn,
+  type DailyClose,
 } from '../../src/shared/marketIndex';
+import { syntheticIndexChart } from '../fixtures/syntheticIndexHistory';
 
-/** Yahoo's real ^GSPC response, captured through the deployed proxy on 2026-09-11. */
+/**
+ * Yahoo's real one-day ^GSPC response, captured through the deployed proxy on
+ * 2026-09-11 — exactly what a proxy that predates the range parameter answers.
+ */
 const GSPC = JSON.parse(
   readFileSync(fileURLToPath(new URL('../fixtures/yahoo-chart-gspc.json', import.meta.url)), 'utf8'),
 ) as unknown;
@@ -31,40 +38,132 @@ const fetchedAt = (iso: string) => ({ fetchedAt: new Date(at(iso)).toISOString()
 const decide = (nowIso: string, fetchedIso: string | null) =>
   indexRefreshDecision(at(nowIso), fetchedIso === null ? null : fetchedAt(fetchedIso));
 
-describe('parseIndexChart', () => {
-  it('reads the level and the previous close from a real response', () => {
-    expect(parseIndexChart(GSPC)).toEqual({ price: 7656.98, previousClose: 7591.7 });
+const TEN_YEARS = { from: '2016-11-21', to: '2026-11-20' };
+
+describe('parseIndexHistory', () => {
+  it('reads every close, dated by New York calendar, oldest first', () => {
+    const closes = parseIndexHistory(syntheticIndexChart({ ...TEN_YEARS, close: (_d, i) => 1000 + i }));
+    expect(closes[0]).toEqual(['2016-11-21', 1000]);
+    expect(closes[closes.length - 1][0]).toBe('2026-11-20');
+    expect(closes.length).toBeGreaterThan(2500);
+    for (let i = 1; i < closes.length; i++) expect(closes[i][0] > closes[i - 1][0]).toBe(true);
   });
 
-  it('falls back to previousClose when chartPreviousClose is absent', () => {
-    const body = {
-      chart: { result: [{ meta: { regularMarketPrice: 7600, previousClose: 7500 } }], error: null },
+  it('skips the holes Yahoo leaves as null closes', () => {
+    const closes = parseIndexHistory(
+      syntheticIndexChart({ ...TEN_YEARS, close: (d) => (d === '2026-11-19' ? null : 5000) }),
+    );
+    expect(closes.some(([d]) => d === '2026-11-19')).toBe(false);
+    expect(closes.some(([d]) => d === '2026-11-18')).toBe(true);
+  });
+
+  it("lets the live price replace the day's bar, and append a day the bars have not reached", () => {
+    const body = syntheticIndexChart({ ...TEN_YEARS, close: () => 5000 }) as {
+      chart: { result: Array<{ meta: { regularMarketPrice: number; regularMarketTime: number } }> };
     };
-    expect(parseIndexChart(body)).toEqual({ price: 7600, previousClose: 7500 });
+    const meta = body.chart.result[0].meta;
+    meta.regularMarketPrice = 5100;
+    expect(parseIndexHistory(body).at(-1)).toEqual(['2026-11-20', 5100]);
+    // Monday's session, before its bar exists.
+    meta.regularMarketTime = Date.parse('2026-11-23T15:00:00Z') / 1000;
+    expect(parseIndexHistory(body).slice(-2)).toEqual([
+      ['2026-11-20', 5000],
+      ['2026-11-23', 5100],
+    ]);
   });
 
-  it("passes Yahoo's own verdict through", () => {
+  it('dates in EASTERN time, not UTC — a winter evening stamp stays on its day', () => {
+    // 9:30 PM EST on Nov 20 is already Nov 21 in UTC.
+    const body = syntheticIndexChart({ ...TEN_YEARS, close: () => 5000 }) as {
+      chart: { result: Array<{ meta: { regularMarketTime: number } }> };
+    };
+    body.chart.result[0].meta.regularMarketTime = Date.parse('2026-11-20T21:30:00-05:00') / 1000;
+    expect(parseIndexHistory(body).at(-1)?.[0]).toBe('2026-11-20');
+  });
+
+  it('calls a one-day answer what it is — an old proxy — not a flat decade', () => {
+    expect(() => parseIndexHistory(GSPC)).toThrow(HistoryTooShortError);
+    expect(() => parseIndexHistory(GSPC)).toThrow(/redeploying/);
+  });
+
+  it("passes Yahoo's own verdict through, and refuses a non-chart", () => {
     const body = { chart: { result: null, error: { code: 'Not Found', description: 'No data found' } } };
-    expect(() => parseIndexChart(body)).toThrow(/No data found/);
+    expect(() => parseIndexHistory(body)).toThrow(/No data found/);
+    expect(() => parseIndexHistory(null)).toThrow(/no chart payload/);
+    expect(() => parseIndexHistory({ chart: { result: [], error: null } })).toThrow(/no result/);
+  });
+});
+
+describe('trailingReturn — the zoomed-out windows', () => {
+  // A month of closes that encodes its own date, so the window's ends are
+  // readable straight off the answer.
+  const closes: DailyClose[] = [
+    ['2021-11-19', 4000],
+    ['2021-11-22', 4100],
+    ['2023-11-20', 4500],
+    ['2025-11-20', 6500],
+    ['2025-11-21', 6600],
+    ['2026-11-13', 7560],
+    ['2026-11-20', 6910],
+  ];
+
+  it('measures from the same calendar date a year back to the latest close', () => {
+    const r = trailingReturn(closes, 1);
+    expect(r?.from).toEqual(['2025-11-20', 6500]);
+    expect(r?.to).toEqual(['2026-11-20', 6910]);
+    expect(r?.change).toBeCloseTo(6910 / 6500 - 1, 12);
+    expect(r?.annualized).toBeCloseTo(6910 / 6500 - 1, 12);
   });
 
-  it('refuses a response with no previous close — the green or red would be a guess', () => {
-    const body = { chart: { result: [{ meta: { regularMarketPrice: 7600 } }], error: null } };
-    expect(() => parseIndexChart(body)).toThrow(/previous close/);
+  it('uses the last close ON OR BEFORE that date when it was not a trading day', () => {
+    // 2021-11-20 was a Saturday: Friday's close starts the five-year window.
+    expect(trailingReturn(closes, 5)?.from).toEqual(['2021-11-19', 4000]);
   });
 
-  it('refuses a price that is missing, zero or not a number', () => {
-    for (const price of [undefined, 0, -1, Number.NaN, '7600']) {
-      const body = {
-        chart: { result: [{ meta: { regularMarketPrice: price, chartPreviousClose: 7500 } }], error: null },
-      };
-      expect(() => parseIndexChart(body)).toThrow(/usable price/);
-    }
+  it('annualizes the longer windows', () => {
+    const r = trailingReturn(closes, 3);
+    expect(r?.from).toEqual(['2023-11-20', 4500]);
+    expect(r?.annualized).toBeCloseTo(Math.pow(6910 / 4500, 1 / 3) - 1, 12);
   });
 
-  it('refuses something that is not a chart response at all', () => {
-    expect(() => parseIndexChart(null)).toThrow(/no chart payload/);
-    expect(() => parseIndexChart({ chart: { result: [], error: null } })).toThrow(/no result meta/);
+  it('answers null when the history does not reach back — never a shorter window', () => {
+    expect(trailingReturn(closes, 10)).toBeNull();
+    expect(trailingReturn([], 1)).toBeNull();
+  });
+
+  it('lands Feb 29 on Feb 28 a year later', () => {
+    const leap: DailyClose[] = [
+      ['2027-02-26', 100],
+      ['2028-02-28', 105],
+      ['2028-02-29', 110],
+    ];
+    expect(trailingReturn(leap, 1)?.from).toEqual(['2027-02-26', 100]);
+    const back: DailyClose[] = [
+      ['2027-02-28', 100],
+      ['2027-03-01', 999],
+      ['2028-02-29', 110],
+    ];
+    expect(trailingReturn(back, 1)?.from).toEqual(['2027-02-28', 100]);
+  });
+});
+
+describe('formatting', () => {
+  it('signs a percentage with one decimal and a typographic minus', () => {
+    expect(formatSignedPct(0.0568)).toBe('+5.7%');
+    expect(formatSignedPct(-0.0861)).toBe('−8.6%');
+    expect(formatSignedPct(0.5196)).toBe('+52.0%');
+    expect(formatSignedPct(0.00004)).toBe('0.0%');
+    expect(formatSignedPct(-0.00004)).toBe('0.0%');
+  });
+
+  it('prints a close date without shifting it a day in any zone', () => {
+    expect(formatCloseDate('2025-11-20')).toBe('Nov 20, 2025');
+    expect(formatCloseDate('2026-01-01')).toBe('Jan 1, 2026');
+  });
+
+  it('has no daily-change formatter at all — the page shows no daily move', () => {
+    expect(Object.keys(marketIndex)).not.toContain('formatIndexChange');
+    expect(Object.keys(marketIndex)).not.toContain('indexChange');
   });
 });
 
@@ -156,28 +255,5 @@ describe('formatEtTimestamp — EST or EDT, as the date requires', () => {
 
   it('uses plain spaces, not the narrow no-break space newer ICU emits', () => {
     expect(formatEtTimestamp(at('2026-09-11T16:46:20-04:00'))).not.toMatch(/[  ]/);
-  });
-});
-
-describe('the change line', () => {
-  it('is signed, two-decimal, with the percentage in parentheses', () => {
-    expect(formatIndexChange({ price: 7656.98, previousClose: 7591.7 })).toBe('+65.28 (+0.86%)');
-    expect(indexChange({ price: 7656.98, previousClose: 7591.7 }).direction).toBe('up');
-    expect(formatIndexChange({ price: 7500, previousClose: 7600 })).toBe('−100.00 (−1.32%)');
-    expect(indexChange({ price: 7500, previousClose: 7600 }).direction).toBe('down');
-  });
-
-  it('calls a move too small to print a cent flat, not green or red', () => {
-    expect(indexChange({ price: 7600.004, previousClose: 7600 }).direction).toBe('flat');
-    expect(formatIndexChange({ price: 7600.004, previousClose: 7600 })).toBe('0.00 (0.00%)');
-    // The negative-zero case: -0.004 rounds to -0 cents, which is not "down".
-    expect(indexChange({ price: 7599.996, previousClose: 7600 }).direction).toBe('flat');
-    expect(formatIndexChange({ price: 7599.996, previousClose: 7600 })).toBe('0.00 (0.00%)');
-  });
-
-  it('groups thousands in both the level and a large move', () => {
-    expect(formatIndexLevel(7656.98)).toBe('7,656.98');
-    expect(formatIndexLevel(7600)).toBe('7,600.00');
-    expect(formatIndexChange({ price: 8834.5, previousClose: 7600 })).toBe('+1,234.50 (+16.24%)');
   });
 });

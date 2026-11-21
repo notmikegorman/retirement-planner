@@ -776,7 +776,8 @@ describe('pages walkthrough: the based bundle, driven as a brand-new user', () =
     const fbPage = await fallbackContext.newPage();
     fbPage.on('pageerror', (err) => pageErrors.push(String(err)));
 
-    await fbPage.goto(`${staticServer.origin}${BASE}/`);
+    // Straight to Plan: the root is the Dashboard, which has no verdict.
+    await fbPage.goto(`${staticServer.origin}${BASE}/workbench`);
     await fbPage
       .getByRole('heading', { name: 'Where should your data live?' })
       .waitFor({ state: 'visible', timeout: 60_000 });

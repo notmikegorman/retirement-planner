@@ -624,10 +624,17 @@ describe('the snapshot dialog (source scan)', () => {
   });
 
   it('takes a snapshot from confirm only — never from Cancel or Escape', () => {
-    // Two call sites since 2026-08-30: the dialog's confirm, and the once-a-
-    // day automatic snapshot on arrival. Nothing else may record a row.
-    expect(page.match(/api\.takeNetWorthSnapshot/g)).toHaveLength(2);
-    expect(page).toContain('const takenToday = snapshots.some((s) => {');
+    // Two call sites: the dialog's confirm here, and the once-a-day automatic
+    // snapshot — since 2026-11-21 in ../dailySnapshot.ts, which this page and
+    // the Dashboard share so the two doors take ONE snapshot a day. Nothing
+    // else in the UI may record a row.
+    expect(page.match(/api\.takeNetWorthSnapshot/g)).toHaveLength(1);
+    expect(page).toContain('await ensureTodaysSnapshot({ snapshots, profile })');
+    const daily = read('../../src/ui/dailySnapshot.ts');
+    expect(daily.match(/api\.takeNetWorthSnapshot/g)).toHaveLength(1);
+    const dashboard = read('../../src/ui/pages/DashboardPage.tsx');
+    expect(dashboard).not.toContain('api.takeNetWorthSnapshot');
+    expect(dashboard).toContain('await ensureTodaysSnapshot({ snapshots, profile })');
     expect(take).toContain('api.takeNetWorthSnapshot');
     expect(page).toContain('onConfirm={take}');
     expect(page).toContain('onDismiss={closeDialog}');

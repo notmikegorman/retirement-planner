@@ -139,7 +139,7 @@ describe('interruption matrix: killed tab, write-ahead intent, honest resolution
   }
 
   async function bootApp(page: Page): Promise<void> {
-    await page.goto(`${staticServer.origin}/?backend=local`);
+    await page.goto(`${staticServer.origin}/workbench?backend=local`);
     await page.locator('.verdict').first().waitFor({ state: 'visible', timeout: 240_000 });
   }
 

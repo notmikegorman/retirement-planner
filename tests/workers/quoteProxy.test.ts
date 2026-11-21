@@ -181,6 +181,19 @@ describe('the symbol gate', () => {
     const last = upstreamSeen.at(-1);
     expect(last?.url).toContain('/v8/finance/chart/%5EGSPC?interval=1d&range=1d');
   });
+
+  it('forwards an allowlisted range, and 400s any other before touching upstream', async () => {
+    await get('?symbol=%5EGSPC&range=10y', APP_ORIGIN);
+    expect(upstreamSeen.at(-1)?.url).toContain('/v8/finance/chart/%5EGSPC?interval=1d&range=10y');
+    const seenBefore = upstreamSeen.length;
+    for (const range of ['max', '1y', '10y&interval=1m', '']) {
+      const res = await get(`?symbol=VTI&range=${encodeURIComponent(range)}`, APP_ORIGIN);
+      expect(res.status, `range ${JSON.stringify(range)}`).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain('range');
+    }
+    expect(upstreamSeen.length).toBe(seenBefore);
+  });
 });
 
 describe('the dumb pipe', () => {
@@ -239,6 +252,9 @@ describe('the dumb pipe', () => {
     );
     expect(source).toContain("'https://query1.finance.yahoo.com'");
     // And the path is the exact one src/store/quotes.ts builds.
-    expect(source).toContain('/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d');
+    expect(source).toContain(
+      '/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}',
+    );
+    expect(source).toContain("params.get('range') ?? '1d'");
   });
 });

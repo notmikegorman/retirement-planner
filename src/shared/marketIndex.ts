@@ -1,10 +1,18 @@
 /**
- * THE S&P 500 TICKER — its rules, with no browser in them.
+ * THE DASHBOARD'S MARKET WINDOW — its rules, with no browser in them.
  *
- * The sidebar shows one number that is not about the household: the S&P 500's
- * level, the day's move, and when the app last fetched it. Everything here is
- * pure so the one part that is easy to get wrong — WHEN to fetch — is pinned by
- * tests against real Eastern-time instants, both sides of daylight saving.
+ * The Dashboard shows the S&P 500 the way the owner asked to see it: ZOOMED
+ * OUT. Not the day's move, not the week's — what the index has done over the
+ * last 12 months, with 3 and 5 years beside it. A 3% Friday is real, and it is
+ * also a rounding error on a year; the page exists to show the year. So this
+ * module computes trailing windows from daily closes and deliberately has no
+ * function that reports a daily change (the sidebar ticker that showed one
+ * was removed with the Dashboard's arrival, 2026-11-21).
+ *
+ * The index stands in for the portfolio. The household keeps investing every
+ * month, so its own balance change mixes market moves with contributions; the
+ * index's change is the market's half alone, which is the half that moves
+ * with the news.
  *
  * WHEN TO FETCH (the owner's rule, and the refinement it needed). Refresh when
  * the app is activated, unless the value is under an hour old or the market
@@ -43,12 +51,21 @@ const OPEN_MINUTE = 9 * 60 + 30;
 const CLOSE_MINUTE = 16 * 60;
 const SETTLED_MINUTE = CLOSE_MINUTE + CLOSE_SETTLE_MS / 60_000;
 
-/** What the sidebar keeps between visits. */
-export interface IndexQuote {
-  price: number;
-  /** The prior session's close — what the day's move is measured from. */
-  previousClose: number;
-  /** ISO — when the APP fetched it; the timestamp the sidebar shows. */
+/**
+ * The range the Dashboard asks the proxy for. Ten years, though the longest
+ * window is five: a five-year window needs the close from five years BEFORE
+ * the latest one, and a "5y" response starts a day or two after that.
+ */
+export const HISTORY_RANGE = '10y';
+
+/** One trading day's close, dated by New York's calendar. */
+export type DailyClose = [date: string, close: number];
+
+/** What the Dashboard keeps between visits — market data, nothing household. */
+export interface IndexHistory {
+  /** Oldest first; the last entry is the latest price (live during a session). */
+  closes: DailyClose[];
+  /** ISO — when the APP fetched it; drives the refresh rule and the "as of". */
   fetchedAt: string;
 }
 
@@ -57,11 +74,30 @@ function isPositive(x: unknown): x is number {
 }
 
 /**
- * Yahoo's chart JSON down to the two numbers the ticker needs. Refuses rather
- * than guesses: a missing previous close would make the day's move — the green
- * or red on screen — a number with nothing under it.
+ * Below this many closes the response cannot be the ten-year history it was
+ * asked for. That is what a quote proxy deployed before the range parameter
+ * existed answers (it ignores `range` and relays one day), and it must read
+ * as "the proxy needs updating", never as a 0% year.
  */
-export function parseIndexChart(body: unknown): { price: number; previousClose: number } {
+export const MIN_HISTORY_CLOSES = 5 * 250;
+
+export class HistoryTooShortError extends Error {
+  constructor(count: number) {
+    super(
+      `the quote proxy returned ${count} daily close${count === 1 ? '' : 's'}, not ten years — ` +
+        'it predates the history range and needs redeploying',
+    );
+    this.name = 'HistoryTooShortError';
+  }
+}
+
+/**
+ * Yahoo's chart JSON down to dated closes. Null closes (Yahoo leaves a hole on
+ * the odd half-day) are skipped. The latest price replaces the day's bar when
+ * it is fresher — mid-session the bar's close and the live price agree, but
+ * nothing guarantees it.
+ */
+export function parseIndexHistory(body: unknown): DailyClose[] {
   const chart = (body as { chart?: unknown } | null)?.chart as
     | { result?: unknown; error?: { description?: string; code?: string } | null }
     | undefined;
@@ -71,19 +107,111 @@ export function parseIndexChart(body: unknown): { price: number; previousClose: 
       `Yahoo rejected ${SP500_SYMBOL}: ${chart.error.description ?? chart.error.code ?? 'unknown error'}`,
     );
   }
-  const meta = (Array.isArray(chart.result) ? chart.result[0] : undefined)?.meta as
-    | { regularMarketPrice?: unknown; chartPreviousClose?: unknown; previousClose?: unknown }
+  const result = (Array.isArray(chart.result) ? chart.result[0] : undefined) as
+    | {
+        meta?: { regularMarketPrice?: unknown; regularMarketTime?: unknown };
+        timestamp?: unknown;
+        indicators?: { quote?: Array<{ close?: unknown }> };
+      }
     | undefined;
-  if (!meta) throw new Error('the quote response has no result meta');
-  const price = meta.regularMarketPrice;
-  const previousClose = isPositive(meta.chartPreviousClose)
-    ? meta.chartPreviousClose
-    : meta.previousClose;
-  if (!isPositive(price)) throw new Error('the quote response has no usable price');
-  if (!isPositive(previousClose)) {
-    throw new Error('the quote response has no previous close to measure the day against');
+  if (!result) throw new Error('the quote response has no result');
+  const stamps = Array.isArray(result.timestamp) ? (result.timestamp as unknown[]) : [];
+  const rawCloses = result.indicators?.quote?.[0]?.close;
+  const closes = Array.isArray(rawCloses) ? (rawCloses as unknown[]) : [];
+  const out: DailyClose[] = [];
+  for (let i = 0; i < stamps.length; i++) {
+    const t = stamps[i];
+    const c = closes[i];
+    if (typeof t !== 'number' || !isPositive(c)) continue;
+    const date = etDate(t * 1000);
+    // Yahoo can repeat the live day; keep the later figure.
+    if (out.length > 0 && out[out.length - 1][0] === date) out[out.length - 1] = [date, c];
+    else out.push([date, c]);
   }
-  return { price, previousClose };
+  const price = result.meta?.regularMarketPrice;
+  const time = result.meta?.regularMarketTime;
+  if (isPositive(price) && typeof time === 'number') {
+    const date = etDate(time * 1000);
+    const last = out[out.length - 1];
+    if (last === undefined || last[0] < date) out.push([date, price]);
+    else if (last[0] === date) out[out.length - 1] = [date, price];
+  }
+  if (out.length < MIN_HISTORY_CLOSES) throw new HistoryTooShortError(out.length);
+  return out;
+}
+
+/** A trailing window's answer: where it started, where it ended, and the move. */
+export interface TrailingReturn {
+  years: number;
+  from: DailyClose;
+  to: DailyClose;
+  /** Total change over the window, as a fraction (0.057 = +5.7%). */
+  change: number;
+  /** The same change as a compound yearly rate. */
+  annualized: number;
+}
+
+/** 'YYYY-MM-DD' minus whole years, with Feb 29 landing on Feb 28. */
+function yearsBefore(date: string, years: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const target = new Date(Date.UTC(y - years, m - 1, d));
+  // Feb 29 → Mar 1 in a common year; step back to the 28th instead.
+  if (target.getUTCMonth() !== m - 1) target.setUTCDate(0);
+  return target.toISOString().slice(0, 10);
+}
+
+/**
+ * The change from the last close ON OR BEFORE the same calendar date `years`
+ * ago to the latest close. Null when the history does not reach back that far
+ * — a window measured from a later start would be a different window under
+ * the same label.
+ */
+export function trailingReturn(closes: readonly DailyClose[], years: number): TrailingReturn | null {
+  const to = closes[closes.length - 1];
+  if (to === undefined) return null;
+  const target = yearsBefore(to[0], years);
+  let from: DailyClose | undefined;
+  // Binary search for the last close dated <= target.
+  let lo = 0;
+  let hi = closes.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (closes[mid][0] <= target) {
+      from = closes[mid];
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (from === undefined) return null;
+  const change = to[1] / from[1] - 1;
+  return { years, from, to, change, annualized: Math.pow(1 + change, 1 / years) - 1 };
+}
+
+/** The Dashboard's windows: the headline first, then the zoom-outs. */
+export const WINDOW_YEARS = [1, 3, 5] as const;
+
+const ONE_DP = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/** "+5.7%", "−3.2%", "0.0%" — a typographic minus, and no sign on a flat zero. */
+export function formatSignedPct(fraction: number): string {
+  const text = ONE_DP.format(Math.abs(fraction) * 100);
+  if (text === '0.0') return '0.0%';
+  return `${fraction > 0 ? '+' : '−'}${text}%`;
+}
+
+/** "Nov 20, 2025" from a 'YYYY-MM-DD' — a calendar date, so no zone shift. */
+export function formatCloseDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -125,6 +253,12 @@ function etWall(ms: number): EtWall {
   };
 }
 
+/** An instant's New York calendar date, 'YYYY-MM-DD'. */
+function etDate(ms: number): string {
+  const w = etWall(ms);
+  return `${w.year}-${String(w.month).padStart(2, '0')}-${String(w.day).padStart(2, '0')}`;
+}
+
 function isWeekday(weekday: number): boolean {
   return weekday >= 1 && weekday <= 5;
 }
@@ -163,7 +297,7 @@ export type IndexRefreshReason =
   | 'capture-close'
   | 'close-final';
 
-/** Should an activation refetch? The reason is for tests and for the tooltip. */
+/** Should an activation refetch? The reason is for tests. */
 export function indexRefreshDecision(
   nowMs: number,
   cached: { fetchedAt: string } | null,
@@ -187,7 +321,7 @@ export function indexRefreshDecision(
 }
 
 // ---------------------------------------------------------------------------
-// What the sidebar prints
+// The "as of" stamp
 // ---------------------------------------------------------------------------
 
 const ET_STAMP = new Intl.DateTimeFormat('en-US', {
@@ -206,36 +340,4 @@ const ET_STAMP = new Intl.DateTimeFormat('en-US', {
  */
 export function formatEtTimestamp(ms: number): string {
   return ET_STAMP.format(ms).replace(/[  ]/g, ' ');
-}
-
-export type IndexDirection = 'up' | 'down' | 'flat';
-
-export function indexChange(q: { price: number; previousClose: number }): {
-  change: number;
-  percent: number;
-  direction: IndexDirection;
-} {
-  const change = q.price - q.previousClose;
-  const percent = (change / q.previousClose) * 100;
-  // Direction from the ROUNDED move: a change too small to print as a cent
-  // must not paint the line green or red while it reads "0.00".
-  const cents = Math.round(change * 100);
-  return { change, percent, direction: cents > 0 ? 'up' : cents < 0 ? 'down' : 'flat' };
-}
-
-const TWO_DP = new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-/** "7,656.98" — an index level, so no currency sign. */
-export function formatIndexLevel(price: number): string {
-  return TWO_DP.format(price);
-}
-
-/** "+65.28 (+0.86%)", "−100.00 (−1.32%)", or "0.00 (0.00%)". */
-export function formatIndexChange(q: { price: number; previousClose: number }): string {
-  const { change, percent, direction } = indexChange(q);
-  const sign = direction === 'up' ? '+' : direction === 'down' ? '−' : '';
-  return `${sign}${TWO_DP.format(Math.abs(change))} (${sign}${TWO_DP.format(Math.abs(percent))}%)`;
 }

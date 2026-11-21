@@ -4,9 +4,14 @@
  * sends no CORS header and 429s clients without a browser-ish User-Agent (a
  * header a page is forbidden to set). It is deliberately a DUMB PIPE:
  *
- *   GET <worker>/?symbol=VTI   →  Yahoo's chart JSON, byte for byte
+ *   GET <worker>/?symbol=VTI           →  Yahoo's chart JSON, byte for byte
+ *   GET <worker>/?symbol=^GSPC&range=10y →  the same, ten years of daily closes
  *
- * - ONE parameter, validated with the app's own symbol discipline (the
+ * - `range` is OPTIONAL and drawn from a two-word allowlist: '1d' (the
+ *   default, what every quote refresh asks for) and '10y' (the Dashboard's
+ *   history, for its 12-month and longer windows). Anything else is a 400 —
+ *   the proxy forwards no free text upstream.
+ * - `symbol` is validated with the app's own symbol discipline (the
  *   SYMBOL_RE below mirrors src/shared/schemas.ts — uppercase letters,
  *   digits, `.^-`, at most 10 chars). Anything else is a 400 before a byte
  *   goes upstream, and the path segment is encodeURIComponent'd regardless —
@@ -39,6 +44,12 @@
 
 /** Mirror of src/shared/schemas.ts SYMBOL_RE — the app's symbol discipline. */
 const SYMBOL_RE = /^[A-Z0-9.^-]{1,10}$/;
+
+/**
+ * The ranges the relay will ask Yahoo for. '1d' is a quote; '10y' is the
+ * Dashboard's history (src/shared/marketIndex.ts). Both use interval=1d.
+ */
+export const RANGES = ['1d', '10y'] as const;
 
 /** The exact endpoint src/store/quotes.ts has always built its URL against. */
 const DEFAULT_UPSTREAM_BASE = 'https://query1.finance.yahoo.com';
@@ -82,13 +93,18 @@ export async function handleQuoteRequest(
   if (request.method !== 'GET') {
     return refuse(405, 'Only GET is served here.', cors);
   }
-  const symbol = new URL(request.url).searchParams.get('symbol');
+  const params = new URL(request.url).searchParams;
+  const symbol = params.get('symbol');
   if (symbol === null || !SYMBOL_RE.test(symbol)) {
     return refuse(
       400,
       'expected a ticker symbol (uppercase letters/digits/.^-, at most 10 chars) in ?symbol=',
       cors,
     );
+  }
+  const range = params.get('range') ?? '1d';
+  if (!(RANGES as readonly string[]).includes(range)) {
+    return refuse(400, `expected range to be one of ${RANGES.join(', ')}`, cors);
   }
 
   const base = env.UPSTREAM_BASE ?? DEFAULT_UPSTREAM_BASE;
@@ -97,8 +113,9 @@ export async function handleQuoteRequest(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const upstream = await fetch(
-      // The same path src/store/quotes.ts builds, encoded the same way.
-      `${base}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
+      // The same path src/store/quotes.ts builds, encoded the same way; the
+      // range is one of RANGES, never the caller's text.
+      `${base}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`,
       {
         headers: { 'user-agent': 'Mozilla/5.0' },
         signal: controller.signal,

@@ -4,9 +4,9 @@ import { useSwUpdate } from './pwa';
 import { ThemeContext, useThemeController } from './theme';
 import { ToastProvider } from './toast';
 import { FolderControl } from './components/topbar/FolderControl';
-import { MarketTicker } from './components/topbar/MarketTicker';
 import { MODULE_ICONS } from './modules/icons';
 import { ModuleBanner } from './modules/ModuleBanner';
+import { DashboardPage } from './pages/DashboardPage';
 import { WorkbenchPage } from './pages/WorkbenchPage';
 import { SearchPage } from './pages/SearchPage';
 import { NetWorthPage } from './pages/NetWorthPage';
@@ -25,10 +25,11 @@ import { WidowPlaybookModule } from './modules/WidowPlaybookModule';
  * THE SHELL (the owner's layout, 2026-08-30, modeled on smplmark): a narrow
  * left panel for navigating between modules, and a wide right panel holding
  * the selected module — each module opening with a banner where its title,
- * breadcrumbs and actions live. Plan sits FIRST above a separator (nav.ts's
- * PAGES carries the order — it is also the URL vocabulary), the rest run
- * alphabetical, and Settings lives at the very bottom, in the footer beside
- * the folder control. '/' still opens Plan.
+ * breadcrumbs and actions live. The Dashboard sits FIRST above a separator
+ * (nav.ts's PAGES carries the order — it is also the URL vocabulary), the
+ * rest run alphabetical, Plan among them (the owner's 2026-11-21 move), and
+ * Settings lives at the very bottom, in the footer beside the folder
+ * control. '/' opens the Dashboard.
  *
  * The labels live here as a Record over PAGES so a module added there
  * without a label (or a label without a module) fails to compile rather
@@ -38,7 +39,7 @@ import { WidowPlaybookModule } from './modules/WidowPlaybookModule';
  * every existing link for a word.
  */
 const NAV_LABELS: Record<Page, string> = {
-  workbench: 'Plan',
+  dashboard: 'Dashboard',
   accounts: 'Accounts',
   expenses: 'Expenses',
   home: 'Home',
@@ -47,6 +48,7 @@ const NAV_LABELS: Record<Page, string> = {
   insurance: 'Insurance',
   investing: 'Investing',
   networth: 'Net worth',
+  workbench: 'Plan',
   search: 'Search',
   settings: 'Settings',
   tithing: 'Tithing',
@@ -116,16 +118,13 @@ export function App() {
                       <span className="sideNavIcon">{MODULE_ICONS[item]}</span>
                       {NAV_LABELS[item]}
                     </button>
-                    {/* Plan stands alone above the working set. */}
-                    {item === 'workbench' ? (
+                    {/* The Dashboard stands alone above the working set. */}
+                    {item === 'dashboard' ? (
                       <div className="sideNavSep" aria-hidden="true" />
                     ) : null}
                   </Fragment>
                 ),
               )}
-              {/* The S&P 500, under the last module behind its own separator
-                  (both render nothing when no quote proxy is configured). */}
-              <MarketTicker />
             </nav>
             {/* Settings at the very bottom (owner's placement), then where
                 the data on screen lives — File > New / File > Open. The
@@ -151,6 +150,7 @@ export function App() {
               Every body is full-bleed now, so the old wide/narrow split is
               gone with the max-widths.
             */}
+            {page === 'dashboard' && <DashboardPage {...props} />}
             {page === 'workbench' && (
               <>
                 <ModuleBanner title="Plan" />

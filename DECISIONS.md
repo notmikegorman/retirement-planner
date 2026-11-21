@@ -2884,3 +2884,44 @@ Decisions in the build, each commented at its site:
   and the Housing card clamps the field when the term or payoff is edited.
 - **Intermediate slices fire `mortgage-paydown`**; the last fires `mortgage-payoff`.
   Both chips read the slice amount from the trace line, as the lump's always did.
+
+## The Dashboard (2026-11-21, twenty-second pass)
+
+The owner's ask: a page that keeps a bad week in proportion. On Friday
+2026-11-20 the S&P 500 fell 3.7%, and 8.6% on the week — read off a daily
+ticker, a six-figure loss in five days. Read off twelve months it was still
++5.7%, and +52% over three years. The app now opens on that second reading.
+
+- **Dashboard first, Plan alphabetical.** `dashboard` heads PAGES above the
+  separator and owns '/'; Plan (`workbench`) moves into the alphabet by its
+  label and writes `/workbench` for its bare path. `/dashboard` canonicalizes
+  to '/'. The setup form now lands on `/workbench`, not the root: a household
+  just typed in has no score yet, and Plan is where it learns what is missing.
+- **The sidebar S&P 500 ticker is gone** (twenty-first pass, reversed). Its
+  daily move was exactly the reading this page exists to step back from, and
+  `marketIndex.ts` no longer has any function that computes one.
+- **The market card: 12 months, then 3 and 5 years.** Trailing windows from
+  daily closes, each measured from the last close on or before the same
+  calendar date N years back; a window the history cannot reach is "—", never a
+  shorter window under the same label. The S&P 500 stands in for the
+  portfolio: the household invests monthly, so its own balance change mixes
+  market moves with contributions, and the app holds no share counts to
+  separate them. A loss reads in the text colour, never red.
+- **The proxy grew one optional parameter**, `range` ∈ {`1d`, `10y`}. Ten
+  years, not five, because a five-year window needs the close from five years
+  before the latest one, and Yahoo's "5y" starts a day or two after it. A
+  proxy deployed before the parameter answers one day; the parser calls fewer
+  than five years of closes `HistoryTooShortError` and the card says the proxy
+  needs redeploying. The history is cached in localStorage
+  (`fplan-sp500-history`, market data, per browser) under the ticker's old
+  hour/close refresh rule.
+- **The plan card: the newest score, re-measured daily.** Arriving takes
+  today's net-worth snapshot if none exists — fresh prices, the plan re-scored
+  against them — the same once-a-day rule Net worth keeps. The rule moved into
+  `src/ui/dailySnapshot.ts` so the two doors share ONE day: a page arriving
+  while the other's POST is in flight joins that promise, and one whose list
+  predates a landed snapshot is caught by the module's `takenDay`. The card
+  shows the success probability and, when solved, what the plan supports a
+  year; while today's run is in flight it keeps the last answer and says a
+  fresh one is coming. **The net worth itself is not shown** — it is a dollar
+  figure that moves with the news.

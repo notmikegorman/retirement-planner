@@ -27,6 +27,14 @@ function Glyph({ children }: { children: ReactNode }) {
 }
 
 export const MODULE_ICONS: Record<Page, ReactNode> = {
+  // A gauge: the long view, at a glance.
+  dashboard: (
+    <Glyph>
+      <path d="M4 17a8 8 0 1 1 16 0" />
+      <path d="M12 17l4-5" />
+      <path d="M4 21h16" />
+    </Glyph>
+  ),
   accounts: (
     <Glyph>
       <path d="M3 10h18M5 10v8m4.5-8v8m5-8v8M19 10v8M3 21h18M12 3l9 7H3l9-7z" />

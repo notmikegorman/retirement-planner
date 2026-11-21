@@ -89,3 +89,8 @@ export const SEARCH_FIRST_RUN =
 export const HISTORY_FIRST_RUN =
   'Scoring waits until the profile has accounts — a version scored against zero ' +
   'accounts would record a number that was never true of any household.';
+
+/** The Dashboard's plan card, gated. */
+export const DASHBOARD_FIRST_RUN =
+  'Add your accounts on the Accounts page — the plan is scored once there is ' +
+  'something to simulate.';

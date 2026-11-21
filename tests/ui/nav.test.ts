@@ -56,19 +56,17 @@ const EVERY_ROUTE: Route[] = PAGES.flatMap((page) => [
 ]);
 
 describe('the vocabulary', () => {
-  it('covers the thirteen modules: Plan first, the rest alphabetical', () => {
-    // The owner's rules (2026-08-30): the old Profile page's tabs each
-    // became a module, joined by Plan (id 'workbench' — the label changed,
-    // the URL vocabulary did not) and Net worth. Plan sits FIRST, above the
-    // sidebar separator; everything after it is alphabetized. 'search' is
-    // still addressable but draws no sidebar item, and 'settings' renders in
-    // the sidebar footer; App.tsx carries both rules. 'dashboard',
-    // 'methodology', 'profile' and 'health' (its fields moved onto the
-    // Settings page the same day) are tombstones, asserted with the
-    // unknown/legacy paths below. Widow's Playbook joined on 2026-09-08 and
-    // lands last, which is where alphabetical puts it.
+  it('covers the fourteen modules: Dashboard first, the rest alphabetical', () => {
+    // The owner's rules: the old Profile page's tabs each became a module
+    // (2026-08-30), joined by Plan (id 'workbench' — the label changed, the
+    // URL vocabulary did not), Net worth, and Widow's Playbook (2026-09-08).
+    // The Dashboard took the top slot from Plan on 2026-11-21 and Plan
+    // joined the alphabet, sorted by its LABEL — so 'workbench' sits where
+    // "Plan" falls, between Net worth and the hidden Search/Settings.
+    // 'search' is still addressable but draws no sidebar item, and
+    // 'settings' renders in the sidebar footer; App.tsx carries both rules.
     expect([...PAGES]).toEqual([
-      'workbench',
+      'dashboard',
       'accounts',
       'expenses',
       'home',
@@ -77,14 +75,26 @@ describe('the vocabulary', () => {
       'insurance',
       'investing',
       'networth',
+      'workbench',
       'search',
       'settings',
       'tithing',
       'widow-playbook',
     ]);
-    // Alphabetical below Plan is the rule, not a coincidence of the list.
-    const rest = [...PAGES].slice(1);
-    expect(rest).toEqual([...rest].sort());
+  });
+
+  it('sorts the sidebar by the labels it draws', () => {
+    const app = readFileSync(
+      fileURLToPath(new URL('../../src/ui/App.tsx', import.meta.url)),
+      'utf8',
+    );
+    const label = (page: string): string => {
+      const m = app.match(new RegExp(`\\n  '?${page}'?: (['"])(.*?)\\1,`));
+      if (m === null) throw new Error(`no label for ${page}`);
+      return m[2];
+    };
+    const labels = [...PAGES].slice(1).map(label);
+    expect(labels).toEqual([...labels].sort((x, y) => x.localeCompare(y)));
   });
 
   it('names the entity pages — the ones whose second segment is a record id', () => {
@@ -160,8 +170,9 @@ describe('the vocabulary', () => {
 });
 
 describe('parseRoute', () => {
-  it("sends '/' to the workbench", () => {
-    expect(parseRoute('/')).toEqual({ page: 'workbench', tab: null });
+  it("sends '/' to the Dashboard", () => {
+    expect(parseRoute('/')).toEqual({ page: 'dashboard', tab: null });
+    expect(HOME).toEqual({ page: 'dashboard', tab: null });
     expect(parseRoute('')).toEqual(HOME);
   });
 
@@ -232,8 +243,9 @@ describe('parseRoute', () => {
 
   it('resolves an unknown path instead of blanking the screen', () => {
     // Whatever arrives — a typo, a link to a page that was deleted (there used
-    // to be /compare, /results, /dashboard and /methodology), a favicon-ish
-    // path — lands somewhere real.
+    // to be /compare, /results and /methodology), a favicon-ish path — lands
+    // somewhere real. (/dashboard was on that list until the Dashboard came
+    // back as a page, 2026-11-21; it lands on HOME because it IS home.)
     expect(parseRoute('/nonsense')).toEqual(HOME);
     expect(parseRoute('/compare')).toEqual(HOME);
     expect(parseRoute('/results/summary')).toEqual(HOME);
@@ -262,15 +274,13 @@ describe('parseRoute', () => {
 });
 
 describe('routePath', () => {
-  it('writes /page and /page/sub — and the ROOT for a bare Plan', () => {
-    // Plan is HOME and the root is its address (the owner's call,
-    // 2026-08-30): the site root must not redirect anywhere, and the
-    // sidebar's Plan item lands on the root URL. Tabbed views keep their
-    // named paths.
-    expect(routePath({ page: 'workbench', tab: null })).toBe('/');
-    // The legacy path canonicalizes to the root, as one fact: parse the old
-    // address, write the new one.
-    expect(routePath(parseRoute('/workbench'))).toBe('/');
+  it('writes /page and /page/sub — and the ROOT for the Dashboard', () => {
+    // The Dashboard is HOME and the root is its address (the owner's call,
+    // 2026-11-21, taking the rule Plan held since 2026-08-30): the site root
+    // must not redirect anywhere. Plan is an ordinary module now.
+    expect(routePath({ page: 'dashboard', tab: null })).toBe('/');
+    expect(routePath(parseRoute('/dashboard'))).toBe('/');
+    expect(routePath({ page: 'workbench', tab: null })).toBe('/workbench');
     expect(routePath({ page: 'workbench', tab: 'cashflow' })).toBe('/workbench/cashflow');
     expect(routePath({ page: 'accounts', tab: 'k401' })).toBe('/accounts/k401');
   });
@@ -293,9 +303,9 @@ describe('routePath', () => {
   it('gives every view a distinct path', () => {
     const paths = EVERY_ROUTE.map(routePath);
     expect(new Set(paths).size).toBe(paths.length);
-    // 13 pages + 10 results tabs + 4 search tabs + 3 net-worth tabs
-    // + 5 Widow's Playbook tabs = 35.
-    expect(paths.length).toBe(35);
+    // 14 pages + 10 results tabs + 4 search tabs + 3 net-worth tabs
+    // + 5 Widow's Playbook tabs = 36.
+    expect(paths.length).toBe(36);
   });
 });
 
@@ -496,9 +506,8 @@ class Session {
 describe('a browsing session', () => {
   it('changes the screen every time Back changes the URL, across a page visit', () => {
     // The reproduction, one press at a time. Storage says 'summary' at load.
-    const s = new Session('/', { 'fplan-results-tab': 'summary' });
-    // A bare Plan's canonical path is the ROOT (2026-08-30).
-    expect([s.path, s.tab()]).toEqual(['/', 'summary']);
+    const s = new Session('/workbench', { 'fplan-results-tab': 'summary' });
+    expect([s.path, s.tab()]).toEqual(['/workbench', 'summary']);
 
     s.click('cashflow');
     expect([s.path, s.tab(), s.depth]).toEqual(['/workbench/cashflow', 'cashflow', 2]);
@@ -512,7 +521,7 @@ describe('a browsing session', () => {
 
     // The press that used to move the URL and nothing else.
     s.back();
-    expect(s.path).toBe('/');
+    expect(s.path).toBe('/workbench');
     expect(s.tab()).toBe('summary');
   });
 

@@ -19,7 +19,6 @@
  *    the same way — and the previously stored quote survives untouched, with
  *    its honest fetchedAt.
  */
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -27,6 +26,7 @@ import { build } from 'vite';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { createServer, type Server } from 'node:http';
 import type { QuoteRefreshResult, QuotesFile } from '../../src/shared/types';
+import { syntheticIndexChart } from '../fixtures/syntheticIndexHistory';
 import { VTI_FIXTURE_TEXT, driveSeedFiles } from './driveFixtures';
 import { mountQuoteProxy, type MountedProxy } from './quoteProxyAdapter';
 import { serveStatic, type StaticServer } from './staticServer';
@@ -34,10 +34,18 @@ import { serveStatic, type StaticServer } from './staticServer';
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const distUi = path.join(repoRoot, 'dist', 'ui');
 
-/** Yahoo's real ^GSPC response, captured through the deployed proxy (2026-09-11). */
-const GSPC_FIXTURE_TEXT = readFileSync(
-  path.join(repoRoot, 'tests', 'fixtures', 'yahoo-chart-gspc.json'),
-  'utf8',
+/**
+ * Ten years of ^GSPC closes, stepped so each window's answer is a round
+ * number: 12 months 6000 → 6600 (+10.0%), 3 years 5000 → (+32.0%), 5 years
+ * 4000 → (+65.0%).
+ */
+const GSPC_HISTORY_TEXT = JSON.stringify(
+  syntheticIndexChart({
+    from: '2016-11-21',
+    to: '2026-11-20',
+    close: (d) =>
+      d < '2021-12-01' ? 4000 : d < '2023-12-01' ? 5000 : d < '2025-12-01' ? 6000 : 6600,
+  }),
 );
 
 /** The seeded quote's fetchedAt — what a successful refresh must move. */
@@ -58,8 +66,10 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
   let upstream: Server;
   let proxy: MountedProxy;
   const pageErrors: string[] = [];
-  /** Upstream requests for ^GSPC — the sidebar ticker's, and only its. */
+  /** Upstream requests for ^GSPC — the Dashboard's history, and only its. */
   let gspcHits = 0;
+  /** The range each of those asked for. */
+  const gspcRanges: string[] = [];
 
   beforeAll(async () => {
     await build({ configFile: path.join(repoRoot, 'vite.config.ts'), logLevel: 'warn' });
@@ -71,7 +81,8 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     upstream = createServer((req, res) => {
       if ((req.url ?? '').startsWith('/v8/finance/chart/%5EGSPC')) {
         gspcHits += 1;
-        res.writeHead(200, { 'content-type': 'application/json' }).end(GSPC_FIXTURE_TEXT);
+        gspcRanges.push(new URL(req.url ?? '', 'http://x').searchParams.get('range') ?? '');
+        res.writeHead(200, { 'content-type': 'application/json' }).end(GSPC_HISTORY_TEXT);
         return;
       }
       if ((req.url ?? '').startsWith('/v8/finance/chart/VTI')) {
@@ -131,7 +142,11 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
         await writable.close();
       }
     }, driveSeedFiles());
-    await page.goto(`${staticServer.origin}/?backend=local`);
+    // Plan, not the root: the root is the Dashboard, which takes a snapshot
+    // on arrival — and a snapshot refreshes VTI through the proxy, which
+    // would hand the Refresh-prices leg below its answer before its click.
+    // The Dashboard gets its own leg further down.
+    await page.goto(`${staticServer.origin}/workbench?backend=local`);
     await page.locator('.verdict').first().waitFor({ state: 'visible', timeout: 180_000 });
   }, 300_000);
 
@@ -193,28 +208,25 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     expect(answer.body.error).toContain('ticker symbol');
   }, 60_000);
 
-  it('the sidebar S&P 500 ticker: fetched through the proxy, skipped within the hour, refetched when stale', async () => {
-    const ticker = page.locator('.marketTicker');
-    await ticker.waitFor({ state: 'visible', timeout: 60_000 });
-    await expect.poll(() => ticker.innerText(), { timeout: 30_000 }).toContain('7,656.98');
-    const text = await ticker.innerText();
-    expect(text).toContain('S&P 500');
-    // The day's move, signed, percentage in parentheses — and green.
-    expect(text).toContain('+65.28 (+0.86%)');
-    expect(await ticker.locator('.marketTickerChange.up').count()).toBe(1);
-    // The fetch time, in Eastern time with the season's own abbreviation.
-    expect(text).toMatch(/\b(EDT|EST)\b/);
-
-    // Placement: directly under Widow's Playbook, behind a separator.
+  it('the Dashboard: the S&P 500 zoomed out, fetched once, skipped within the hour, refetched when stale — and the plan re-scored', async () => {
+    // The sidebar: Dashboard first, behind its separator, and no ticker.
     const trail = await page
       .locator('.sideNavItems > *')
       .evaluateAll((els) => els.map((e) => `${e.className}|${(e.textContent ?? '').trim()}`));
-    const at = trail.findIndex((t) => t.startsWith('marketTicker|'));
-    expect(trail[at - 1]).toMatch(/^sideNavSep\|/);
-    expect(trail[at - 2]).toContain("Widow's Playbook");
+    expect(trail[0]).toContain('Dashboard');
+    expect(trail[1]).toMatch(/^sideNavSep\|/);
+    expect(trail.some((t) => t.includes('S&P 500'))).toBe(false);
+    expect(gspcHits).toBe(0);
 
-    // Launch fetched exactly once, however many activation events boot fired.
-    expect(gspcHits).toBe(1);
+    await page.locator('.sideNav').getByRole('button', { name: 'Dashboard', exact: true }).click();
+    const market = page.getByRole('region', { name: 'The market, zoomed out' });
+    await expect.poll(() => market.innerText(), { timeout: 60_000 }).toContain('Up 10.0%');
+    const text = await market.innerText();
+    expect(text).toContain('Nov 20, 2025 → Nov 20, 2026');
+    expect(text).toContain('+32.0%');
+    expect(text).toContain('+65.0%');
+    expect(text).toMatch(/\b(EDT|EST)\b/);
+    expect(gspcRanges).toEqual(['10y']);
 
     // An activation within the hour does NOT refetch...
     await page.evaluate(() => {
@@ -224,29 +236,43 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     await page.waitForTimeout(1_000);
     expect(gspcHits).toBe(1);
 
-    // ...but a stale value does. A fetchedAt years old refetches whatever the
-    // real clock says: during a session it is past the hour, and after the
-    // close it predates the settled close. So this leg cannot depend on when
-    // CI happens to run — and it proves the no-refetch above was the rule, not
-    // a dead listener.
+    // ...but a stale value does, whatever the real clock says (years old is
+    // past the hour mid-session and before the settled close after it).
     await page.evaluate(() => {
-      const stale = JSON.parse(localStorage.getItem('fplan-sp500') ?? '{}') as Record<string, unknown>;
+      const key = 'fplan-sp500-history';
+      const stale = JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>;
       stale.fetchedAt = '2020-01-06T15:00:00.000Z';
-      localStorage.setItem('fplan-sp500', JSON.stringify(stale));
+      localStorage.setItem(key, JSON.stringify(stale));
       window.dispatchEvent(new Event('focus'));
     });
     await expect.poll(() => gspcHits, { timeout: 30_000 }).toBe(2);
-    // The refetch replaced the stale value rather than merely requesting one.
     await expect
       .poll(() =>
         page.evaluate(
           () =>
-            (JSON.parse(localStorage.getItem('fplan-sp500') ?? '{}') as { fetchedAt?: string })
-              .fetchedAt ?? '',
+            (
+              JSON.parse(localStorage.getItem('fplan-sp500-history') ?? '{}') as {
+                fetchedAt?: string;
+              }
+            ).fetchedAt ?? '',
         ),
       )
       .not.toMatch(/^2020-/);
-  }, 120_000);
+
+    // The plan half: arriving took today's snapshot (the seed holds none
+    // from today) and its score lands on the card.
+    const plan = page.getByRole('region', { name: 'The retirement plan' });
+    await expect
+      .poll(() => plan.innerText(), { timeout: 300_000 })
+      .toContain('chance the money lasts');
+    const rows = await page.evaluate(() =>
+      (
+        window as unknown as { __fplanApi: { getNetWorth(): Promise<Array<{ takenAt: string }>> } }
+      ).__fplanApi.getNetWorth(),
+    );
+    const today = new Date().toDateString();
+    expect(rows.filter((r) => new Date(r.takenAt).toDateString() === today)).toHaveLength(1);
+  }, 420_000);
 
   it('a DOWN upstream fails per-symbol and the stored quote survives untouched', async () => {
     const before = await page.evaluate(() =>

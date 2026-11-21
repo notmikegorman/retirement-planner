@@ -202,14 +202,14 @@ validates the symbol, relays the JSON, and logs nothing:
 
 - the **price refresh** (Refresh prices on Accounts, Run now on the Plan page),
   which sends your holdings' **ticker symbols** — nothing else;
-- the **S&P 500 in the sidebar**, which asks for exactly one symbol, `^GSPC`,
-  when the app opens or you switch back to it — at most once an hour, and after
-  the close only until the closing value is in. It carries nothing about your
-  household.
+- the **Dashboard's S&P 500 history**, which asks for exactly one symbol,
+  `^GSPC`, with ten years of daily closes, when the Dashboard opens or you
+  switch back to it — at most once an hour, and after the close only until the
+  closing value is in. It carries nothing about your household.
 
 The deployed app is pointed at the owner's proxy when it is built. A build with
-no proxy configured — a local `npm run dev`, the test lanes — hides the ticker
-and makes neither request: a quote refresh reports a per-symbol failure saying
+no proxy configured — a local `npm run dev`, the test lanes — hides the
+Dashboard's market card and makes neither request: a quote refresh reports a per-symbol failure saying
 how to deploy one ([`workers/quote-proxy/README.md`](workers/quote-proxy/README.md)),
 stored quotes keep their recorded as-of dates, and nothing else is affected.
 

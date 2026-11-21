@@ -12,7 +12,7 @@
  * THE SHAPE IS /module/sub: one segment for the module (the sidebar's
  * vocabulary), one optional segment for either a tab from that module's own
  * list (PAGE_TABS) or, on the entity modules, a record id (ENTITY_PAGES).
- * '/' is the workbench, and so is anything unrecognised — an unknown path
+ * '/' is the Dashboard, and so is anything unrecognised — an unknown path
  * resolves rather than blanking the screen.
  *
  * ONE TAB SEGMENT PER PAGE, which means the Workbench's LEFT panel (Plan,
@@ -38,21 +38,24 @@ import { useCallback, useEffect, useState } from 'react';
 // ---------------------------------------------------------------------------
 
 /**
- * THE MODULES, in sidebar order: Plan (the page whose id stays 'workbench' —
- * its URLs, storage keys and machinery all predate the label) FIRST, above a
- * separator, then everything else ALPHABETICAL by label — the owner's rules,
- * 2026-08-30. '/' opens Plan (HOME below).
+ * THE MODULES, in sidebar order: Dashboard FIRST, above a separator, then
+ * everything else ALPHABETICAL by label — Plan (the page whose id stays
+ * 'workbench': its URLs, storage keys and machinery all predate the label)
+ * included. The owner's rules: alphabetical since 2026-08-30; Dashboard took
+ * the top slot and the root URL from Plan on 2026-11-21, and Plan joined the
+ * alphabet. '/' opens the Dashboard (HOME below).
  *
  * 'search' stays addressable but draws no sidebar item, and 'settings' draws
  * its item in the sidebar FOOTER — App.tsx's NAV_HIDDEN / footer rendering
- * carry those rules. 'dashboard', 'methodology', 'profile' and 'health' are
- * tombstones: the first two resolve to HOME like any unknown path;
- * '/profile/<tab>' paths redirect to the module the tab became, and
- * '/health' — a module until its fields moved onto the Settings page
- * (2026-08-30) — redirects to Settings (parseRoute owns both mappings).
+ * carry those rules. 'methodology', 'profile' and 'health' are tombstones:
+ * the first resolves to HOME like any unknown path; '/profile/<tab>' paths
+ * redirect to the module the tab became, and '/health' — a module until its
+ * fields moved onto the Settings page (2026-08-30) — redirects to Settings
+ * (parseRoute owns both mappings). 'dashboard' was a tombstone too until it
+ * came back as a different page under the same word.
  */
 export const PAGES = [
-  'workbench',
+  'dashboard',
   'accounts',
   'expenses',
   'home',
@@ -61,6 +64,7 @@ export const PAGES = [
   'insurance',
   'investing',
   'networth',
+  'workbench',
   'search',
   'settings',
   'tithing',
@@ -173,6 +177,7 @@ export type NetWorthTabId = (typeof NETWORTH_TAB_IDS)[number];
  */
 export const PAGE_TABS = {
   accounts: [],
+  dashboard: [],
   expenses: [],
   home: [],
   household: [],
@@ -288,7 +293,7 @@ export interface Route {
 }
 
 /** Where '/' goes, and where anything unrecognised goes. */
-export const HOME: Route = { page: 'workbench', tab: null };
+export const HOME: Route = { page: 'dashboard', tab: null };
 
 /**
  * Read a pathname into a route. Total by construction: every string in, a
@@ -348,14 +353,14 @@ export function parseRoute(path: string): Route {
 /** The canonical path for a route — the only string ever written to history. */
 export function routePath(route: Route): string {
   /*
-   * PLAN IS HOME, AND THE ROOT IS ITS ADDRESS (the owner's call, 2026-08-30):
-   * a bare Plan writes '/', never '/workbench' — so the site root does not
-   * "redirect" anywhere, and the sidebar's Plan item lands on the root URL.
-   * The legacy '/workbench' still PARSES (it is in PAGES), and the canonical
-   * rewrite then cleans it up to '/'. A tabbed view keeps its named path
-   * (/workbench/cashflow): the tab is the part of the address worth sending.
+   * THE DASHBOARD IS HOME, AND THE ROOT IS ITS ADDRESS (the owner's call,
+   * 2026-11-21, moving the rule Plan held since 2026-08-30): a bare Dashboard
+   * writes '/', never '/dashboard' — the site root does not "redirect"
+   * anywhere. '/dashboard' still PARSES (it is in PAGES), and the canonical
+   * rewrite cleans it up to '/'. Plan is an ordinary module now: a bare Plan
+   * writes '/workbench', and its tabbed views keep /workbench/<tab>.
    */
-  if (route.page === 'workbench' && route.tab === null) return '/';
+  if (route.page === 'dashboard') return '/';
   return route.tab === null ? `/${route.page}` : `/${route.page}/${route.tab}`;
 }
 
@@ -445,6 +450,7 @@ export function resolveTab<T extends string>(
  */
 export const PAGE_TAB_STORAGE_KEY = {
   accounts: null,
+  dashboard: null,
   expenses: null,
   home: null,
   household: null,
@@ -575,7 +581,7 @@ export function useRoute(): { route: Route; navigate: NavigateFn; storedTabs: St
   useEffect(() => {
     /*
      * The address bar can disagree with the route it resolved to: '/' is the
-     * workbench, '/Profile' is /profile, '/nonsense' is the workbench too, and
+     * Dashboard, '/Profile' is /profile, '/nonsense' is the Dashboard too, and
      * '/profile/budget' is a tab that no longer exists. Write the resolved
      * answer back so the URL always says what is on screen — with REPLACE,
      * because a push on load would make the first Back a no-op that lands on

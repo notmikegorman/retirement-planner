@@ -105,9 +105,9 @@ const httpApi = {
   /** The stored quotes — what every derived balance is priced from. */
   getQuotes: () => request<QuotesFile>('/api/quotes'),
   /**
-   * One of the app's two network steps — the other is the sidebar's S&P 500
-   * ticker (components/topbar/MarketTicker.tsx). No symbols = every symbol any
-   * account holds. Per-symbol failures come back in `results`, never as a
+   * One of the app's two network steps — the other is the Dashboard's S&P 500
+   * history (pages/DashboardPage.tsx). No symbols = every symbol any account
+   * holds. Per-symbol failures come back in `results`, never as a
    * batch error.
    */
   refreshQuotes: (symbols?: string[]) =>
