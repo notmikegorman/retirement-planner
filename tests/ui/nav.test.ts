@@ -673,13 +673,29 @@ describe('the base path helpers', () => {
     expect(withBase('/workbench', '/retirement-planner')).toBe(
       '/retirement-planner/workbench',
     );
-    // The app ROOT writes the BARE base — no trailing slash (the owner's
-    // ask, 2026-08-30): Plan's address on the deployed site is
-    // .../retirement-planner, and stripBase above reads both forms back as
-    // '/', so a host directory-redirect on refresh trims itself back out.
-    expect(withBase('/', '/retirement-planner')).toBe('/retirement-planner');
+    // The app ROOT keeps the trailing slash (2026-11-21): the installed
+    // app's scope is /retirement-planner/, and the bare base is OUTSIDE it —
+    // every Dashboard click grew the PWA a URL bar. stripBase still reads the
+    // bare form (an old bookmark) as '/'.
+    expect(withBase('/', '/retirement-planner')).toBe('/retirement-planner/');
+    expect(stripBase('/retirement-planner', '/retirement-planner')).toBe('/');
     expect(withBase('/', '')).toBe('/');
     expect(withBase('/profile/expenses', '')).toBe('/profile/expenses');
+  });
+
+  it('writes every view INSIDE the installed app\'s manifest scope', () => {
+    // An installed PWA shows a URL bar over any navigation outside its scope.
+    // The manifest's scope is "./", resolved against the manifest's own URL
+    // under the base — so every written path must start with `${base}/`.
+    const manifest = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../../public/manifest.webmanifest', import.meta.url)), 'utf8'),
+    ) as { scope: string; start_url: string };
+    const base = '/retirement-planner';
+    const scope = new URL(manifest.scope, `https://host${base}/manifest.webmanifest`).pathname;
+    expect(scope).toBe(`${base}/`);
+    for (const route of EVERY_ROUTE) {
+      expect(withBase(routePath(route), base).startsWith(scope), routePath(route)).toBe(true);
+    }
   });
 
   it('the two directions round-trip for every route in the vocabulary', () => {

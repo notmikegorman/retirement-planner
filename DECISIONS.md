@@ -2925,3 +2925,31 @@ ticker, a six-figure loss in five days. Read off twelve months it was still
   year; while today's run is in flight it keeps the last answer and says a
   fresh one is coming. **The net worth itself is not shown** — it is a dollar
   figure that moves with the news.
+
+## The Dashboard, second pass (2026-11-21, twenty-third pass)
+
+Three reports from the owner, the morning after:
+
+- **A URL bar over the installed app on every Dashboard click.** The manifest's
+  scope is `./`, i.e. `/retirement-planner/` WITH the slash, and an installed PWA
+  grows a URL bar over any navigation outside its scope. The bare-base rule
+  (2026-08-30: the root writes `/retirement-planner`, no slash) put the root just
+  outside it — invisible while Plan held the root and the app was opened at its
+  start URL, constant once the root became the most-clicked sidebar item. The root
+  now writes the base with its slash; stripBase still reads the bare form. A nav
+  test pins every written path inside the manifest's resolved scope.
+- **92.8% on the Dashboard, 96.5% on Plan.** The card read the newest ledger
+  row, and today's row had been scored at 10:47 by a stale cached bundle on
+  engine 1.24.0 (before the update reached the installed app) — a different
+  engine, a different plan hash. The probability now comes from the Plan page's
+  OWN final run: the same request (plan as written, Monte Carlo, final paths, the
+  profile's seed), so the same runKey and the same cache entry, printed with the
+  verdict's own formatter. It runs after today's snapshot so it sees today's
+  prices; the snapshot scorer runs that identical request and the run manager
+  joins the two. The 1.24.0 row stays as recorded — a ledger row is never
+  re-scored.
+- **Fill the page: five cards.** The 12-month move and the plan score large
+  across the top; 3 years, 5 years and the monthly spend the plan supports
+  across the bottom. The spend comes from the newest snapshot that measured THIS
+  plan on THIS engine (whole dollars a month, rounded down, the yearly figure
+  under it); a row scored under another plan or engine is skipped, never shown.

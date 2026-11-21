@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NetWorthSnapshot, Profile } from '../../src/shared/types';
+import type { NetWorthSnapshot, Profile, Scenario } from '../../src/shared/types';
 
 const takeNetWorthSnapshot = vi.fn();
 vi.mock('../../src/ui/api', () => ({ api: { takeNetWorthSnapshot } }));
@@ -19,9 +19,9 @@ const {
   resetDailySnapshotForTests,
   snapshotTakenToday,
 } = await import('../../src/ui/dailySnapshot');
-const { latestScored, marketWindows, readHistoryCache, scoreStatus } = await import(
-  '../../src/ui/pages/dashboardLogic'
-);
+const { comparableSpend, marketWindows, monthlyFromYearly, planFingerprint, readHistoryCache } =
+  await import('../../src/ui/pages/dashboardLogic');
+const { planHash } = await import('../../src/store/planHistoryStore');
 
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
@@ -115,38 +115,39 @@ describe('ensureTodaysSnapshot — one snapshot a day, two doors', () => {
   });
 });
 
-describe('the plan card', () => {
-  const fmt = (iso: string) => iso.slice(0, 10);
+describe('the plan cards', () => {
+  const plan = JSON.parse(read('../../data-defaults/scenarios/base-case.json')) as Scenario;
+  const other = { ...plan, events: [] } as Scenario;
+  const scored = (id: string, takenAt: string, p: Scenario, engine: string, spend?: number) =>
+    row(id, takenAt, {
+      score: { ...score(0.96, spend), planHash: planFingerprint(p), engineVersion: engine },
+    });
 
-  it('shows the NEWEST scored row, skipping one still scoring', () => {
-    const list = [
-      row('a', '2026-11-19T12:00:00Z', { score: score(0.98, 88_000) }),
-      row('b', '2026-11-20T12:00:00Z', { score: score(0.99, 90_000) }),
-      row('c', '2026-11-21T12:00:00Z'),
-    ];
-    expect(latestScored(list)?.id).toBe('b');
-    expect(latestScored([row('z', '2026-11-21T12:00:00Z')])).toBeNull();
+  it('fingerprints a plan exactly as the stores file its scores', () => {
+    expect(planFingerprint(plan)).toBe(planHash(plan));
   });
 
-  it("says which day's prices the score used, or that today's are being scored", () => {
+  it('takes the spend from the newest row that measured THIS plan on THIS engine', () => {
     const list = [
-      row('b', '2026-11-20T12:00:00Z', { score: score(0.99) }),
-      row('c', '2026-11-21T12:00:00Z'),
+      scored('a', '2026-11-11T12:00:00Z', plan, '1.25.0', 70_839),
+      // The owner's report: a row scored by a stale bundle on the old engine.
+      scored('b', '2026-11-21T10:47:00Z', plan, '1.24.0', 66_757),
+      // And one scored under a different plan.
+      scored('c', '2026-11-21T12:00:00Z', other, '1.25.0', 99_000),
+      // And one still solving.
+      scored('d', '2026-11-21T13:00:00Z', plan, '1.25.0'),
     ];
-    expect(scoreStatus({ snapshots: list, scoring: [], refreshing: true, formatDate: fmt })).toBe(
-      'Refreshing prices…',
-    );
-    expect(scoreStatus({ snapshots: list, scoring: ['c'], refreshing: false, formatDate: fmt })).toBe(
-      'Re-scoring with today’s prices…',
-    );
-    const scored = [row('c', '2026-11-21T12:00:00Z', { score: score(0.99) })];
-    expect(scoreStatus({ snapshots: scored, scoring: ['c'], refreshing: false, formatDate: fmt })).toBe(
-      'Solving what the plan supports…',
-    );
-    expect(scoreStatus({ snapshots: list, scoring: [], refreshing: false, formatDate: fmt })).toBe(
-      'Scored 2026-11-20, with that day’s prices',
-    );
-    expect(scoreStatus({ snapshots: [], scoring: [], refreshing: false, formatDate: fmt })).toBeNull();
+    expect(comparableSpend(list, plan, '1.25.0')).toEqual({
+      yearly: 70_839,
+      takenAt: '2026-11-11T12:00:00Z',
+    });
+    expect(comparableSpend(list, other, '1.25.0')?.yearly).toBe(99_000);
+    expect(comparableSpend(list, plan, '9.9.9')).toBeNull();
+  });
+
+  it('states the spend monthly, in whole dollars, never rounding up', () => {
+    expect(monthlyFromYearly(66_757.8125)).toBe(5_563);
+    expect(monthlyFromYearly(72_000)).toBe(6_000);
   });
 });
 
@@ -193,6 +194,34 @@ describe('the page keeps its promises (source scan)', () => {
 
   it('never paints a loss red', () => {
     expect(dashCss).not.toContain('--bad');
+  });
+
+  it('scores with the Plan page’s own final run — same request, same number', () => {
+    expect(page).toContain('scenario: scenarioForPlainRun(plan),');
+    expect(page).toContain('...finalRunParams(profile.settings),');
+    // Formatted exactly as the Plan page's verdict formats it.
+    expect(page).toContain('formatPct(m.result.success, 1)');
+    // After today's prices: the run is started only once the snapshot settled.
+    const measure = page.slice(page.indexOf('function usePlanMeasure'));
+    expect(measure.indexOf('ensureTodaysSnapshot')).toBeLessThan(measure.indexOf('api.startRun'));
+  });
+
+  it('lays out five cards: two large, three small, in the owner’s order', () => {
+    const order = [...page.matchAll(/size="(large|small)"\s+label=\{?[`"]([^`"]+)/g)].map(
+      (m) => `${m[1]}:${m[2]}`,
+    );
+    expect(order).toEqual([
+      'large:S&P 500 · last 12 months',
+      'large:Retirement plan',
+      'small:S&P 500 · ${years} years',
+      'small:The plan supports',
+    ]);
+    expect(page).toContain('{ years: 3, r: three }');
+    expect(page).toContain('{ years: 5, r: five }');
+  });
+
+  it('re-arms its still-mounted flag on every mount (StrictMode remounts on the same refs)', () => {
+    expect(page).toMatch(/useEffect\(\(\) => \{\s*alive\.current = true;\s*return \(\) => \{\s*alive\.current = false;/);
   });
 
   it('does not show the net worth in dollars', () => {

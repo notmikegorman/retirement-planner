@@ -219,13 +219,17 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
     expect(gspcHits).toBe(0);
 
     await page.locator('.sideNav').getByRole('button', { name: 'Dashboard', exact: true }).click();
-    const market = page.getByRole('region', { name: 'The market, zoomed out' });
+    const market = page.getByRole('region', { name: 'The market, last 12 months' });
     await expect.poll(() => market.innerText(), { timeout: 60_000 }).toContain('Up 10.0%');
     const text = await market.innerText();
     expect(text).toContain('Nov 20, 2025 → Nov 20, 2026');
-    expect(text).toContain('+32.0%');
-    expect(text).toContain('+65.0%');
     expect(text).toMatch(/\b(EDT|EST)\b/);
+    expect(await page.getByRole('region', { name: 'The market, last 3 years' }).innerText()).toContain(
+      '+32.0%',
+    );
+    expect(await page.getByRole('region', { name: 'The market, last 5 years' }).innerText()).toContain(
+      '+65.0%',
+    );
     expect(gspcRanges).toEqual(['10y']);
 
     // An activation within the hour does NOT refetch...
@@ -260,11 +264,39 @@ describe('quote proxy e2e: local mode, real handler, fixture upstream', () => {
       .not.toMatch(/^2020-/);
 
     // The plan half: arriving took today's snapshot (the seed holds none
-    // from today) and its score lands on the card.
+    // from today), and the score card prints the Plan page's own final run.
     const plan = page.getByRole('region', { name: 'The retirement plan' });
     await expect
       .poll(() => plan.innerText(), { timeout: 300_000 })
       .toContain('chance the money lasts');
+    // The very number the Plan page prints for its final run: the same
+    // request, asked of the cache the Dashboard's run filled.
+    const planPct = await page.evaluate(async () => {
+      const w = window as unknown as {
+        __fplanApi: {
+          getPlan(): Promise<Record<string, unknown>>;
+          getProfile(): Promise<{ settings: { mcPathsFinal: number; seed: number } }>;
+          lookupCachedRun(req: unknown): Promise<{ result: { success: number } | null }>;
+        };
+      };
+      const [plan, profile] = await Promise.all([w.__fplanApi.getPlan(), w.__fplanApi.getProfile()]);
+      const { solver: _s, ...scenario } = plan;
+      const { result } = await w.__fplanApi.lookupCachedRun({
+        scenario,
+        mode: 'montecarlo',
+        paths: profile.settings.mcPathsFinal,
+        seed: profile.settings.seed,
+      });
+      return result === null ? null : `${(result.success * 100).toFixed(1)}%`;
+    });
+    expect(planPct).not.toBeNull();
+    expect(await plan.innerText()).toContain(planPct!);
+    // And the monthly spend lands once the snapshot's solve does.
+    await expect
+      .poll(() => page.getByRole('region', { name: 'What the plan supports' }).innerText(), {
+        timeout: 300_000,
+      })
+      .toMatch(/\$[\d,]+ \/ mo/);
     const rows = await page.evaluate(() =>
       (
         window as unknown as { __fplanApi: { getNetWorth(): Promise<Array<{ takenAt: string }>> } }

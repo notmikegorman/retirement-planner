@@ -150,85 +150,107 @@ body {
   margin: 6px 8px;
 }
 
-/* The Dashboard: two calm cards, the long view at a glance. A gain reads
-   green; a loss reads in the ordinary text colour, never red — the page's
-   whole job is to keep a bad week in proportion. */
+/* The Dashboard (the owner's layout, 2026-11-21): five cards filling the
+   page — the 12-month move and the plan score large across the top, 3 years,
+   5 years and the monthly spend across the bottom. Six columns so the top
+   pair spans three each and the bottom trio two each. A gain reads green; a
+   loss reads in the ordinary text colour, never red — the page's whole job
+   is to keep a bad week in proportion. */
 .dashGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: minmax(260px, 3fr) minmax(180px, 2fr);
   gap: 16px;
-  max-width: 900px;
+  /* Fill the panel under the banner: viewport minus banner and body padding. */
+  min-height: calc(100vh - 104px);
 }
 
 .dashCard {
+  display: flex;
+  flex-direction: column;
   margin-bottom: 0;
+  padding: 20px 24px;
+}
+
+.dashCard.large {
+  grid-column: span 3;
+}
+
+.dashCard.small {
+  grid-column: span 2;
 }
 
 .dashLabel {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-dim);
 }
 
-.dashHeadline {
-  font-size: 34px;
+/* The number sits in the middle of whatever height the card is given. */
+.dashBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.dashValue {
   font-weight: 700;
-  line-height: 1.2;
-  margin-top: 6px;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
-.dashHeadline.muted {
-  font-size: 15px;
-  font-weight: 400;
+.dashCard.large .dashValue {
+  font-size: clamp(44px, 7vw, 96px);
 }
 
-.dashHeadline.up,
-.dashZoomValue.up {
+.dashCard.small .dashValue {
+  font-size: clamp(30px, 3.6vw, 52px);
+}
+
+.dashValue.up {
   color: var(--good);
 }
 
 .dashSub {
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 8px;
 }
 
-.dashSpend {
-  margin-top: 14px;
+.dashCard.large .dashSub {
+  font-size: 18px;
+}
+
+.dashCard.small .dashSub {
   font-size: 15px;
 }
 
-.dashZoomRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 28px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.dashZoomLabel {
-  font-size: 12px;
+.dashMuted {
   color: var(--text-dim);
-}
-
-.dashZoomValue {
-  font-size: 20px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.dashZoomRate {
-  font-size: 12px;
-  color: var(--text-dim);
+  font-size: 15px;
 }
 
 .dashStamp {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
-  margin-top: 14px;
+}
+
+/* Phone and narrow windows: one column, natural heights. */
+@media (max-width: 760px) {
+  .dashGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    min-height: 0;
+  }
+
+  .dashCard.large,
+  .dashCard.small {
+    grid-column: auto;
+    min-height: 160px;
+  }
 }
 
 /* The app's 'you are here' vocabulary — accent-soft fill, accent text —

@@ -258,17 +258,20 @@ export function stripBase(pathname: string, base: string): string {
 /**
  * The app-path → history.pushState direction.
  *
- * THE APP ROOT WRITES THE BARE BASE, no trailing slash (the owner's ask,
- * 2026-08-30): a based deploy shows .../retirement-planner for Plan, not
- * .../retirement-planner/. stripBase reads the bare base back as '/' (and
- * the slashed form via its prefix branch), so the round trip holds either
- * way — a hard refresh may bounce through the host's directory redirect and
- * the canonical rewrite then trims it again. At root (base '') the path is
- * already the bare '/'.
+ * THE APP ROOT WRITES THE BASE WITH ITS TRAILING SLASH (2026-11-21,
+ * reversing the 2026-08-30 bare-base rule). The installed app's manifest
+ * scope is "./" — /retirement-planner/ WITH the slash — and an installed PWA
+ * that navigates outside its scope grows a URL bar over the window. The bare
+ * /retirement-planner is outside it, so pushing the bare base for the root
+ * (which became the Dashboard, the most-clicked item) put that bar on screen
+ * at every Dashboard click. In app mode there is no address bar, so the slash
+ * the old rule hid is invisible there anyway. stripBase reads both forms as
+ * '/', so old bookmarks of the bare base still resolve. At root (base '') the
+ * path is already '/'.
  */
 export function withBase(path: string, base: string): string {
   if (base === '') return path;
-  return path === '/' ? base : `${base}${path}`;
+  return `${base}${path}`;
 }
 
 /** What this build was told at bundle time; '' outside a bundler (tests). */

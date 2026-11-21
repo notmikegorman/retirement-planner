@@ -13,12 +13,23 @@
  *     separate them. No daily or weekly move appears anywhere on this page,
  *     by design — and a down year reads in the text colour, never red.
  *
- *  2. IS THE PLAN STILL ON TRACK? The newest recorded score. Arriving takes
- *     today's net-worth snapshot if none exists yet (../dailySnapshot.ts, the
- *     same once-a-day rule the Net worth page keeps), which refreshes every
- *     holding's price and re-scores the plan against them. The net worth
- *     itself is not shown: it is a dollar figure that moves with the news,
- *     which is the very thing this page exists to step back from.
+ *  2. IS THE PLAN STILL ON TRACK? The Plan page's OWN final-quality run —
+ *     the same request (scoreRunRequest's shape: the plan as written, Monte
+ *     Carlo, the final path count, the profile's seed), so the same runKey,
+ *     the same cache entry and the same number, always (the owner's
+ *     2026-11-21 report: 92.8% here against 96.5% there, because this card
+ *     read a ledger row scored by a stale bundle). Arriving first takes
+ *     today's net-worth snapshot if none exists (../dailySnapshot.ts, the
+ *     once-a-day rule the Net worth page keeps), which refreshes every
+ *     holding's price; its scorer then runs exactly this request, and the
+ *     run manager dedupes the two. What the plan SUPPORTS a month comes from
+ *     the newest snapshot that measured this same plan on this engine. The
+ *     net worth itself is not shown: it is a dollar figure that moves with
+ *     the news, which is the very thing this page exists to step back from.
+ *
+ * FIVE CARDS (the owner's layout, 2026-11-21): the 12-month move and the plan
+ * score large across the top; 3 years, 5 years and the monthly spend the plan
+ * supports across the bottom.
  *
  * WHEN THE MARKET HISTORY FETCHES: on mount and whenever the app is
  * ACTIVATED while this page is up — the window regains focus, the tab
@@ -42,9 +53,17 @@ import {
   type IndexHistory,
   type TrailingReturn,
 } from '../../shared/marketIndex';
-import type { NetWorthSnapshot, Profile } from '../../shared/types';
-import { formatUSD } from '../../shared/util';
-import { api } from '../api';
+import {
+  ENGINE_VERSION,
+  type NetWorthSnapshot,
+  type Profile,
+  type RunResult,
+  type Scenario,
+} from '../../shared/types';
+import { formatPct, formatUSD } from '../../shared/util';
+import { api, pollRun } from '../api';
+import { scenarioForPlainRun } from '../components/results/resultsData';
+import { finalRunParams } from '../components/workbench/workbenchLogic';
 import { ensureTodaysSnapshot } from '../dailySnapshot';
 import { DASHBOARD_FIRST_RUN, simulationReadiness } from '../firstRun';
 import type { PageProps } from '../nav';
@@ -52,13 +71,12 @@ import { ModuleBanner } from '../modules/ModuleBanner';
 import { QUOTE_PROXY_STORAGE_KEY, resolveQuoteProxyUrl } from '../local/proxyQuoteFetcher';
 import {
   HISTORY_CACHE_KEY,
-  latestScored,
+  comparableSpend,
   marketWindows,
+  monthlyFromYearly,
   readHistoryCache,
-  scoreStatus,
 } from './dashboardLogic';
 import { formatSnapshotDate } from './netWorthChart';
-import { formatScorePct } from './netWorthScoreChart';
 
 const FETCH_TIMEOUT_MS = 15_000;
 const SCORING_POLL_MS = 2500;
@@ -155,72 +173,82 @@ function useIndexHistory(proxyUrl: string | null): {
   return { history, error };
 }
 
-function ZoomOut({ years, result }: { years: number; result: TrailingReturn | null }) {
+/** One card: a small caps label, the big number, and what qualifies it. */
+function Card(props: {
+  size: 'large' | 'small';
+  label: string;
+  ariaLabel: string;
+  value: string | null;
+  tone?: 'up' | null;
+  sub?: string | null;
+  stamp?: string | null;
+  muted?: string | null;
+}) {
+  const { size, label, ariaLabel, value, tone, sub, stamp, muted } = props;
   return (
-    <div className="dashZoom">
-      <div className="dashZoomLabel">{years} years</div>
-      {result === null ? (
-        <div className="dashZoomValue muted">—</div>
-      ) : (
-        <>
-          <div className={`dashZoomValue ${result.change >= 0 ? 'up' : ''}`}>
-            {formatSignedPct(result.change)}
-          </div>
-          <div className="dashZoomRate">{formatSignedPct(result.annualized)} a year</div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function MarketCard({ proxyUrl }: { proxyUrl: string }) {
-  const { history, error } = useIndexHistory(proxyUrl);
-  const windows = history === null ? null : marketWindows(history.closes);
-  const headline = windows?.headline ?? null;
-  return (
-    <section className="card dashCard" aria-label="The market, zoomed out">
-      <div className="dashLabel">S&amp;P 500 · last 12 months</div>
-      {headline === null ? (
-        <div className="dashHeadline muted">{error ?? 'Loading…'}</div>
-      ) : (
-        <>
-          <div className={`dashHeadline ${headline.change >= 0 ? 'up' : ''}`}>
-            {headline.change >= 0 ? 'Up ' : 'Down '}
-            {formatSignedPct(Math.abs(headline.change)).replace('+', '')}
-          </div>
-          <div className="dashSub">
-            {formatCloseDate(headline.from[0])} → {formatCloseDate(headline.to[0])}
-          </div>
-          <div className="dashZoomRow">
-            {windows?.zoomOut.map((z) => <ZoomOut key={z.years} {...z} />)}
-          </div>
-          <div className="dashStamp">
-            As of {formatEtTimestamp(Date.parse(history!.fetchedAt))}
-            {error === null ? '' : ` · ${error}`}
-          </div>
-        </>
-      )}
+    <section className={`card dashCard ${size}`} aria-label={ariaLabel}>
+      <div className="dashLabel">{label}</div>
+      <div className="dashBody">
+        {value === null ? (
+          <div className="dashMuted">{muted ?? 'Loading…'}</div>
+        ) : (
+          <>
+            <div className={`dashValue${tone === 'up' ? ' up' : ''}`}>{value}</div>
+            {sub ? <div className="dashSub">{sub}</div> : null}
+          </>
+        )}
+      </div>
+      {stamp ? <div className="dashStamp">{stamp}</div> : null}
     </section>
   );
 }
 
-function PlanCard() {
+/** A trailing window as a card's value: "+52.0%", or null when unreachable. */
+function windowValue(r: TrailingReturn | null): string | null {
+  return r === null ? null : formatSignedPct(r.change);
+}
+
+function windowRange(r: TrailingReturn | null): string | null {
+  return r === null ? null : `${formatCloseDate(r.from[0])} → ${formatCloseDate(r.to[0])}`;
+}
+
+/** Everything the plan cards need, loaded and measured once per visit. */
+function usePlanMeasure(): {
+  gated: boolean;
+  loadError: string | null;
+  result: RunResult | null;
+  progress: number | null;
+  runError: string | null;
+  refreshError: string | null;
+  spend: { yearly: number; takenAt: string } | null;
+  spendPending: boolean;
+} {
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[] | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [plan, setPlan] = useState<Scenario | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [result, setResult] = useState<RunResult | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
   const [scoring, setScoring] = useState<string[]>([]);
-  const tried = useRef(false);
+  const started = useRef(false);
+  const alive = useRef(true);
+  // Set on EVERY mount, not only at creation: StrictMode's dev double-mount
+  // runs this cleanup and then the effect again on the same refs, and a flag
+  // only ever cleared would drop every answer after it.
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
-  const load = useCallback(async () => {
+  const loadLedger = useCallback(async () => {
     try {
-      const [list, prof] = await Promise.all([api.getNetWorth(), api.getProfile()]);
-      setSnapshots(list);
-      setProfile(prof);
-      setLoadError(null);
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      setSnapshots(await api.getNetWorth());
+    } catch {
+      // The spend card degrades; the score does not depend on the ledger.
     }
   }, []);
 
@@ -231,15 +259,29 @@ function PlanCard() {
     } catch {
       return;
     }
+    if (!alive.current) return;
     setScoring(ids);
-    // Reload while running too: the probability lands before the spend solve.
-    await load();
-  }, [load]);
+    await loadLedger();
+  }, [loadLedger]);
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      try {
+        const [list, prof, pl] = await Promise.all([
+          api.getNetWorth(),
+          api.getProfile(),
+          api.getPlan(),
+        ]);
+        if (!alive.current) return;
+        setSnapshots(list);
+        setProfile(prof);
+        setPlan(pl);
+      } catch (e) {
+        if (alive.current) setLoadError(e instanceof Error ? e.message : String(e));
+      }
+    })();
     void poll();
-  }, [load, poll]);
+  }, [poll]);
 
   const idle = scoring.length === 0;
   useEffect(() => {
@@ -248,74 +290,150 @@ function PlanCard() {
     return () => clearInterval(timer);
   }, [idle, poll]);
 
-  // Today's snapshot, behind the scenes — once per mount.
+  const gated = profile !== null && simulationReadiness(profile).state === 'no-accounts';
+
   useEffect(() => {
-    if (tried.current || snapshots === null || profile === null) return;
-    tried.current = true;
-    setRefreshing(true);
+    if (started.current || snapshots === null || profile === null || plan === null || gated) {
+      return;
+    }
+    started.current = true;
     void (async () => {
+      // Today's prices first: the snapshot refreshes every holding's quote,
+      // and the run below must see them or it measures yesterday.
       try {
         const snapshot = await ensureTodaysSnapshot({ snapshots, profile });
-        if (snapshot !== null) {
+        if (snapshot !== null && alive.current) {
           setSnapshots((prev) =>
             (prev ?? []).some((s) => s.id === snapshot.id) ? prev : [...(prev ?? []), snapshot],
           );
           setScoring((prev) => [...prev.filter((x) => x !== snapshot.id), snapshot.id]);
         }
       } catch (e) {
-        setSnapshotError(e instanceof Error ? e.message : String(e));
+        if (alive.current) setRefreshError(e instanceof Error ? e.message : String(e));
+      }
+      // The Plan page's final run. A cache hit answers at once; a run the
+      // snapshot scorer already started is the SAME runKey, which the run
+      // manager joins rather than repeats.
+      try {
+        const { runId } = await api.startRun({
+          scenario: scenarioForPlainRun(plan),
+          ...finalRunParams(profile.settings),
+        });
+        const done = await pollRun(
+          runId,
+          (p) => {
+            if (alive.current) setProgress(p.progress);
+          },
+          500,
+        );
+        if (!alive.current) return;
+        if (done.status !== 'done' || !done.result) throw new Error(done.error ?? 'Run failed');
+        setResult(done.result);
+      } catch (e) {
+        if (alive.current) setRunError(e instanceof Error ? e.message : String(e));
       } finally {
-        setRefreshing(false);
+        if (alive.current) setProgress(null);
       }
     })();
-  }, [snapshots, profile]);
+  }, [snapshots, profile, plan, gated]);
 
-  const gated = profile !== null && simulationReadiness(profile).state === 'no-accounts';
-  const scored = snapshots === null ? null : latestScored(snapshots);
-  const status =
-    snapshots === null
-      ? null
-      : scoreStatus({ snapshots, scoring, refreshing, formatDate: formatSnapshotDate });
+  const spend = snapshots !== null && plan !== null ? comparableSpend(snapshots, plan, ENGINE_VERSION) : null;
+  const newest = snapshots?.[snapshots.length - 1];
+  const spendPending = newest !== undefined && scoring.includes(newest.id);
 
-  return (
-    <section className="card dashCard" aria-label="The retirement plan">
-      <div className="dashLabel">Retirement plan</div>
-      {loadError !== null ? (
-        <div className="error-banner">{loadError}</div>
-      ) : snapshots === null || profile === null ? (
-        <div className="dashHeadline muted">Loading…</div>
-      ) : gated ? (
-        <div className="dashSub">{DASHBOARD_FIRST_RUN}</div>
-      ) : scored === null ? (
-        <div className="dashHeadline muted">{status ?? 'Not scored yet'}</div>
-      ) : (
-        <>
-          <div className="dashHeadline">{formatScorePct(scored.score.success * 100)}</div>
-          <div className="dashSub">chance the money lasts</div>
-          {scored.score.sustainableSpend === undefined ? null : (
-            <div className="dashSpend">
-              Supports up to <strong>{formatUSD(scored.score.sustainableSpend)}</strong> a year
-            </div>
-          )}
-          {status === null ? null : <div className="dashStamp">{status}</div>}
-        </>
-      )}
-      {snapshotError === null ? null : (
-        <div className="error-banner">Today&rsquo;s refresh failed: {snapshotError}</div>
-      )}
-    </section>
-  );
+  return { gated, loadError, result, progress, runError, refreshError, spend, spendPending };
 }
 
 export function DashboardPage(_props: PageProps) {
   const [proxyUrl] = useState(proxyUrlForSession);
+  const { history, error: marketError } = useIndexHistory(proxyUrl);
+  const m = usePlanMeasure();
+
+  const windows = history === null ? null : marketWindows(history.closes);
+  const year = windows?.headline ?? null;
+  const [three, five] = windows?.zoomOut.map((z) => z.result) ?? [null, null];
+  const marketMuted =
+    proxyUrl === null ? 'No market data source is configured.' : (marketError ?? 'Loading…');
+  const asOf =
+    history === null
+      ? null
+      : `As of ${formatEtTimestamp(Date.parse(history.fetchedAt))}` +
+        (marketError === null ? '' : ` · ${marketError}`);
+
+  const planMuted = m.loadError
+    ? m.loadError
+    : m.gated
+      ? DASHBOARD_FIRST_RUN
+      : m.runError
+        ? `Could not score the plan: ${m.runError}`
+        : m.progress !== null
+          ? `Scoring… ${Math.round(m.progress * 100)}%`
+          : 'Loading…';
+
   return (
     <>
       <ModuleBanner title="Dashboard" />
       <div className="moduleBody">
         <div className="dashGrid">
-          {proxyUrl === null ? null : <MarketCard proxyUrl={proxyUrl} />}
-          <PlanCard />
+          <Card
+            size="large"
+            label="S&P 500 · last 12 months"
+            ariaLabel="The market, last 12 months"
+            value={
+              year === null
+                ? null
+                : `${year.change >= 0 ? 'Up' : 'Down'} ${formatSignedPct(Math.abs(year.change)).replace('+', '')}`
+            }
+            tone={year !== null && year.change >= 0 ? 'up' : null}
+            sub={windowRange(year)}
+            stamp={asOf}
+            muted={marketMuted}
+          />
+          <Card
+            size="large"
+            label="Retirement plan"
+            ariaLabel="The retirement plan"
+            value={m.result === null || m.gated ? null : formatPct(m.result.success, 1)}
+            sub="chance the money lasts"
+            stamp={
+              m.result === null
+                ? null
+                : `${m.result.meta.paths.toLocaleString('en-US')} simulated futures, today’s prices` +
+                  (m.refreshError === null ? '' : ` · prices not refreshed: ${m.refreshError}`)
+            }
+            muted={planMuted}
+          />
+          {[
+            { years: 3, r: three },
+            { years: 5, r: five },
+          ].map(({ years, r }) => (
+            <Card
+              key={years}
+              size="small"
+              label={`S&P 500 · ${years} years`}
+              ariaLabel={`The market, last ${years} years`}
+              value={windowValue(r)}
+              tone={r !== null && r.change >= 0 ? 'up' : null}
+              sub={r === null ? null : `${formatSignedPct(r.annualized)} a year`}
+              stamp={windowRange(r)}
+              muted={history === null ? marketMuted : 'Not enough history'}
+            />
+          ))}
+          <Card
+            size="small"
+            label="The plan supports"
+            ariaLabel="What the plan supports"
+            value={m.spend === null || m.gated ? null : `${formatUSD(monthlyFromYearly(m.spend.yearly))} / mo`}
+            sub={m.spend === null ? null : `${formatUSD(m.spend.yearly)} a year`}
+            stamp={m.spend === null ? null : `Solved ${formatSnapshotDate(m.spend.takenAt)}`}
+            muted={
+              m.gated
+                ? DASHBOARD_FIRST_RUN
+                : m.spendPending
+                  ? 'Solving…'
+                  : 'Not solved for this plan yet'
+            }
+          />
         </div>
       </div>
     </>

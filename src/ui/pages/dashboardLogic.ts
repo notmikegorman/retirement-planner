@@ -9,7 +9,9 @@ import {
   type IndexHistory,
   type TrailingReturn,
 } from '../../shared/marketIndex';
-import type { NetWorthSnapshot, SnapshotScore } from '../../shared/types';
+import { planIdentityKey } from '../../shared/planIdentity';
+import { sha256Hex } from '../../shared/sha256';
+import type { NetWorthSnapshot, Scenario } from '../../shared/types';
 
 /** localStorage key for the cached S&P 500 history — market data, per browser. */
 export const HISTORY_CACHE_KEY = 'fplan-sp500-history';
@@ -51,38 +53,36 @@ export function marketWindows(closes: readonly DailyClose[]): {
 }
 
 /**
- * The row whose score the card shows: the NEWEST scored one. Today's row,
- * while it is still scoring, has no score yet — the card keeps showing the
- * last known answer and says a fresh one is coming, rather than blanking.
+ * WHAT THE PLAN SUPPORTS — the sustainable spend, taken from the newest
+ * snapshot whose score measured THIS plan on THIS engine. The success
+ * probability no longer comes from the ledger (the card shows the Plan page's
+ * own final run, so the two pages cannot disagree); the spend still does,
+ * because only the snapshot scorer solves it. A row scored under a different
+ * plan or engine answers a different question — the owner's 2026-11-21 report
+ * was exactly that: a row scored by a stale cached bundle on the previous
+ * engine, printed beside today's plan — so such a row is skipped, never shown.
  */
-export function latestScored(
+export function comparableSpend(
   snapshots: readonly NetWorthSnapshot[],
-): (NetWorthSnapshot & { score: SnapshotScore }) | null {
+  plan: Scenario,
+  engineVersion: string,
+): { yearly: number; takenAt: string } | null {
+  const hash = planFingerprint(plan);
   for (let i = snapshots.length - 1; i >= 0; i--) {
-    const s = snapshots[i];
-    if (s.score !== undefined) return s as NetWorthSnapshot & { score: SnapshotScore };
+    const s = snapshots[i].score;
+    if (s === undefined || s.sustainableSpend === undefined) continue;
+    if (s.planHash !== hash || s.engineVersion !== engineVersion) continue;
+    return { yearly: s.sustainableSpend, takenAt: snapshots[i].takenAt };
   }
   return null;
 }
 
-/**
- * The status line under the score — which day's prices it was scored with,
- * or that today's are being scored now.
- */
-export function scoreStatus(opts: {
-  snapshots: readonly NetWorthSnapshot[];
-  scoring: readonly string[];
-  refreshing: boolean;
-  formatDate: (iso: string) => string;
-}): string | null {
-  if (opts.refreshing) return 'Refreshing prices…';
-  const newest = opts.snapshots[opts.snapshots.length - 1];
-  if (newest !== undefined && opts.scoring.includes(newest.id)) {
-    return newest.score === undefined
-      ? 'Re-scoring with today’s prices…'
-      : 'Solving what the plan supports…';
-  }
-  const scored = latestScored(opts.snapshots);
-  if (scored === null) return null;
-  return `Scored ${opts.formatDate(scored.takenAt)}, with that day’s prices`;
+/** The plan's fingerprint — the same sha256 the stores file scores under. */
+export function planFingerprint(plan: Scenario): string {
+  return sha256Hex(planIdentityKey(plan));
+}
+
+/** "$5,563" a month from a yearly figure — whole dollars, rounded down. */
+export function monthlyFromYearly(yearly: number): number {
+  return Math.floor(yearly / 12);
 }
