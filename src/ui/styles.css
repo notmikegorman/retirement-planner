@@ -159,7 +159,7 @@ body {
 .dashGrid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  grid-template-rows: minmax(260px, 3fr) minmax(180px, 2fr);
+  grid-template-rows: minmax(240px, 3fr) minmax(170px, 2fr) minmax(120px, 1.2fr);
   gap: 16px;
   /* Fill the panel under the banner: viewport minus banner and body padding. */
   min-height: calc(100vh - 104px);
@@ -178,6 +178,19 @@ body {
 
 .dashCard.small {
   grid-column: span 2;
+}
+
+/* The plan's key inputs, half the row each. */
+.dashCard.input {
+  grid-column: span 3;
+}
+
+.dashCard.input .dashValue {
+  font-size: clamp(26px, 2.8vw, 40px);
+}
+
+.dashCard.input .dashSub {
+  font-size: 15px;
 }
 
 .dashLabel {
@@ -247,7 +260,8 @@ body {
   }
 
   .dashCard.large,
-  .dashCard.small {
+  .dashCard.small,
+  .dashCard.input {
     grid-column: auto;
     min-height: 160px;
   }

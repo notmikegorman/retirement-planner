@@ -2953,3 +2953,23 @@ Three reports from the owner, the morning after:
   across the bottom. The spend comes from the newest snapshot that measured THIS
   plan on THIS engine (whole dollars a month, rounded down, the yearly figure
   under it); a row scored under another plan or engine is skipped, never shown.
+
+## The Dashboard's spend and inputs, and a boot that explains itself (2026-11-26)
+
+- **"Not solved for this plan yet" with a solved figure on disk.** The card
+  matched ledger rows by plan hash, and plan.json is re-saved (same plan,
+  different bytes → different identity key) after the snapshot. The card now
+  asks for the snapshot scorer's own max-spend request, so today's solve is a
+  run-cache hit, and one not yet made is computed on the spot.
+- **Two inputs on the Dashboard**: the retirement year (each person's month
+  when they differ) and the next house (its price, or "the sale's proceeds",
+  and the month it is bought — sale plus rental months).
+- **A blank page with no console error, on a second laptop.** Nothing renders
+  until boot has opened the data, so any await that never settles is a silent
+  blank. Every boot step is now traced (`bootTrace.ts`): logged as
+  `[fplan boot] …` with its elapsed time, and after 10 s the page shows the step
+  it is stuck on, the steps so far, the browser and service-worker state, and
+  Reload / Clear-the-app-cache buttons. index.html carries a no-bundle fallback
+  for code that never starts. The IndexedDB open gained the `onblocked` it never
+  had. Prime suspect without the trace: a data folder in iCloud Drive whose
+  files macOS has offloaded — the file read waits on the download.

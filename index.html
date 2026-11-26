@@ -35,5 +35,35 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/ui/main.tsx"></script>
+    <script>
+      // If the app's code never runs at all (a cached copy pointing at files
+      // that no longer exist, a browser that cannot load it), the page would
+      // stay blank for ever. main.tsx sets __fplanBooting the moment it runs;
+      // without it after 10 s, say so in plain HTML — no bundle needed.
+      setTimeout(function () {
+        if (window.__fplanBooting) return;
+        var root = document.getElementById('root');
+        if (!root || root.childNodes.length > 0) return;
+        root.innerHTML =
+          '<div style="max-width:44rem;margin:4rem auto;padding:0 1rem;font-family:system-ui,sans-serif">' +
+          '<h1>The planner’s code did not start</h1>' +
+          '<p>This browser loaded the page but not the app. Usually a stale cached copy is to blame.</p>' +
+          '<p><button id="fplan-reset">Clear the app cache and reload</button></p>' +
+          '<pre style="white-space:pre-wrap;font-size:12px"></pre></div>';
+        root.querySelector('pre').textContent =
+          'browser: ' + navigator.userAgent + '\nservice worker: ' +
+          (navigator.serviceWorker && navigator.serviceWorker.controller ? 'controlling this page' : 'none');
+        console.error('[fplan boot] the app bundle never started');
+        document.getElementById('fplan-reset').onclick = function () {
+          var done = function () { location.reload(); };
+          var sw = navigator.serviceWorker;
+          Promise.resolve(sw ? sw.getRegistrations() : [])
+            .then(function (regs) { return Promise.all(regs.map(function (r) { return r.unregister(); })); })
+            .then(function () { return window.caches ? caches.keys() : []; })
+            .then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); })
+            .then(done, done);
+        };
+      }, 10000);
+    </script>
   </body>
 </html>

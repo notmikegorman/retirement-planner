@@ -19,9 +19,8 @@ const {
   resetDailySnapshotForTests,
   snapshotTakenToday,
 } = await import('../../src/ui/dailySnapshot');
-const { comparableSpend, marketWindows, monthlyFromYearly, planFingerprint, readHistoryCache } =
+const { marketWindows, monthlyFromYearly, nextHouse, readHistoryCache, retirementDates, spendFromSolve } =
   await import('../../src/ui/pages/dashboardLogic');
-const { planHash } = await import('../../src/store/planHistoryStore');
 
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
@@ -116,38 +115,38 @@ describe('ensureTodaysSnapshot — one snapshot a day, two doors', () => {
 });
 
 describe('the plan cards', () => {
-  const plan = JSON.parse(read('../../data-defaults/scenarios/base-case.json')) as Scenario;
-  const other = { ...plan, events: [] } as Scenario;
-  const scored = (id: string, takenAt: string, p: Scenario, engine: string, spend?: number) =>
-    row(id, takenAt, {
-      score: { ...score(0.96, spend), planHash: planFingerprint(p), engineVersion: engine },
-    });
-
-  it('fingerprints a plan exactly as the stores file its scores', () => {
-    expect(planFingerprint(plan)).toBe(planHash(plan));
-  });
-
-  it('takes the spend from the newest row that measured THIS plan on THIS engine', () => {
-    const list = [
-      scored('a', '2026-11-11T12:00:00Z', plan, '1.25.0', 70_839),
-      // The owner's report: a row scored by a stale bundle on the old engine.
-      scored('b', '2026-11-21T10:47:00Z', plan, '1.24.0', 66_757),
-      // And one scored under a different plan.
-      scored('c', '2026-11-21T12:00:00Z', other, '1.25.0', 99_000),
-      // And one still solving.
-      scored('d', '2026-11-21T13:00:00Z', plan, '1.25.0'),
-    ];
-    expect(comparableSpend(list, plan, '1.25.0')).toEqual({
-      yearly: 70_839,
-      takenAt: '2026-11-11T12:00:00Z',
-    });
-    expect(comparableSpend(list, other, '1.25.0')?.yearly).toBe(99_000);
-    expect(comparableSpend(list, plan, '9.9.9')).toBeNull();
+  it('reads the solve with the scorer’s rules: a figure, none, or above the bracket', () => {
+    expect(spendFromSolve(76_035.15625)).toEqual({ kind: 'value', yearly: 76_035.15625 });
+    expect(spendFromSolve(undefined).kind).toBe('reason');
+    expect(spendFromSolve(400_000)).toEqual({ kind: 'reason', text: 'More than $33,333 a month' });
   });
 
   it('states the spend monthly, in whole dollars, never rounding up', () => {
     expect(monthlyFromYearly(66_757.8125)).toBe(5_563);
     expect(monthlyFromYearly(72_000)).toBe(6_000);
+  });
+
+  it('names the retirement year — one date, or each when they differ', () => {
+    const retire = (person: string, date: string) => ({ type: 'retire' as const, person, date });
+    expect(retirementDates({ events: [retire('p1', '2027-06'), retire('p2', '2027-06')] })).toEqual({
+      headline: '2027',
+      detail: 'June 2027',
+    });
+    expect(retirementDates({ events: [retire('p2', '2029-01'), retire('p1', '2027-06')] })).toEqual({
+      headline: '2027–2029',
+      detail: 'June 2027 · January 2029',
+    });
+    expect(retirementDates({ events: [] })).toBeNull();
+  });
+
+  it('prices the next house and dates the purchase from the sale plus the rental months', () => {
+    const h = { sellDate: '2028-03', rentMonths: 3, purchasePrice: 1_450_000 } as Scenario['housing'];
+    expect(nextHouse({ housing: h })).toEqual({ headline: '$1,450,000', detail: 'Bought June 2028' });
+    expect(nextHouse({ housing: { ...h!, purchasePrice: 'sale_proceeds' } })?.headline).toBe(
+      'The sale’s proceeds',
+    );
+    expect(nextHouse({ housing: { ...h!, purchasePrice: 'none' } })).toBeNull();
+    expect(nextHouse({ housing: undefined })).toBeNull();
   });
 });
 
@@ -206,7 +205,7 @@ describe('the page keeps its promises (source scan)', () => {
     expect(measure.indexOf('ensureTodaysSnapshot')).toBeLessThan(measure.indexOf('api.startRun'));
   });
 
-  it('lays out five cards: two large, three small, in the owner’s order', () => {
+  it('lays out the owner’s cards: two large, three small, two inputs', () => {
     const order = [...page.matchAll(/size="(large|small)"\s+label=\{?[`"]([^`"]+)/g)].map(
       (m) => `${m[1]}:${m[2]}`,
     );
@@ -216,6 +215,10 @@ describe('the page keeps its promises (source scan)', () => {
       'small:S&P 500 · ${years} years',
       'small:The plan supports',
     ]);
+    expect(page).toMatch(/size="input"\s+label="Retirement"/);
+    expect(page).toMatch(/size="input"\s+label="Next house"/);
+    // The spend is the scorer's own max-spend request, so today's solve is a cache hit.
+    expect(page).toContain("scenario: { ...scenarioForPlainRun(plan), solver: { type: 'max_spend' } },");
     expect(page).toContain('{ years: 3, r: three }');
     expect(page).toContain('{ years: 5, r: five }');
   });

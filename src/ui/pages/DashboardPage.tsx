@@ -22,14 +22,19 @@
  *     today's net-worth snapshot if none exists (../dailySnapshot.ts, the
  *     once-a-day rule the Net worth page keeps), which refreshes every
  *     holding's price; its scorer then runs exactly this request, and the
- *     run manager dedupes the two. What the plan SUPPORTS a month comes from
- *     the newest snapshot that measured this same plan on this engine. The
+ *     run manager dedupes the two. What the plan SUPPORTS a month is the same
+ *     trick for the snapshot scorer's second run: the max-spend solve, asked
+ *     with spendRunRequest's exact shape, so a solve the scorer already made
+ *     today is a cache hit and one it has not is computed here (2026-11-26:
+ *     matching ledger rows by plan hash missed whenever plan.json had been
+ *     re-saved since the snapshot, and the card read "Not solved"). The
  *     net worth itself is not shown: it is a dollar figure that moves with
  *     the news, which is the very thing this page exists to step back from.
  *
- * FIVE CARDS (the owner's layout, 2026-11-21): the 12-month move and the plan
- * score large across the top; 3 years, 5 years and the monthly spend the plan
- * supports across the bottom.
+ * THE CARDS (the owner's layout, 2026-11-21, plus 2026-11-26's inputs row):
+ * the 12-month move and the plan score large across the top; 3 years, 5 years
+ * and the monthly spend the plan supports in the middle; and the plan's two
+ * key inputs — when it retires, and the next house — along the bottom.
  *
  * WHEN THE MARKET HISTORY FETCHES: on mount and whenever the app is
  * ACTIVATED while this page is up — the window regains focus, the tab
@@ -54,7 +59,6 @@ import {
   type TrailingReturn,
 } from '../../shared/marketIndex';
 import {
-  ENGINE_VERSION,
   type NetWorthSnapshot,
   type Profile,
   type RunResult,
@@ -71,12 +75,14 @@ import { ModuleBanner } from '../modules/ModuleBanner';
 import { QUOTE_PROXY_STORAGE_KEY, resolveQuoteProxyUrl } from '../local/proxyQuoteFetcher';
 import {
   HISTORY_CACHE_KEY,
-  comparableSpend,
   marketWindows,
   monthlyFromYearly,
+  nextHouse,
   readHistoryCache,
+  retirementDates,
+  spendFromSolve,
+  type SpendAnswer,
 } from './dashboardLogic';
-import { formatSnapshotDate } from './netWorthChart';
 
 const FETCH_TIMEOUT_MS = 15_000;
 const SCORING_POLL_MS = 2500;
@@ -175,7 +181,7 @@ function useIndexHistory(proxyUrl: string | null): {
 
 /** One card: a small caps label, the big number, and what qualifies it. */
 function Card(props: {
-  size: 'large' | 'small';
+  size: 'large' | 'small' | 'input';
   label: string;
   ariaLabel: string;
   value: string | null;
@@ -220,8 +226,9 @@ function usePlanMeasure(): {
   progress: number | null;
   runError: string | null;
   refreshError: string | null;
-  spend: { yearly: number; takenAt: string } | null;
-  spendPending: boolean;
+  spend: SpendAnswer | null;
+  spendProgress: number | null;
+  plan: Scenario | null;
 } {
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[] | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -232,6 +239,8 @@ function usePlanMeasure(): {
   const [result, setResult] = useState<RunResult | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [scoring, setScoring] = useState<string[]>([]);
+  const [spend, setSpend] = useState<SpendAnswer | null>(null);
+  const [spendProgress, setSpendProgress] = useState<number | null>(null);
   const started = useRef(false);
   const alive = useRef(true);
   // Set on EVERY mount, not only at creation: StrictMode's dev double-mount
@@ -334,14 +343,34 @@ function usePlanMeasure(): {
       } finally {
         if (alive.current) setProgress(null);
       }
+      // What the plan supports: the snapshot scorer's max-spend solve, the
+      // same request (scoreRunner.spendRunRequest), so the same cache entry.
+      try {
+        const { runId } = await api.startRun({
+          scenario: { ...scenarioForPlainRun(plan), solver: { type: 'max_spend' } },
+          ...finalRunParams(profile.settings),
+        });
+        const done = await pollRun(
+          runId,
+          (p) => {
+            if (alive.current) setSpendProgress(p.progress);
+          },
+          500,
+        );
+        if (!alive.current) return;
+        if (done.status !== 'done' || !done.result) throw new Error(done.error ?? 'Solve failed');
+        setSpend(spendFromSolve(done.result.solverOutput?.answer));
+      } catch (e) {
+        if (alive.current) {
+          setSpend({ kind: 'reason', text: `Could not solve: ${e instanceof Error ? e.message : String(e)}` });
+        }
+      } finally {
+        if (alive.current) setSpendProgress(null);
+      }
     })();
   }, [snapshots, profile, plan, gated]);
 
-  const spend = snapshots !== null && plan !== null ? comparableSpend(snapshots, plan, ENGINE_VERSION) : null;
-  const newest = snapshots?.[snapshots.length - 1];
-  const spendPending = newest !== undefined && scoring.includes(newest.id);
-
-  return { gated, loadError, result, progress, runError, refreshError, spend, spendPending };
+  return { gated, loadError, result, progress, runError, refreshError, spend, spendProgress, plan };
 }
 
 export function DashboardPage(_props: PageProps) {
@@ -359,6 +388,9 @@ export function DashboardPage(_props: PageProps) {
       ? null
       : `As of ${formatEtTimestamp(Date.parse(history.fetchedAt))}` +
         (marketError === null ? '' : ` · ${marketError}`);
+
+  const retire = m.plan === null ? null : retirementDates(m.plan);
+  const house = m.plan === null ? null : nextHouse(m.plan);
 
   const planMuted = m.loadError
     ? m.loadError
@@ -423,16 +455,38 @@ export function DashboardPage(_props: PageProps) {
             size="small"
             label="The plan supports"
             ariaLabel="What the plan supports"
-            value={m.spend === null || m.gated ? null : `${formatUSD(monthlyFromYearly(m.spend.yearly))} / mo`}
-            sub={m.spend === null ? null : `${formatUSD(m.spend.yearly)} a year`}
-            stamp={m.spend === null ? null : `Solved ${formatSnapshotDate(m.spend.takenAt)}`}
+            value={
+              m.gated || m.spend?.kind !== 'value'
+                ? null
+                : `${formatUSD(monthlyFromYearly(m.spend.yearly))} / mo`
+            }
+            sub={m.spend?.kind === 'value' ? `${formatUSD(m.spend.yearly)} a year` : null}
+            stamp={m.spend?.kind === 'value' ? 'At the plan’s success target, today’s prices' : null}
             muted={
               m.gated
                 ? DASHBOARD_FIRST_RUN
-                : m.spendPending
-                  ? 'Solving…'
-                  : 'Not solved for this plan yet'
+                : m.spend?.kind === 'reason'
+                  ? m.spend.text
+                  : m.spendProgress !== null
+                    ? `Solving… ${Math.round(m.spendProgress * 100)}%`
+                    : 'Waiting for the score…'
             }
+          />
+          <Card
+            size="input"
+            label="Retirement"
+            ariaLabel="When the plan retires"
+            value={retire === null ? null : retire.headline}
+            sub={retire?.detail ?? null}
+            muted={m.plan === null ? 'Loading…' : 'No retirement date in the plan'}
+          />
+          <Card
+            size="input"
+            label="Next house"
+            ariaLabel="The next house"
+            value={house === null ? null : house.headline}
+            sub={house?.detail ?? null}
+            muted={m.plan === null ? 'Loading…' : 'No home purchase in the plan'}
           />
         </div>
       </div>

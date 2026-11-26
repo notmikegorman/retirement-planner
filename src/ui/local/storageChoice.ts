@@ -33,6 +33,7 @@
  * renderer; main.tsx has no storage knowledge. This module is the seam
  * between them.
  */
+import { traceStep } from '../bootTrace';
 import { randomHex } from '../../shared/random';
 
 export type StorageChoice = 'opfs' | 'folder';
@@ -323,6 +324,14 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error('IndexedDB refused to open'));
+    // Without this a blocked open waits for ever, silently — a blank page.
+    req.onblocked = () =>
+      reject(
+        new Error(
+          'IndexedDB is blocked by another window of this app — close the other ' +
+            'windows or tabs of the planner and reload.',
+        ),
+      );
   });
 }
 
@@ -621,13 +630,16 @@ export async function computeBootGate(): Promise<BootGateState> {
   // brand-new visit — the exact case the ON-by-default is for — went
   // straight to the chooser.)
   const friendMode = readFriendMode();
+  traceStep(`reading the storage choice (friend mode ${friendMode ? 'on' : 'off'})`);
   if (friendMode) return resolveBootGate(FRIEND_GATE_FACTS);
   const choice = readStorageChoice();
   const canPickFolder = supportsFolderPicker();
   if (choice !== 'folder') {
     return resolveBootGate({ choice, canPickFolder, handleFound: false, folderName: null, permission: null });
   }
+  traceStep('loading the saved folder handle (IndexedDB)');
   const saved = await loadFolderHandle();
+  traceStep(`checking permission for folder "${saved?.handle.name ?? '(none saved)'}"`);
   // A missing queryPermission (never the case on the one engine that ships
   // pickers, but declared optional) reads as granted: the handle either
   // works or the boot's own first read fails loudly.

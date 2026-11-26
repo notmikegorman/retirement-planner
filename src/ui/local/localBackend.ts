@@ -37,6 +37,7 @@
  * the injection seam the quote service has always had, reachable from outside
  * the bundle.
  */
+import { traceStep } from '../bootTrace';
 import type { z } from 'zod';
 import type {
   Assumptions,
@@ -183,6 +184,7 @@ export async function bootLocalBackend(): Promise<Api> {
   // Which storage — the boot gate's approved answer (Phase 7): the picked
   // real folder, or the OPFS folder the automated lane and the demo fallback
   // drive. Everything below is identical either way — the driver's own rule.
+  traceStep('opening the storage');
   const storage = await resolveStorageForBoot();
   // Show a friend mode: throw the sample away and start over whenever the
   // shipped defaults have moved since this copy was made. The folder is
@@ -198,12 +200,14 @@ export async function bootLocalBackend(): Promise<Api> {
   // The guard FIRST — before initDataDir can touch a byte. One Web Lock,
   // scoped to this folder in this browser profile; browserWriterGuard.ts
   // explains what it covers and what it deliberately does not.
+  traceStep(`taking the writer lock for ${storage.label}`);
   const acquisition = await acquireBrowserWriterGuard({ folderId: storage.folderId });
   if (!acquisition.ok) throw new LocalBootRefusedError(acquisition.reason, acquisition.message);
 
   // Orphaned `.crswap` staging files sweep NOW — guard held (so nothing can
   // be mid-write), stores not yet reading (so nothing has listed the debris).
   // swapArtifacts.ts carries the whole policy.
+  traceStep('listing the data folder');
   const sweptSwapFiles = await sweepSwapArtifacts(handle);
   if (sweptSwapFiles.length > 0) {
     console.log(
@@ -214,6 +218,7 @@ export async function bootLocalBackend(): Promise<Api> {
 
   const files = createFsaFileStore(handle, storage.label);
   bootedFiles = files;
+  traceStep('loading the bundled defaults');
   const stores: Stores = createStores({ files, defaults: await bundledDefaults() });
   /*
    * ZERO-START: only the D8 demo fallback still seeds the fictional starter
@@ -227,6 +232,7 @@ export async function bootLocalBackend(): Promise<Api> {
   // Show a friend mode seeds the same fictional household for the same
   // reason the demo does: a filled example is the entire point, and an empty
   // folder would drop your friend on the setup step instead of the app.
+  traceStep('reading the data folder’s files');
   const init = await stores.data.initDataDir({
     seedStarterProfile: demo || storage.kind === 'friend',
   });
@@ -244,6 +250,7 @@ export async function bootLocalBackend(): Promise<Api> {
   // answer — the same position the server's boot gives this, for the same
   // reason: no page may read a row whose fate is still being decided
   // (store/scoringIntent.ts; the Aug-20 loss is the incident this closes).
+  traceStep('checking for interrupted scoring');
   await services.scoringIntents.heal();
 
   /**

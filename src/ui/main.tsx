@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { api, backendMode, ensureBackendReady } from './api';
+import { bootTrace, traceFinished, traceStep } from './bootTrace';
 import { maybeRegisterServiceWorker } from './pwa';
 import { DemoStorageBanner, FolderReconnect, ProfileSetup, StorageChooser } from './local/StorageGate';
 import {
@@ -84,6 +85,79 @@ function BootFailure({ message }: { message: string }) {
   );
 }
 
+/** How long a boot may run before the page says where it is stuck. */
+const BOOT_STUCK_MS = 10_000;
+
+/**
+ * Throw away the cached copy of the app — service worker and its caches —
+ * and reload from the network. The data is untouched: it lives in the folder
+ * (or browser storage), never in these caches.
+ */
+async function resetAppCache(): Promise<void> {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = (await globalThis.caches?.keys()) ?? [];
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } finally {
+    location.reload();
+  }
+}
+
+/**
+ * The first screen, shown the moment the bundle runs: blank for a beat (a
+ * normal boot replaces it before anyone sees it), then "Starting…", then —
+ * once the boot has run BOOT_STUCK_MS — the step it is waiting on, every step
+ * so far, and what this browser is, so a report from a machine nobody else
+ * can touch carries its own diagnosis (bootTrace.ts says why).
+ */
+function BootStatus() {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(timer);
+  }, []);
+  const elapsed = Math.round(performance.now());
+  if (elapsed < 1500) return null;
+  const { steps } = bootTrace();
+  const current = steps[steps.length - 1];
+  const stuck = elapsed >= BOOT_STUCK_MS;
+  return (
+    <div style={{ maxWidth: '44rem', margin: '4rem auto', padding: '0 1rem' }} role="status">
+      <h1>{stuck ? 'Startup is taking too long' : 'Starting…'}</h1>
+      {stuck ? (
+        <>
+          <p>
+            Waiting on: <strong>{current?.label ?? 'the app’s code to start'}</strong> (for{' '}
+            {Math.round((elapsed - (current?.at ?? 0)) / 1000)}s)
+          </p>
+          <pre className="bootTrace" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>
+            {[
+              ...steps.map((st) => `+${st.at}ms  ${st.label}`),
+              '',
+              `browser: ${navigator.userAgent}`,
+              `service worker: ${navigator.serviceWorker?.controller ? 'controlling this page' : 'none'}`,
+              `address: ${location.pathname}${location.search}`,
+            ].join('\n')}
+          </pre>
+          <p>
+            If the data folder is in iCloud Drive, macOS may be downloading its files; open the
+            folder in Finder to check. Otherwise, try:
+          </p>
+          <p style={{ display: 'flex', gap: 8 }}>
+            <button className="primary" onClick={() => location.reload()}>
+              Reload
+            </button>
+            <button onClick={() => void resetAppCache()}>Clear the app cache and reload</button>
+          </p>
+        </>
+      ) : (
+        <p className="muted">{current?.label}</p>
+      )}
+    </div>
+  );
+}
+
 /** Reconnect's permission re-grant — must run inside the button's gesture. */
 async function requestFolderAccess(): Promise<boolean> {
   const saved = await loadFolderHandle();
@@ -156,10 +230,12 @@ async function boot(): Promise<void> {
   if (backendMode === 'local') {
     const gate = await computeBootGate();
     if (gate.kind === 'choose') {
+      traceFinished('the storage chooser');
       render(<StorageChooser canPickFolder={gate.canPickFolder} onChosen={() => void boot()} />);
       return;
     }
     if (gate.kind === 'reconnect') {
+      traceFinished('the folder reconnect');
       render(
         <FolderReconnect
           folderName={gate.folderName}
@@ -173,7 +249,9 @@ async function boot(): Promise<void> {
     demoStorage = gate.kind === 'ready-opfs' && gate.demo;
     const friendMode = gate.kind === 'ready-friend';
     try {
+      traceStep('starting the local backend');
       await ensureBackendReady();
+      traceStep('asking whether the folder holds a household');
       // The second stage: storage is ready, the guard is held — does the
       // folder hold a household? meta() answers LIVE, so the re-boot after
       // the setup write falls straight through here.
@@ -185,6 +263,7 @@ async function boot(): Promise<void> {
           friendMode,
         })
       ) {
+        traceFinished('the household setup');
         render(
           <ProfileSetup
             onSubmit={async (profile) => {
@@ -202,6 +281,7 @@ async function boot(): Promise<void> {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      traceFinished(`the boot failure: ${message}`);
       // The guard refusal keeps its own page (its heading IS the diagnosis);
       // everything else gets the honest generic one. Matched by name rather
       // than instanceof so main.tsx never statically imports the local
@@ -216,6 +296,7 @@ async function boot(): Promise<void> {
       return;
     }
   }
+  traceFinished('the app');
   render(
     <>
       {demoStorage ? <DemoStorageBanner /> : null}
@@ -224,4 +305,17 @@ async function boot(): Promise<void> {
   );
 }
 
+// An error nobody caught during boot would otherwise leave the BootStatus
+// screen waiting for ever; put it on screen instead, and in the console.
+window.addEventListener('error', (e) => {
+  if (!bootTrace().finished) render(<BootFailure message={`Startup error: ${e.message}`} />);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason instanceof Error ? e.reason.message : String(e.reason);
+  if (!bootTrace().finished) render(<BootFailure message={`Startup error: ${reason}`} />);
+});
+
+(window as unknown as { __fplanBooting?: boolean }).__fplanBooting = true;
+traceStep('the app’s code is running');
+render(<BootStatus />);
 void boot();

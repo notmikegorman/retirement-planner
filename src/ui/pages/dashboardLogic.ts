@@ -9,9 +9,10 @@ import {
   type IndexHistory,
   type TrailingReturn,
 } from '../../shared/marketIndex';
-import { planIdentityKey } from '../../shared/planIdentity';
-import { sha256Hex } from '../../shared/sha256';
-import type { NetWorthSnapshot, Scenario } from '../../shared/types';
+import { MAX_SPEND_HI } from '../../engine/solvers';
+import { purchaseDate } from '../../engine/housingPlan';
+import type { Scenario } from '../../shared/types';
+import { formatUSD } from '../../shared/util';
 
 /** localStorage key for the cached S&P 500 history — market data, per browser. */
 export const HISTORY_CACHE_KEY = 'fplan-sp500-history';
@@ -52,37 +53,71 @@ export function marketWindows(closes: readonly DailyClose[]): {
   };
 }
 
-/**
- * WHAT THE PLAN SUPPORTS — the sustainable spend, taken from the newest
- * snapshot whose score measured THIS plan on THIS engine. The success
- * probability no longer comes from the ledger (the card shows the Plan page's
- * own final run, so the two pages cannot disagree); the spend still does,
- * because only the snapshot scorer solves it. A row scored under a different
- * plan or engine answers a different question — the owner's 2026-11-21 report
- * was exactly that: a row scored by a stale cached bundle on the previous
- * engine, printed beside today's plan — so such a row is skipped, never shown.
- */
-export function comparableSpend(
-  snapshots: readonly NetWorthSnapshot[],
-  plan: Scenario,
-  engineVersion: string,
-): { yearly: number; takenAt: string } | null {
-  const hash = planFingerprint(plan);
-  for (let i = snapshots.length - 1; i >= 0; i--) {
-    const s = snapshots[i].score;
-    if (s === undefined || s.sustainableSpend === undefined) continue;
-    if (s.planHash !== hash || s.engineVersion !== engineVersion) continue;
-    return { yearly: s.sustainableSpend, takenAt: snapshots[i].takenAt };
-  }
-  return null;
-}
+/** What the spend card shows: a figure, or the honest reason there is none. */
+export type SpendAnswer = { kind: 'value'; yearly: number } | { kind: 'reason'; text: string };
 
-/** The plan's fingerprint — the same sha256 the stores file scores under. */
-export function planFingerprint(plan: Scenario): string {
-  return sha256Hex(planIdentityKey(plan));
+/**
+ * The max-spend solve's answer, read with the snapshot scorer's own two rules
+ * (store/scoreRunner.solveSustainableSpend): no answer means nothing in the
+ * bracket reaches the target; an answer at the bracket's top means "more than
+ * this", which is not a figure anything measured.
+ */
+export function spendFromSolve(answer: number | undefined): SpendAnswer {
+  if (answer === undefined) {
+    return { kind: 'reason', text: 'No spending level reaches the plan’s success target' };
+  }
+  if (answer >= MAX_SPEND_HI) {
+    return { kind: 'reason', text: `More than ${formatUSD(MAX_SPEND_HI / 12)} a month` };
+  }
+  return { kind: 'value', yearly: answer };
 }
 
 /** "$5,563" a month from a yearly figure — whole dollars, rounded down. */
 export function monthlyFromYearly(yearly: number): number {
   return Math.floor(yearly / 12);
+}
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** "June 2027" from '2027-06'. */
+export function formatYearMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return `${MONTHS[m - 1] ?? ''} ${y}`.trim();
+}
+
+/**
+ * When the plan stops work: one date when everyone retires together, each
+ * person's when they differ (first name and date), null when no one does.
+ */
+export function retirementDates(
+  plan: Pick<Scenario, 'events'>,
+): { headline: string; detail: string | null } | null {
+  const retires = plan.events.flatMap((e) => (e.type === 'retire' ? [e] : []));
+  if (retires.length === 0) return null;
+  const dates = [...new Set(retires.map((e) => e.date))].sort();
+  const year = Number(dates[0].slice(0, 4));
+  if (dates.length === 1) return { headline: String(year), detail: formatYearMonth(dates[0]) };
+  return {
+    headline: `${year}–${dates[dates.length - 1].slice(0, 4)}`,
+    detail: dates.map(formatYearMonth).join(' · '),
+  };
+}
+
+/**
+ * The next house: its price and the month it is bought (sale month plus the
+ * rental months — engine/housingPlan.purchaseDate). Null when the plan holds
+ * no move, or moves to rent with no purchase.
+ */
+export function nextHouse(
+  plan: Pick<Scenario, 'housing'>,
+): { headline: string; detail: string | null } | null {
+  const h = plan.housing;
+  if (h === undefined || h.purchasePrice === 'none') return null;
+  const bought = `Bought ${formatYearMonth(purchaseDate(h))}`;
+  // 'sale_proceeds': the next house costs whatever the old one nets.
+  if (h.purchasePrice === 'sale_proceeds') return { headline: 'The sale’s proceeds', detail: bought };
+  return { headline: formatUSD(h.purchasePrice), detail: bought };
 }
