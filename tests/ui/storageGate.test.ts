@@ -24,6 +24,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   NO_ANSWER,
+  latestPermissionQuery,
   queryFolderPermission,
   parseStorageChoice,
   profileSetupNeeded,
@@ -201,5 +202,25 @@ describe('queryFolderPermission — a browser that never answers does not hang t
     const bare = src.split('\n').filter((l) => /await saved\.handle\.queryPermission/.test(l));
     expect(bare).toEqual([]);
     expect(src.match(/await queryFolderPermission\(saved\.handle\)/g)?.length).toBe(2);
+  });
+});
+
+describe('a late permission answer is not lost', () => {
+  it('exposes the query that outlived the cutoff', async () => {
+    let answer!: (s: PermissionState) => void;
+    const h = {
+      queryPermission: () => new Promise<PermissionState>((r) => (answer = r)),
+    } as unknown as FileSystemDirectoryHandle;
+    expect(await queryFolderPermission(h, 10)).toBe(NO_ANSWER);
+    const late = latestPermissionQuery();
+    expect(late).not.toBeNull();
+    answer('granted');
+    expect(await late).toBe('granted');
+  });
+
+  it('the Reconnect screen boots on a late grant', () => {
+    const src = readFileSync(resolve(__dirname, '../../src/ui/main.tsx'), 'utf8');
+    expect(src).toMatch(/bootWhenLateGrantArrives\(\);\s*return;/);
+    expect(src).toMatch(/state === 'granted' && bootGeneration === startedAt/);
   });
 });

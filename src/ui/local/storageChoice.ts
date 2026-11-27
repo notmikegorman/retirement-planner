@@ -619,6 +619,13 @@ export function profileSetupNeeded(facts: {
 export const PERMISSION_QUERY_MS = 3000;
 export const NO_ANSWER = 'no-answer' as const;
 
+let pendingPermission: Promise<PermissionState> | null = null;
+
+/** The most recent folder-permission query, still answering or not. */
+export function latestPermissionQuery(): Promise<PermissionState> | null {
+  return pendingPermission;
+}
+
 /** queryPermission, bounded: NO_ANSWER if the browser hasn't replied in `ms`. */
 export async function queryFolderPermission(
   handle: FileSystemDirectoryHandle,
@@ -626,6 +633,10 @@ export async function queryFolderPermission(
 ): Promise<PermissionState | null | typeof NO_ANSWER> {
   const query = handle.queryPermission?.({ mode: 'readwrite' });
   if (query === undefined) return null;
+  // The query keeps running past the cutoff; the Reconnect screen listens
+  // for its late answer and boots on its own when it is 'granted' (Chrome on
+  // the owner's own laptop answered after >3s, 2026-11-27).
+  pendingPermission = query;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<typeof NO_ANSWER>((resolve) => {
     timer = setTimeout(() => resolve(NO_ANSWER), ms);

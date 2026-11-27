@@ -9,6 +9,7 @@ import {
   clearStorageChoice,
   computeBootGate,
   forgetFolderHandle,
+  latestPermissionQuery,
   loadFolderHandle,
   profileSetupNeeded,
 } from './local/storageChoice';
@@ -158,6 +159,24 @@ function BootStatus() {
   );
 }
 
+/**
+ * The gate stops waiting on a slow permission query after a few seconds, but
+ * the query itself runs on. If it then answers 'granted', no click is needed:
+ * boot — once, and only if nothing else (a click) has booted meanwhile.
+ */
+function bootWhenLateGrantArrives(): void {
+  const query = latestPermissionQuery();
+  if (query === null) return;
+  const startedAt = bootGeneration;
+  void query.then(
+    (state) => {
+      console.info(`[fplan boot] late answer about the folder: ${state}`);
+      if (state === 'granted' && bootGeneration === startedAt) void boot();
+    },
+    () => undefined,
+  );
+}
+
 /** Reconnect's permission re-grant — must run inside the button's gesture. */
 async function requestFolderAccess(): Promise<boolean> {
   const saved = await loadFolderHandle();
@@ -212,6 +231,9 @@ function resetRememberedViews(): void {
   if (window.location.pathname !== plan) window.history.replaceState(null, '', plan);
 }
 
+/** Bumped by every boot, so a late grant never boots twice. */
+let bootGeneration = 0;
+
 /**
  * BOOT ORDER, local mode: the storage gate first (where should the data
  * live? — rendered as a page whenever the answer needs a user gesture:
@@ -226,6 +248,7 @@ function resetRememberedViews(): void {
  * and renders exactly as it always has.
  */
 async function boot(): Promise<void> {
+  bootGeneration += 1;
   let demoStorage = false;
   if (backendMode === 'local') {
     const gate = await computeBootGate();
@@ -244,6 +267,7 @@ async function boot(): Promise<void> {
           onChooseOther={() => void chooseOtherStorage()}
         />,
       );
+      bootWhenLateGrantArrives();
       return;
     }
     demoStorage = gate.kind === 'ready-opfs' && gate.demo;
