@@ -610,6 +610,33 @@ export function profileSetupNeeded(facts: {
   return !facts.profileExists;
 }
 
+/**
+ * How long the boot waits for the browser to say whether a saved folder is
+ * still granted. queryPermission is meant to answer at once, but the owner's
+ * second laptop (Chrome, 2026-11-27) never answered at all — a blank page
+ * that only the boot trace could explain. Past this, the boot stops waiting.
+ */
+export const PERMISSION_QUERY_MS = 3000;
+export const NO_ANSWER = 'no-answer' as const;
+
+/** queryPermission, bounded: NO_ANSWER if the browser hasn't replied in `ms`. */
+export async function queryFolderPermission(
+  handle: FileSystemDirectoryHandle,
+  ms: number = PERMISSION_QUERY_MS,
+): Promise<PermissionState | null | typeof NO_ANSWER> {
+  const query = handle.queryPermission?.({ mode: 'readwrite' });
+  if (query === undefined) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof NO_ANSWER>((resolve) => {
+    timer = setTimeout(() => resolve(NO_ANSWER), ms);
+  });
+  try {
+    return await Promise.race([query, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The only facts that matter once the mode is on — the rule ignores the rest. */
 const FRIEND_GATE_FACTS = {
   choice: null,
@@ -642,9 +669,19 @@ export async function computeBootGate(): Promise<BootGateState> {
   traceStep(`checking permission for folder "${saved?.handle.name ?? '(none saved)'}"`);
   // A missing queryPermission (never the case on the one engine that ships
   // pickers, but declared optional) reads as granted: the handle either
-  // works or the boot's own first read fails loudly.
-  const permission =
-    saved === null ? null : ((await saved.handle.queryPermission?.({ mode: 'readwrite' })) ?? null);
+  // works or the boot's own first read fails loudly. A query that never
+  // answers reads as 'prompt': the Reconnect screen then offers the click
+  // that re-grants, and "Choose different storage" as the way round it.
+  let permission: PermissionState | null = null;
+  if (saved !== null) {
+    const answer = await queryFolderPermission(saved.handle);
+    if (answer === NO_ANSWER) {
+      traceStep(`no answer about folder "${saved.handle.name}" after ${PERMISSION_QUERY_MS / 1000}s; asking for a reconnect`);
+      permission = 'prompt';
+    } else {
+      permission = answer;
+    }
+  }
   return resolveBootGate({
     choice,
     canPickFolder,
@@ -697,7 +734,10 @@ export async function resolveStorageForBoot(): Promise<ResolvedStorage> {
           'Reload the page to choose where your data lives — the folder itself is untouched.',
       );
     }
-    const permission = (await saved.handle.queryPermission?.({ mode: 'readwrite' })) ?? 'granted';
+    // No answer here means the gate already saw 'granted' or the owner has
+    // just clicked Reconnect — go on, and let the first file read speak.
+    const answer = await queryFolderPermission(saved.handle);
+    const permission = answer === NO_ANSWER ? 'granted' : (answer ?? 'granted');
     if (permission !== 'granted') {
       throw new Error(
         `The browser has not granted access to the folder "${saved.handle.name}" yet. ` +

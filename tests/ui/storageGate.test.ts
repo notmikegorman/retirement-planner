@@ -19,8 +19,12 @@
  *     STRAND every user who picked browser-private storage while it was
  *     offered — the cut removed the offer, never the storage.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  NO_ANSWER,
+  queryFolderPermission,
   parseStorageChoice,
   profileSetupNeeded,
   resolveBootGate,
@@ -172,5 +176,30 @@ describe('isSwapArtifact', () => {
     expect(isSwapArtifact('plan.json')).toBe(false);
     expect(isSwapArtifact('crswap')).toBe(false);
     expect(isSwapArtifact('notes.crswap.json')).toBe(false);
+  });
+});
+
+describe('queryFolderPermission — a browser that never answers does not hang the boot', () => {
+  const asHandle = (h: object) => h as unknown as FileSystemDirectoryHandle;
+
+  it('passes an answer through', async () => {
+    const h = asHandle({ queryPermission: async () => 'granted' });
+    expect(await queryFolderPermission(h, 50)).toBe('granted');
+  });
+
+  it('reads a missing queryPermission as null', async () => {
+    expect(await queryFolderPermission(asHandle({}), 50)).toBeNull();
+  });
+
+  it('gives NO_ANSWER when the query never settles', async () => {
+    const h = asHandle({ queryPermission: () => new Promise(() => {}) });
+    expect(await queryFolderPermission(h, 20)).toBe(NO_ANSWER);
+  });
+
+  it('the boot gate and the boot both go through the bounded query', () => {
+    const src = readFileSync(resolve(__dirname, '../../src/ui/local/storageChoice.ts'), 'utf8');
+    const bare = src.split('\n').filter((l) => /await saved\.handle\.queryPermission/.test(l));
+    expect(bare).toEqual([]);
+    expect(src.match(/await queryFolderPermission\(saved\.handle\)/g)?.length).toBe(2);
   });
 });
