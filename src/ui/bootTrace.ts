@@ -39,6 +39,17 @@ export function traceFinished(screen: string): void {
   finished = true;
 }
 
+/**
+ * A boot that starts again after a first screen (the chooser's pick, a
+ * Reconnect click) is still a boot: switch the trace back on so its steps are
+ * logged and shown too. Without this the second boot ran silently — the
+ * owner's picked folder that "did nothing", 2026-11-27.
+ */
+export function traceResume(label: string): void {
+  finished = false;
+  traceStep(label);
+}
+
 export function bootTrace(): { steps: readonly BootStep[]; finished: boolean } {
   return { steps, finished };
 }

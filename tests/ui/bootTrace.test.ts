@@ -77,3 +77,25 @@ describe('every wait before the first screen is named (source scan)', () => {
     expect(read('../../src/ui/main.tsx')).toContain('__fplanBooting = true');
   });
 });
+
+describe('traceResume — a second boot is traced too', () => {
+  it('switches the trace back on after a first screen', async () => {
+    const { resetBootTraceForTests, traceFinished, traceResume, traceStep, bootTrace } = await import(
+      '../../src/ui/bootTrace'
+    );
+    resetBootTraceForTests();
+    traceStep('first');
+    traceFinished('the storage chooser');
+    traceStep('ignored');
+    expect(bootTrace().finished).toBe(true);
+    traceResume('starting again after the first screen');
+    traceStep('opening the storage');
+    expect(bootTrace().finished).toBe(false);
+    expect(bootTrace().steps.map((s) => s.label)).toEqual([
+      'first',
+      'showing the storage chooser',
+      'starting again after the first screen',
+      'opening the storage',
+    ]);
+  });
+});

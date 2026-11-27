@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { api, backendMode, ensureBackendReady } from './api';
-import { bootTrace, traceFinished, traceStep } from './bootTrace';
+import { bootTrace, traceFinished, traceResume, traceStep } from './bootTrace';
 import { maybeRegisterServiceWorker } from './pwa';
 import { DemoStorageBanner, FolderReconnect, ProfileSetup, StorageChooser } from './local/StorageGate';
 import {
@@ -112,13 +112,14 @@ async function resetAppCache(): Promise<void> {
  * so far, and what this browser is, so a report from a machine nobody else
  * can touch carries its own diagnosis (bootTrace.ts says why).
  */
-function BootStatus() {
+function BootStatus({ since = 0 }: { since?: number }) {
   const [, tick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => tick((n) => n + 1), 500);
     return () => clearInterval(timer);
   }, []);
-  const elapsed = Math.round(performance.now());
+  const now = Math.round(performance.now());
+  const elapsed = now - since;
   if (elapsed < 1500) return null;
   const { steps } = bootTrace();
   const current = steps[steps.length - 1];
@@ -130,7 +131,7 @@ function BootStatus() {
         <>
           <p>
             Waiting on: <strong>{current?.label ?? 'the app’s code to start'}</strong> (for{' '}
-            {Math.round((elapsed - (current?.at ?? 0)) / 1000)}s)
+            {Math.round((now - (current?.at ?? 0)) / 1000)}s)
           </p>
           <pre className="bootTrace" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>
             {[
@@ -249,6 +250,10 @@ let bootGeneration = 0;
  */
 async function boot(): Promise<void> {
   bootGeneration += 1;
+  if (bootGeneration > 1) {
+    traceResume('starting again after the first screen');
+    render(<BootStatus since={performance.now()} />);
+  }
   let demoStorage = false;
   if (backendMode === 'local') {
     const gate = await computeBootGate();
