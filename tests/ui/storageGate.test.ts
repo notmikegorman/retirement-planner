@@ -21,10 +21,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   NO_ANSWER,
   latestPermissionQuery,
+  loadFolderHandle,
+  saveFolderHandle,
   queryFolderPermission,
   parseStorageChoice,
   profileSetupNeeded,
@@ -222,5 +224,81 @@ describe('a late permission answer is not lost', () => {
     const src = readFileSync(resolve(__dirname, '../../src/ui/main.tsx'), 'utf8');
     expect(src).toMatch(/bootWhenLateGrantArrives\(\);\s*return;/);
     expect(src).toMatch(/state === 'granted' && bootGeneration === startedAt/);
+  });
+});
+
+describe('saveFolderHandle — a write the browser throws away is an error, not a silent success', () => {
+  /** A tiny IndexedDB stand-in whose readwrite transactions abort after their puts "succeed". */
+  function fakeIdb(abortWrites: boolean) {
+    const data = new Map<string, unknown>();
+    const req = <T,>(result: T) => {
+      const r: { result?: T; onsuccess?: () => void; onerror?: () => void } = {};
+      setTimeout(() => {
+        r.result = result;
+        r.onsuccess?.();
+      }, 0);
+      return r;
+    };
+    const db = {
+      objectStoreNames: { contains: () => true },
+      close: () => undefined,
+      transaction: (_s: string, mode: string) => {
+        const pending = new Map<string, unknown>();
+        const tx: Record<string, unknown> & {
+          oncomplete?: () => void;
+          onabort?: () => void;
+          error: DOMException | null;
+        } = { error: null };
+        tx.objectStore = () => ({
+          get: (k: string) => req(data.get(k)),
+          put: (v: unknown, k: string) => {
+            pending.set(k, v);
+            return req(k);
+          },
+        });
+        setTimeout(() => {
+          if (mode === 'readwrite' && abortWrites) {
+            tx.error = new DOMException('commit failed', 'AbortError');
+            tx.onabort?.();
+          } else {
+            for (const [k, v] of pending) data.set(k, v);
+            tx.oncomplete?.();
+          }
+        }, 5);
+        return tx;
+      },
+    };
+    return {
+      data,
+      open: () => {
+        const r: Record<string, unknown> & { onsuccess?: () => void } = { result: db };
+        setTimeout(() => r.onsuccess?.(), 0);
+        return r;
+      },
+    };
+  }
+
+  it('a thrown-away commit is logged, and this visit still boots on the pick', async () => {
+    vi.stubGlobal('indexedDB', fakeIdb(true));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const handle = { name: 'Data', isSameEntry: async () => false } as unknown as FileSystemDirectoryHandle;
+    const saved = await saveFolderHandle(handle);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/IndexedDB threw the write away \(AbortError: commit failed\)/);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/was not kept/);
+    expect((await loadFolderHandle())?.handle).toBe(saved.handle);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('resolves, and reads back, when the commit lands', async () => {
+    const idb = fakeIdb(false);
+    vi.stubGlobal('indexedDB', idb);
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const handle = { name: 'Data', isSameEntry: async () => false } as unknown as FileSystemDirectoryHandle;
+    const saved = await saveFolderHandle(handle);
+    expect((await loadFolderHandle())?.id).toBe(saved.id);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });

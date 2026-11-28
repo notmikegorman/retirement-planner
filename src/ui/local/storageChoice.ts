@@ -387,7 +387,25 @@ async function withStore<T>(
 ): Promise<T> {
   const db = await openDb();
   try {
-    return await body(db.transaction(DB_STORE, mode).objectStore(DB_STORE));
+    const tx = db.transaction(DB_STORE, mode);
+    // A put that "succeeds" can still be thrown away when the transaction
+    // fails to COMMIT — and nothing reports it unless the transaction itself
+    // is watched. The owner's pick, 2026-11-28: saved, then read back as
+    // never saved, silently. So a write is done only when it has committed.
+    const committed = new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => {
+        // Wrapped, never passed through: an IDB abort's error is often named
+        // 'AbortError', which the chooser reads as "picker closed" and hides.
+        const why = tx.error ? `${tx.error.name}: ${tx.error.message}` : 'no reason given';
+        console.warn(`[storage] IndexedDB threw the write away (${why})`);
+        reject(new Error(`The browser didn't save the folder connection (${why}).`));
+      };
+    });
+    committed.catch(() => undefined); // surfaced below, or superseded by the body's own error
+    const result = await body(tx.objectStore(DB_STORE));
+    await committed;
+    return result;
   } finally {
     db.close();
   }
@@ -430,18 +448,41 @@ export async function saveFolderHandle(handle: FileSystemDirectoryHandle): Promi
   console.info(
     `[storage] saving folder "${handle.name}" (${known.length} remembered; identity check ${Math.round(performance.now() - t0)}ms)`,
   );
-  return withStore('readwrite', async (store) => {
-    const list = parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY)));
-    await requestDone(store.put(record, HANDLE_KEY));
-    await requestDone(
-      store.put(
-        upsertRememberedFolder(list, { ...record, lastOpened: new Date().toISOString() }),
-        FOLDER_LIST_KEY,
-      ),
+  // This visit boots on the pick even if the browser won't keep it (below).
+  pickedThisVisit = record;
+  // The pointer and the remembered list commit SEPARATELY: the list carries
+  // every old handle too, and one the browser can no longer store must not
+  // take the pointer down with it (2026-11-28: a pick that "saved" and then
+  // read back as never saved — the whole transaction thrown away).
+  try {
+    await withStore('readwrite', async (store) => {
+      await requestDone(store.put(record, HANDLE_KEY));
+    });
+  } catch (err) {
+    console.warn(
+      `[storage] the folder connection was not kept, so the next visit will ask again — this visit carries on with it:`,
+      err,
     );
     return record;
-  });
+  }
+  try {
+    await withStore('readwrite', async (store) => {
+      const list = parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY)));
+      await requestDone(
+        store.put(
+          upsertRememberedFolder(list, { ...record, lastOpened: new Date().toISOString() }),
+          FOLDER_LIST_KEY,
+        ),
+      );
+    });
+  } catch (err) {
+    console.warn('[storage] the remembered-folders list (File > Open) was not updated:', err);
+  }
+  return record;
 }
+
+/** The folder picked in this page's life, for when the browser didn't keep it. */
+let pickedThisVisit: SavedFolder | null = null;
 
 /**
  * Every folder this profile was ever granted, most recently opened first.
@@ -499,6 +540,10 @@ export async function loadFolderHandle(): Promise<SavedFolder | null> {
       const record = await requestDone<SavedFolder | undefined>(
         db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(HANDLE_KEY),
       );
+      if (record === undefined && pickedThisVisit !== null) {
+        console.warn(`[storage] no saved folder handle in IndexedDB; using "${pickedThisVisit.handle.name}", picked this visit`);
+        return pickedThisVisit;
+      }
       if (record === undefined) console.info('[storage] no saved folder handle in IndexedDB');
       else if (!(typeof record.id === 'string' && record.handle))
         console.warn('[storage] the saved folder record is malformed', record);
@@ -510,7 +555,7 @@ export async function loadFolderHandle(): Promise<SavedFolder | null> {
     // An unreadable shelf and an empty one land the same place — but say
     // which, or a handle Chrome cannot read back looks like "never saved".
     console.warn('[storage] reading the saved folder handle failed:', err);
-    return null;
+    return pickedThisVisit;
   }
 }
 
