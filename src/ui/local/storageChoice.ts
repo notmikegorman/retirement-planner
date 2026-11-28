@@ -425,7 +425,11 @@ export async function saveFolderHandle(handle: FileSystemDirectoryHandle): Promi
   const known = await withStore('readonly', async (store) =>
     parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY))),
   );
+  const t0 = performance.now();
   const record: SavedFolder = { id: await idForHandle(handle, known), handle };
+  console.info(
+    `[storage] saving folder "${handle.name}" (${known.length} remembered; identity check ${Math.round(performance.now() - t0)}ms)`,
+  );
   return withStore('readwrite', async (store) => {
     const list = parseFolderList(await requestDone(store.get(FOLDER_LIST_KEY)));
     await requestDone(store.put(record, HANDLE_KEY));
@@ -495,12 +499,18 @@ export async function loadFolderHandle(): Promise<SavedFolder | null> {
       const record = await requestDone<SavedFolder | undefined>(
         db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(HANDLE_KEY),
       );
+      if (record === undefined) console.info('[storage] no saved folder handle in IndexedDB');
+      else if (!(typeof record.id === 'string' && record.handle))
+        console.warn('[storage] the saved folder record is malformed', record);
       return record && typeof record.id === 'string' && record.handle ? record : null;
     } finally {
       db.close();
     }
-  } catch {
-    return null; // an unreadable shelf and an empty one land the same place
+  } catch (err) {
+    // An unreadable shelf and an empty one land the same place — but say
+    // which, or a handle Chrome cannot read back looks like "never saved".
+    console.warn('[storage] reading the saved folder handle failed:', err);
+    return null;
   }
 }
 
